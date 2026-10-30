@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { Logo } from "@/components/common/Logo";
 import { MobileDrawerAuth } from "@/components/auth/MobileDrawerAuth";
+import { LanguageSwitcher } from "@/components/common/LanguageSwitcher";
+import { useLanguage } from "@/context/language-context";
 import { cn } from "@/lib/utils";
 import { isActiveLink, mainNavLinks } from "@/lib/navigation";
 
@@ -15,12 +17,42 @@ interface MobileDrawerProps {
 }
 
 /**
- * Slide-in drawer used for mobile/tablet navigation. Closes on
- * backdrop click, ESC, or after navigation. Locks body scroll while
- * open and focuses the close button on open.
+ * Slide-in drawer used for mobile/tablet navigation.
  */
 export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
   const pathname = usePathname() ?? "/";
+  const { t } = useLanguage();
+
+  const getLocalizedLabel = (href: string, defaultLabel: string): string => {
+    switch (href) {
+      case "/":
+        return t("nav.home", defaultLabel);
+      case "/dashboard":
+        return t("nav.dashboard", defaultLabel);
+      case "/schemes":
+        return t("nav.schemes", defaultLabel);
+      case "/analytics":
+        return t("nav.analytics", defaultLabel);
+      case "/predictive-analytics":
+        return t("nav.predictiveAnalytics", defaultLabel);
+      case "/action-board":
+        return t("nav.actionBoard", defaultLabel);
+      case "/insights":
+        return t("nav.insights", defaultLabel);
+      case "/reports":
+        return t("nav.reports", defaultLabel);
+      case "/assistant":
+        return t("nav.assistant", defaultLabel);
+      case "/business":
+        return t("nav.business", defaultLabel);
+      case "/advisor":
+        return t("nav.advisor", defaultLabel);
+      case "/notifications":
+        return t("nav.notifications", defaultLabel);
+      default:
+        return defaultLabel;
+    }
+  };
 
   useEffect(() => {
     if (!open) {
@@ -56,8 +88,9 @@ export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
       id="mobile-drawer"
       aria-hidden={!open}
       className={cn(
-        "fixed inset-0 z-50 md:hidden",
+        "fixed inset-0 z-50 overflow-x-hidden md:hidden",
         open ? "pointer-events-auto" : "pointer-events-none",
+        !open && "hidden",
       )}
     >
       <button
@@ -91,25 +124,28 @@ export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
           </button>
         </div>
 
-        <nav aria-label="Mobile primary" className="flex-1 overflow-y-auto p-4">
+        <div className="border-b border-border/60 p-3">
+          <LanguageSwitcher className="w-full justify-center" />
+        </div>
+
+        <nav aria-label="Mobile" className="flex-1 overflow-y-auto p-4">
           <ul className="flex flex-col gap-1">
             {mainNavLinks.map((link) => {
-              const Icon = link.icon;
               const active = isActiveLink(pathname, link.href);
+              const label = getLocalizedLabel(link.href, link.label);
               return (
                 <li key={link.href}>
                   <Link
                     href={link.href}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      "flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
                       active
-                        ? "bg-secondary text-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                        ? "bg-accent font-semibold text-accent-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                     )}
                   >
-                    <Icon className="size-4" aria-hidden="true" />
-                    {link.label}
+                    {label}
                   </Link>
                 </li>
               );
@@ -117,7 +153,9 @@ export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
           </ul>
         </nav>
 
-        <MobileDrawerAuth onAction={onClose} />
+        <div className="border-t border-border p-4">
+          <MobileDrawerAuth />
+        </div>
       </aside>
     </div>
   );

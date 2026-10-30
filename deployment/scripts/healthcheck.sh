@@ -4,7 +4,7 @@
 #
 # Usage:
 #   deployment/scripts/healthcheck.sh                       # uses defaults
-#   PROXY_URL=https://atlas.example.com healthcheck.sh     # public check
+#   PROXY_URL=https://ursbiz.example.com healthcheck.sh     # public check
 #
 # The script hits the public URL (defaults to http://localhost:8080)
 # and walks the stack: nginx -> frontend -> backend. A failure prints
@@ -15,7 +15,7 @@
 set -uo pipefail
 
 PROXY_URL="${PROXY_URL:-http://localhost:8080}"
-BACKEND_URL="${BACKEND_URL:-http://localhost:8000}"
+BACKEND_URL="${BACKEND_URL:-http://localhost:8001}"
 TIMEOUT="${HEALTHCHECK_TIMEOUT:-5}"
 
 PASS=0
@@ -55,7 +55,7 @@ check "proxy:backend /api/v1/health" "${PROXY_URL}/api/v1/health" "200"
 #    server returns 200 for the root and any prerendered page.
 check "proxy:frontend /"             "${PROXY_URL}/"              "200"
 
-# 3. Direct backend health (only useful when the host port 8000 is
+# 3. Direct backend health (only useful when the host port 8001 is
 #    published; usually it's not. Skipped silently on connection
 #    refused so this script works against prod too.)
 if curl --silent --max-time 2 -o /dev/null "${BACKEND_URL}/api/v1/health" 2>/dev/null; then

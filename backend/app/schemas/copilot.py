@@ -111,7 +111,7 @@ class CopilotRequest(BaseModel):
         max_length=4000,
         description=(
             "Free-text question the user is asking the "
-            "Atlas AI Copilot. 1-4000 characters."
+            "UrsBiz Advisor. 1-4000 characters."
         ),
     )
 

@@ -7,7 +7,7 @@ Never store plaintext passwords.
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.utils.database import Base
@@ -23,6 +23,13 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    # Sprint 23 — the business row that "owns" the user's session context.
+    # Nullable: a freshly registered user has no business yet. ``SET NULL``
+    # on delete means removing a business does not cascade-kill the user.
+    active_business_id: Mapped[int | None] = mapped_column(
+        ForeignKey("businesses.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

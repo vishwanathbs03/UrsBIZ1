@@ -5,15 +5,15 @@ import { Button } from "@/components/ui/button";
 const showcases = [
   {
     id: "dashboard",
-    title: "Executive Dashboard & Business Health Score",
-    subtitle: "Real-time visibility into your 8-category health index.",
+    title: "Executive Dashboard & Profile Readiness Score",
+    subtitle: "Real-time visibility into your 0–100 profile-completeness index.",
     description:
-      "Monitor your Business Health Score out of 100 with category breakdowns across Financial Stability, Operational Risk, Sales Pipeline, and Compliance. Always know where your business stands.",
+      "Monitor your Profile Readiness Score out of 100. It measures how completely your digital twin is filled in across six weighted sections (profile completeness, business info, products/services, team, financial, online presence). It is not a measure of business risk — a fully-populated profile does not mean the business is risk-free.",
     icon: ShieldCheck,
     href: "/dashboard",
     stats: [
-      { label: "Health Index", val: "78 / 100" },
-      { label: "Status", val: "Strong Growth" },
+      { label: "Score", val: "0–100 (deterministic)" },
+      { label: "Measures", val: "Profile completeness" },
     ],
   },
   {
@@ -21,12 +21,12 @@ const showcases = [
     title: "Government Scheme Discovery Engine",
     subtitle: "Unlock capital subsidies & interest subvention schemes.",
     description:
-      "Automatically match 25+ central and state schemes like PMEGP (up to 35% subsidy), CGTMSE, Mudra, and ZED Certification based on your sector, location, and turnover.",
+      "Profile-match central and state schemes (PMEGP, CGTMSE, Mudra, ZED, and others) against your sector, location, and turnover. Each match shows the cited authority, last-verified date, and a clear disclaimer.",
     icon: Landmark,
     href: "/schemes",
     stats: [
-      { label: "Schemes Matched", val: "25+ Active" },
-      { label: "Top Match", val: "95% Score" },
+      { label: "Schemes Catalog", val: "MSME / NSIC / TUF / ZED" },
+      { label: "Profile Match", val: "Score & Disclaimer" },
     ],
   },
   {
@@ -51,8 +51,8 @@ const showcases = [
     icon: Bot,
     href: "/advisor",
     stats: [
-      { label: "Daily Briefings", val: "Every Morning" },
-      { label: "Precision", val: "Zero Hallucination" },
+      { label: "Daily Briefings", val: "Actionable" },
+      { label: "Grounding", val: "Deterministic + Evidence" },
     ],
   },
   {
@@ -65,7 +65,7 @@ const showcases = [
     href: "/reports",
     stats: [
       { label: "Export Format", val: "PDF & CSV" },
-      { label: "Generation Time", val: "< 1 Second" },
+      { label: "Includes", val: "Health + Schemes + Forecast" },
     ],
   },
   {
@@ -77,7 +77,7 @@ const showcases = [
     icon: Bell,
     href: "/notifications",
     stats: [
-      { label: "Alert Latency", val: "Instant" },
+      { label: "Alert Type", val: "Threshold + Deadline" },
       { label: "Shortcut", val: "Ctrl + K" },
     ],
   },

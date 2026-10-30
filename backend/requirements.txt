@@ -5,7 +5,7 @@ pydantic-settings==2.6.1
 pydantic[email]==2.10.3
 python-dotenv==1.0.1
 SQLAlchemy==2.0.36
-psycopg2-binary==2.9.10
+psycopg2-binary==2.9.11
 alembic==1.14.0
 httpx==0.28.1
 
@@ -21,6 +21,11 @@ email-validator==2.2.0
 # dev venv was using so the production image boots without surprise
 # missing-dep failures.
 python-multipart==0.0.20
+
+# --- PDF Reports (Sprint 13.2) ---
+reportlab==4.2.5
+Pillow==10.4.0
+cryptography==43.0.3
 
 # --- Monitoring (Sprint 8 Part 2) ---
 # Prometheus client library. The backend exposes request / latency /

@@ -14,6 +14,8 @@ env/
 .env.local
 .env.*.local
 !.env.example
+.runtime_env*
+!*.runtime_env.example
 
 # IDE
 .vscode/

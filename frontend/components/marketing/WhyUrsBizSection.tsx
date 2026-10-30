@@ -7,29 +7,29 @@ const comparisons = [
     ursbiz: "Real-time AI-driven business health scoring",
   },
   {
-    feature: "Health Scoring",
+    feature: "Profile Readiness Score",
     traditional: "Fragmented spreadsheets with zero unified index",
-    ursbiz: "Unified 0-100 Business Health Score across 8 categories",
+    ursbiz: "Unified 0-100 Profile Readiness Score across 6 weighted sections — measures how complete the digital twin is",
   },
   {
     feature: "Government Schemes",
-    traditional: "Manual search across 40+ confusing ministry portals",
-    ursbiz: "Sub-50ms automated match matching with % score",
+    traditional: "Manual search across multiple ministry portals",
+    ursbiz: "Profile-match with score, last-verified date, and disclaimer",
   },
   {
     feature: "Executive Reports",
-    traditional: "Manual CA consultation costing $500+/mo",
-    ursbiz: "1-Click audit-ready PDF & CSV exports in seconds",
+    traditional: "Manual CA consultation (third-party fee)",
+    ursbiz: "One-click audit-ready PDF & CSV exports",
   },
   {
     feature: "Growth Strategy",
     traditional: "Unsubstantiated intuition and guesswork",
-    ursbiz: "Deterministic 3m/6m/12m predictive growth curves",
+    ursbiz: "Deterministic 3m/6m/12m scenario estimates with horizon & confidence labels",
   },
   {
     feature: "Platform Tooling",
     traditional: "Multiple disconnected apps (Tally + Excel + CA)",
-    ursbiz: "Single integrated operating system for MSMEs",
+    ursbiz: "Single integrated platform — business profile, health scoring, schemes, reports, advisor",
   },
 ];
 

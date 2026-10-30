@@ -419,6 +419,67 @@ class BusinessSummary(BaseModel):
     updated_at: datetime
 
 
+class BusinessListItem(BaseModel):
+    """Sprint 23 — list-card shape returned by ``GET /business/list``.
+
+    The profile panel lists every business the user owns with a
+    'Switch' / 'Delete' affordance per row. ``BusinessSummary`` is
+    too thin (no ``trade_name``, no ``city``, no ``created_at`` —
+    the dashboard renders it differently) so this is a deliberate
+    sibling, not a replacement.
+
+    Fields are all present on the ``Business`` ORM model — no
+    eager-load is required for the read query.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    legal_name: str
+    trade_name: str | None
+    industry: str
+    city: str | None
+    is_completed: bool
+    created_at: datetime
+
+
+class BusinessListResponse(BaseModel):
+    """Envelope for ``GET /business/list``."""
+
+    items: list[BusinessListItem]
+    active_business_id: int | None = None
+    count: int
+
+
+class BusinessMinimalCreate(BaseModel):
+    """Sprint 23 — minimum required fields for the inline
+    'Add a business' form inside the profile panel.
+
+    These are exactly the six required fields of the existing
+    ``BasicSection`` (``legal_name``, ``industry``,
+    ``established_year``, ``employee_count``, ``annual_revenue``,
+    ``revenue_currency``). The remaining 7 wizard steps are filled
+    out on the regular ``/business`` page after the row exists, so
+    the panel form stays narrow and the wizard stays the source of
+    truth for the full business profile.
+    """
+
+    legal_name: NonEmptyStr
+    industry: NonEmptyStr
+    established_year: int = Field(ge=1800, le=2100)
+    employee_count: int = Field(ge=0, le=10_000_000)
+    annual_revenue: float = Field(ge=0)
+    revenue_currency: CurrencyCode = "USD"
+
+    @field_validator("established_year")
+    @classmethod
+    def _no_future_year(cls, value: int) -> int:
+        """Mirror the wizard's BasicSection year rule."""
+        if value > datetime.utcnow().year:
+            raise ValueError("Established year cannot be in the future.")
+        return value
+
+
 # --------------------------------------------------------------------------- #
 # Profile completeness
 # --------------------------------------------------------------------------- #

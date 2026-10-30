@@ -94,14 +94,14 @@ ISSUE #4 — .env.example drift
     (engine uses db_echo). Left as a documented alias for clarity.
 
 ISSUE #5 — Port/URL consistency
-  - dev workflow: backend 8001, frontend 3000 (consistent)
-  - prod overlay: backend 8000, frontend 3000, nginx 80 (consistent)
-  - frontend NEXT_PUBLIC_API_URL default: http://localhost:8001 (matches dev)
-  - backend/entrypoint.sh default: APP_PORT=8000 (matches prod overlay)
-  - INCONSISTENCY 1: backend/entrypoint.sh defaults to 8000 but the
-    backend/Dockerfile CMD also uses 8000, and the dev compose overrides
-    to 8001. Operators who run "docker run" of the bare image get 8000
-    while their frontend expects 8001. The 8000 default in
+  - dev workflow: backend 8090, frontend 3000 (consistent)
+  - prod overlay: backend 8090, frontend 3000, nginx 80 (consistent)
+  - frontend NEXT_PUBLIC_API_URL default: http://localhost:8090 (matches dev)
+  - backend/entrypoint.sh default: APP_PORT=8090 (matches prod overlay)
+  - INCONSISTENCY 1: backend/entrypoint.sh defaults to 8090 but the
+    backend/Dockerfile CMD also uses 8090, and the dev compose overrides
+    to 8090. Operators who run "docker run" of the bare image get 8090
+    while their frontend expects 8090. The 8090 default in
     entrypoint.sh is a real footgun for non-compose deployments.
   - INCONSISTENCY 2: backend/entrypoint.sh + backend/gunicorn_conf.py
     + GUNICORN_* envs in .env.production.example are wired together
@@ -270,14 +270,14 @@ Docker daemon was stopped on the host (service com.docker.service,
 status Stopped, requires admin to start). Could not bring up
 docker-compose. Static audit only:
 
-  docker-compose.yml          (dev, port 8001)
+  docker-compose.yml          (dev, port 8090)
     backend:
-      ports: ["8001:8001"]
-      APP_PORT: 8001
-      healthcheck: http://localhost:8001/health
+      ports: ["8090:8090"]
+      APP_PORT: 8090
+      healthcheck: http://localhost:8090/health
     frontend:
       ports: ["3000:3000"]
-      NEXT_PUBLIC_API_URL: http://localhost:8001
+      NEXT_PUBLIC_API_URL: http://localhost:8090
 
   docker-compose.prod.yml     (prod overlay, port 8000 + nginx 80)
     backend:
@@ -369,7 +369,7 @@ frontend/.env.local.example:
 9. FULL E2E RESULTS
 ================================================================================
 
-scripts/e2e_verify.py — 19 steps. Backend on http://127.0.0.1:8001,
+scripts/e2e_verify.py — 19 steps. Backend on http://127.0.0.1:8090,
 frontend on http://127.0.0.1:3000.
 
 SQLite fresh DB:
@@ -457,10 +457,10 @@ R-6  The /health/ready migration probe reads EXPECTED_HEAD_REVISION at
     so the constant can never go stale. Not done in this milestone
     because it adds an Alembic import to every /health request.
 
-R-7  The dev .env.example has APP_PORT=8001 but the Dockerfile
+R-7  The dev .env.example has APP_PORT=8090 but the Dockerfile
     EXPOSEs 8000. A developer who builds the bare Dockerfile (not
     via compose) gets a backend on 8000, and the frontend's default
-    NEXT_PUBLIC_API_URL=http://localhost:8001 will mismatch. Same
+    NEXT_PUBLIC_API_URL=http://localhost:8090 will mismatch. Same
     issue as #5 in section 3. Pick one default.
 
 ================================================================================

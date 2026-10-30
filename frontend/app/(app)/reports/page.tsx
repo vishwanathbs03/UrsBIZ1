@@ -3,7 +3,9 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ReportsView } from "@/features/reports";
 
 export const metadata: Metadata = {
-  title: "Reports",
+  title: "Executive Report | UrsBiz",
+  description:
+    "Download the executive PDF and CSV reports for your business — branded UrsBiz, with methodology and limitations clearly stated.",
 };
 
 /**

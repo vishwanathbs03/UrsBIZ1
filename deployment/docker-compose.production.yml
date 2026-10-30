@@ -32,7 +32,7 @@ services:
     environment:
       APP_ENV: production
       APP_HOST: 0.0.0.0
-      APP_PORT: "8000"
+      APP_PORT: "8001"
       GUNICORN_WORKERS: "4"
       GUNICORN_THREADS: "2"
       LOG_LEVEL: INFO
@@ -66,7 +66,7 @@ services:
           cpus: "0.5"
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health/live"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8001/health/live"]
       interval: 30s
       timeout: 5s
       retries: 5

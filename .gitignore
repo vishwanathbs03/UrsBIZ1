@@ -112,6 +112,11 @@ ehthumbs.db
 frontend/c/
 frontend/tmp/
 
+# Note: `.kilo/kilo.jsonc` is tracked because it was committed before
+# any ignore rule covered it. Per H7.0 §3, the path is treated as
+# agent-config and not part of the UrsBiz product. Do not rewrite git
+# history to remove it.
+
 # Catch-all for ANY tmp/build/dist directory anywhere in the tree.
 # These are verifier or build outputs and must never be tracked.
 **/tmp/
@@ -124,3 +129,31 @@ frontend/tmp/
 *.cjs
 !scripts/**/*.cjs   # legitimate cjs scripts under scripts/ are OK
 !frontend/**/*.cjs  # legitimate cjs modules under frontend/ are OK
+
+# ----------------------- Playwright (H7.2 / Prompt 2) ------------------ #
+# Runtime test artefacts — never part of the UrsBiz product. These were
+# flagged in H7.0 §3 as not covered; covering them now so a Playwright
+# rerun never commits binary screenshots / traces / videos.
+test-results/
+playwright-report/
+frontend/playwright-report/
+frontend/test-results/
+# Cached browser binaries — Playwright installs them outside node_modules.
+**/.playwright/
+**/playwright/.cache/
+
+# The e2e/ folder is tracked (specs are product), but the artefacts it
+# produces are not.
+
+# ----------------------- Local prompt / spec dumps ---------------- #
+# Working copies of the URSBIZ Hackathon Execution Program docx are
+# unzipped into scripts/docx.txt for agent reference. They are working
+# artefacts, not product artefacts — never commit them.
+scripts/docx.txt
+
+# ----------------------- Agent / Scratch / Debug ------------------ #
+.claude/
+Aibackend
+current-working-tree.txt
+scripts/debug/
+

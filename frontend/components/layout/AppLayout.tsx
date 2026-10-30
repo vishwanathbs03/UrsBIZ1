@@ -20,7 +20,7 @@ export function AppLayout({ children, withSidebar = true, className }: AppLayout
         <main
           id="main-content"
           className={cn(
-            "flex-1",
+            "min-w-0 flex-1",
             withSidebar && "lg:pl-64",
             className,
           )}

@@ -116,6 +116,45 @@ class ChatMessage(Base):
     # add fields without a migration.
     sources_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
 
+    # H7.8A P2 — trust-label semantics.
+    #
+    # True when this assistant turn was produced by the
+    # deterministic fallback (placeholder / safe provider) and
+    # NOT by a real OpenAI-compatible / Ollama response.
+    #
+    # The frontend uses this to decide whether to render the
+    # bubble with the "Calculated by UrsBiz rule engine" trust
+    # label (fallback_used=true) or "Generated explanation"
+    # (fallback_used=false, only when a real provider answered).
+    #
+    # Default False keeps existing rows valid without a
+    # destructive migration. SQLite ALTER TABLE ADD COLUMN
+    # supplies the default at the storage layer.
+    fallback_used: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+
+    # H7.8C — per-message grounding provenance.
+    #
+    # JSON-encoded ``ChatGenerationMeta`` payload the
+    # ``AssistantProviderService`` stamps on every assistant
+    # turn. Empty string for user messages and for any
+    # pre-migration row. The schema is enforced at the
+    # Pydantic layer (``ChatGenerationMeta`` in
+    # ``backend/app/schemas/chat.py``), not at the storage
+    # layer, so the column stays decoupled from the AI
+    # provider's internal vocabulary.
+    #
+    # Why a single JSON column instead of many fields?
+    # Future provenance fields (token counts, reasoning
+    # echoes, prompt-truncation flags) can be added to the
+    # schema without another migration. The migration that
+    # introduced this column is
+    # ``20260101_0007_add_chat_message_generation_meta``.
+    generation_meta_json: Mapped[str] = mapped_column(
+        Text, nullable=False, default=""
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

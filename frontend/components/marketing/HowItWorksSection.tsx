@@ -1,99 +1,80 @@
-import {
-  ArrowRight,
-  Bot,
-  Building2,
-  CheckCircle2,
-  ChevronRight,
-  Landmark,
-  ShieldCheck,
-  TrendingUp,
-} from "lucide-react";
+"use client";
 
-const workflowSteps = [
-  {
-    step: "01",
-    title: "Business Profile",
-    description: "Input turnover, industry, workforce & state in 2 minutes.",
-    icon: Building2,
-  },
-  {
-    step: "02",
-    title: "AI Analysis",
-    description: "Sub-50ms evaluation across 8 operational categories.",
-    icon: Bot,
-  },
-  {
-    step: "03",
-    title: "Health Score",
-    description: "Receive your unified 0-100 Health Index & category sub-scores.",
-    icon: ShieldCheck,
-  },
-  {
-    step: "04",
-    title: "Recommendations",
-    description: "Daily priority action briefings to maximize operational ROI.",
-    icon: CheckCircle2,
-  },
-  {
-    step: "05",
-    title: "Government Schemes",
-    description: "Auto-match 25+ subsidies (PMEGP, CGTMSE, Mudra) with match %.",
-    icon: Landmark,
-  },
-  {
-    step: "06",
-    title: "Business Growth",
-    description: "Reinvest capital grants to achieve +24% projected growth.",
-    icon: TrendingUp,
-  },
-];
+import { CheckCircle2, Compass, Layers, Sparkles } from "lucide-react";
+import { useLanguage } from "@/context/language-context";
 
 export function HowItWorksSection() {
+  const { t } = useLanguage();
+
+  const steps = [
+    {
+      num: t("landing.howItWorks.step1Num"),
+      title: t("landing.howItWorks.step1Title"),
+      desc: t("landing.howItWorks.step1Desc"),
+      icon: Compass,
+    },
+    {
+      num: t("landing.howItWorks.step2Num"),
+      title: t("landing.howItWorks.step2Title"),
+      desc: t("landing.howItWorks.step2Desc"),
+      icon: Sparkles,
+    },
+    {
+      num: t("landing.howItWorks.step3Num"),
+      title: t("landing.howItWorks.step3Title"),
+      desc: t("landing.howItWorks.step3Desc"),
+      icon: Layers,
+    },
+  ];
+
   return (
-    <section aria-labelledby="how-title" className="bg-background py-20 md:py-28">
-      <div className="container mx-auto px-4">
-        <div className="mx-auto max-w-3xl text-center">
-          <p className="text-xs font-bold uppercase tracking-widest text-primary">
-            Seamless Autonomous Workflow
-          </p>
-          <h2
-            id="how-title"
-            className="mt-3 text-3xl font-extrabold tracking-tight text-foreground md:text-4xl"
-          >
-            How UrsBiz Drives Small Business Growth
+    <section className="py-20 md:py-28 bg-background border-t border-border/80">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-3xl text-center space-y-4">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
+            <CheckCircle2 className="size-3.5" />
+            <span>{t("landing.howItWorks.badge")}</span>
+          </div>
+
+          <h2 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl md:text-5xl">
+            {t("landing.howItWorks.title")}
           </h2>
-          <p className="mt-4 text-base text-muted-foreground">
-            From onboarding your digital twin profile to unlocking government capital subsidies in 6 simple steps.
+
+          <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
+            {t("landing.howItWorks.subtitle")}
           </p>
         </div>
 
-        {/* Horizontal Workflow Cards */}
-        <div className="mt-16 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-          {workflowSteps.map((s, i) => {
-            const Icon = s.icon;
-            const isLast = i === workflowSteps.length - 1;
-
+        {/* 3 Horizontal Steps on Desktop, Vertical on Mobile */}
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+          {steps.map((step, idx) => {
+            const Icon = step.icon;
             return (
               <div
-                key={s.step}
-                className="relative flex flex-col justify-between rounded-xl border border-border bg-card p-4 text-left shadow-soft hover-lift transition-all"
+                key={step.num}
+                className="relative rounded-2xl border border-border/80 bg-card p-8 shadow-xs flex flex-col justify-between space-y-4"
               >
-                <div>
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold text-primary">{s.step}</span>
-                    {!isLast && (
-                      <ChevronRight className="hidden lg:block size-4 text-muted-foreground/60" aria-hidden="true" />
-                    )}
+                    <span className="font-mono text-3xl font-black text-primary">
+                      {step.num}
+                    </span>
+                    <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                      <Icon className="size-5" />
+                    </div>
                   </div>
 
-                  <div className="mt-3 inline-flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Icon className="size-4.5" />
-                  </div>
+                  <h3 className="text-xl font-bold text-foreground tracking-tight">
+                    {step.title}
+                  </h3>
 
-                  <h3 className="mt-3 text-sm font-bold text-foreground">{s.title}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                    {s.description}
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {step.desc}
                   </p>
+                </div>
+
+                <div className="pt-2 text-xs font-semibold text-primary">
+                  Step {idx + 1} of 3
                 </div>
               </div>
             );

@@ -138,6 +138,16 @@ export interface UseAssistantDataResult {
   isThinking: boolean;
 
   /**
+   * Sprint AI-6 — Trust-first UI. AssistantContext snapshot
+   * for the side-panel / message-shell. ``null`` when the
+   * data isn't ready. The TrustFirstResponse shell uses
+   * this to surface concrete evidence values ("Revenue
+   * ₹1.80 Cr", "Health score 68/100") instead of raw
+   * evidence IDs.
+   */
+  context: import("./types").AssistantContext | null;
+
+  /**
    * Three contextual follow-up chips derived from the most recent
    * assistant answer. Pure derivation via `buildSmartFollowUps`
    * — no new engines. Empty when the user hasn't asked yet.
@@ -237,6 +247,19 @@ function buildContext(bundle: AssistantBundle): AssistantContext {
       totalDuration: roadmap.summary.total_estimated_duration,
     },
     incomplete,
+    // Sprint AI-6 — extended context. Each field is read
+    // defensively; legacy bundles that pre-date AI-6 simply
+    // return ``undefined`` and the shell falls back to a
+    // humanized label.
+    annualRevenueInr:
+      (twin as unknown as { identity?: { annual_revenue?: number } })
+        .identity?.annual_revenue ?? null,
+    employeeCount:
+      (twin as unknown as { identity?: { employee_count?: string } })
+        .identity?.employee_count ?? null,
+    primarySupplierShare:
+      (twin as unknown as { risk?: { primary_supplier_share?: number } })
+        .risk?.primary_supplier_share ?? null,
   };
 }
 
@@ -608,6 +631,8 @@ export function useAssistantData(): UseAssistantDataResult {
     memoryTopics,
     searchConversation,
     exportConversation,
+    // Sprint AI-6 — Trust-first UI context snapshot.
+    context: state.status === "ready" ? state.context : null,
   };
 }
 

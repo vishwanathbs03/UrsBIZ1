@@ -7,7 +7,7 @@ Two responsibilities:
      served as ``Content-Encoding: gzip``. nginx is the public
      compressor; this is the in-process backup for direct-to-
      backend traffic (dev, tests, ops runs ``curl`` against
-     ``localhost:8000``).
+     ``localhost:8001``).
 
   2. **Cache headers on the health surface.** ``/health`` and
      ``/health/ready`` change on every request, so the middleware

@@ -15,10 +15,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="w-full max-w-md">
           <Link
             href="/"
-            aria-label="UrsBiz — home"
+            aria-label="URSBiz — home"
             className="mb-8 flex justify-center"
           >
-            <Logo size="lg" />
+            <Logo size="lg" variant="primary" withSubtitle />
           </Link>
           {children}
         </div>

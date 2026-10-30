@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { Download, Printer, RefreshCcw } from "lucide-react";
+import { Download, Printer, RefreshCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatedCounter } from "@/components/common/AnimatedCounter";
+import { Logo } from "@/components/common/Logo";
 import { cn } from "@/lib/utils";
-import { Sparkles } from "lucide-react";
 import { ExecutiveKpiCard } from "@/components/dashboard/ExecutiveKpiCard";
 
 interface ReportHeaderProps {
@@ -58,11 +58,14 @@ export function ReportHeader({
         className="pointer-events-none absolute inset-0 rounded-[var(--radius)] bg-gradient-to-br from-primary/10 via-transparent to-violet-500/10"
       />
       <div className="relative grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-        <div className="flex flex-col gap-2">
-          <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary">
-            <Sparkles className="size-3" aria-hidden="true" /> {greeting}
-            Executive Report
-          </span>
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-3">
+            <Logo size="md" variant="compact" />
+            <span className="text-border">|</span>
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+              <Sparkles className="size-3" aria-hidden="true" /> {greeting} Executive Briefing
+            </span>
+          </div>
           <h1 className="text-2xl font-black leading-tight text-foreground sm:text-3xl">
             {hero
               ? `${hero.score}/100 — ${hero.band}`

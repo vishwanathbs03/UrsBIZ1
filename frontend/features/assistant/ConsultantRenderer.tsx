@@ -192,13 +192,10 @@ function ProseBody({ body }: { body: string }) {
   // Reuse the legacy renderer so the same `**bold**` and `- bullet`
   // formatting applies — gives us the McKinsey-grade inline emphasis
   // for free.
-  const html = formatAssistantBody(body);
   return (
-    <div
-      className="prose prose-sm dark:prose-invert max-w-none rounded-lg bg-background/40 p-3 leading-relaxed text-foreground"
-      // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <div className="prose prose-sm dark:prose-invert max-w-none rounded-lg bg-background/40 p-3 leading-relaxed text-foreground">
+      {formatAssistantBody(body || "")}
+    </div>
   );
 }
 

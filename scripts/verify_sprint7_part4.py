@@ -2,7 +2,7 @@
 verify_sprint7_part4.py - ad-hoc verifier for Sprint 7 Part 4
 (Knowledge Retrieval).
 
-Drives the running uvicorn dev server (port 8000) through the
+Drives the running uvicorn dev server (port 8001) through the
 Sprint 7 Part 3 chat endpoint with the new knowledge retrieval
 pipeline attached. Checks:
 
@@ -66,7 +66,7 @@ VENV_PY = BACKEND / "venv" / "Scripts" / "python.exe"
 if not VENV_PY.exists():
     VENV_PY = BACKEND / ".venv" / "Scripts" / "python.exe"
 
-BASE = "http://127.0.0.1:8000"
+BASE = "http://127.0.0.1:8001"
 API = f"{BASE}/api/v1"
 
 ok = True

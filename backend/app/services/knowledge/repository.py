@@ -38,6 +38,9 @@ from app.services.knowledge.base import (
 logger = logging.getLogger(__name__)
 
 
+_CATALOG_CACHE: dict[str, dict[str, Article]] = {}
+
+
 class JsonKnowledgeRepository(KnowledgeRepositoryBase):
     """Read-only repository backed by a JSON file on disk.
 
@@ -56,6 +59,11 @@ class JsonKnowledgeRepository(KnowledgeRepositoryBase):
         self._load()
 
     def _load(self) -> None:
+        path_str = str(self._path)
+        if path_str in _CATALOG_CACHE:
+            self._articles = _CATALOG_CACHE[path_str]
+            return
+
         if not self._path.exists():
             raise FileNotFoundError(
                 f"Knowledge catalog not found at {self._path}"
@@ -94,7 +102,8 @@ class JsonKnowledgeRepository(KnowledgeRepositoryBase):
                 f"Knowledge catalog at {self._path} contained no articles"
             )
 
-        logger.info("Loaded %d knowledge articles from %s", len(self._articles), self._path)
+        _CATALOG_CACHE[path_str] = self._articles
+        logger.info("Loaded %d knowledge articles from %s (cached)", len(self._articles), self._path)
 
     # ---- Read side --------------------------------------------------------- #
 

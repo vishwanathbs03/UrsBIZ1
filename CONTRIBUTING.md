@@ -61,7 +61,7 @@ cp .env.example .env
 .venv/Scripts/python -m uvicorn app.main:app --reload
 ```
 
-The dev server listens on `http://127.0.0.1:8000` and
+The dev server listens on `http://127.0.0.1:8001` and
 auto-reloads on code changes. The schema is created from
 SQLAlchemy metadata on first connect, so no migration step
 is required.
@@ -72,7 +72,7 @@ is required.
 cd frontend
 npm ci
 cp .env.example .env.local
-# Edit .env.local — NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+# Edit .env.local — NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8001
 npm run dev
 ```
 

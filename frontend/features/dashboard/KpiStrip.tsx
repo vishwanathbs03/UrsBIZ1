@@ -240,7 +240,7 @@ function AiConfidenceKpi({ dna, decision }: AiConfidenceKpiProps) {
     <KpiShell
       icon={<Brain className="size-4" aria-hidden="true" />}
       title="AI Confidence"
-      caption="How sure Atlas is about the analysis"
+      caption="How sure UrsBiz is about the analysis"
     >
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline gap-2">

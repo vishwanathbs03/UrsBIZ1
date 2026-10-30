@@ -13,13 +13,13 @@
       --text: #F8FAFC;
       --muted: #94A3B8;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacFont, 'Segoe UI', Roboto, sans-serif; }
     body { background: var(--bg); color: var(--text); overflow-x: hidden; }
     .deck-container { width: 100vw; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem; position: relative; }
     .slide { display: none; width: 100%; max-width: 980px; min-height: 560px; background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 3rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); flex-direction: column; justify-content: space-between; animation: fadeIn 0.5s ease-out; }
     .slide.active { display: flex; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .slide-header { display: flex; justify-content: space-between; align-items: center; border-b: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; }
+    .slide-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
     .slide-num { font-size: 0.875rem; color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
     .slide-title { font-size: 2.25rem; font-weight: 800; color: #FFF; margin-top: 1rem; }
     .slide-subtitle { font-size: 1.1rem; color: var(--accent); margin-top: 0.25rem; font-weight: 600; }
@@ -53,13 +53,13 @@
         <span style="color: var(--accent); font-weight: 600;">AKKA Hack4Good 2026</span>
       </div>
       <h1 class="slide-title">UrsBiz</h1>
-      <div class="slide-subtitle">The AI Business Intelligence Platform for MSMEs</div>
+      <div class="slide-subtitle">Deterministic Business Intelligence for Indian MSMEs</div>
       <div class="slide-body">
-        <p style="font-size: 1.35rem; color: #FFF; margin-top: 1.5rem;">Transforming Small Businesses into Smart Businesses with AI.</p>
-        <p style="margin-top: 1.5rem; color: var(--muted);">Track: Community & Impact → MSME & Global Access Tools</p>
+        <p style="font-size: 1.35rem; color: #FFF; margin-top: 1.5rem;">Profile-match schemes. Compute your Profile Readiness Score. Export audit-ready reports — every number traceable to a rule.</p>
+        <p style="margin-top: 1.5rem; color: var(--muted);">Track: Community & Impact → MSME &amp; Global Access Tools</p>
       </div>
     </div>
-    <div class="notes-box">🎤 <strong>Presenter Note:</strong> Welcome judges. Today we present UrsBiz—the financial operating system bringing Fortune 500 decision intelligence to 63 million small businesses.</div>
+    <div class="notes-box">🎤 <strong>Presenter Note:</strong> Welcome judges. UrsBiz brings profile-matched government scheme discovery, a deterministic 0–100 Profile Readiness Score (a measure of how completely the founder has populated their business profile — not a measure of business risk), and bank-ready PDF/CSV reporting to Indian micro &amp; small enterprises.</div>
   </div>
 
   <!-- Slide 2 -->
@@ -69,19 +69,18 @@
         <span class="slide-num">Slide 02 / 08</span>
         <span>The Problem</span>
       </div>
-      <h2 class="slide-title">The Challenge Facing MSMEs Today</h2>
-      <div class="slide-subtitle">63 Million Businesses Operating Without Data Visibility</div>
+      <h2 class="slide-title">What We Heard From MSME Founders</h2>
+      <div class="slide-subtitle">Manual Reporting, Scheme Discovery Across Portals, No Forward View</div>
       <div class="slide-body">
         <ul>
-          <li><strong>Intuition-Based Decisions:</strong> 92% of MSMEs make critical inventory and capital choices without analytics.</li>
-          <li><strong>No Affordable AI Advisors:</strong> Enterprise tools cost $5,000+/mo; traditional CAs are manual and expensive.</li>
-          <li><strong>Low Awareness of Government Support:</strong> Over $100B in grants (PMEGP, CGTMSE, Mudra) go unclaimed yearly.</li>
-          <li><strong>Manual & Fragmented Reporting:</strong> Owners waste 15+ hours weekly juggling spreadsheets and paper ledgers.</li>
-          <li><strong>Limited Access to Analytics:</strong> Zero forward-looking 12-month revenue or working capital risk forecasts.</li>
+          <li><strong>Fragmented scheme discovery:</strong> Founders navigate multiple ministry portals (msme.gov.in, nsic.co.in, kvib.gov.in) to find applicable subsidies.</li>
+          <li><strong>Manual reporting for bank loans:</strong> Reports are re-typed from spreadsheets and ledgers for every CA or banker review.</li>
+          <li><strong>No forward-looking view:</strong> Most founders we spoke to rely on intuition for the next 3–12 months of cash flow.</li>
+          <li><strong>No single source of truth:</strong> Profile details (turnover, sector, workforce, state) are re-entered on every form.</li>
         </ul>
       </div>
     </div>
-    <div class="notes-box">🎤 <strong>Key Message:</strong> Small businesses contribute 30% to India's GDP, yet 70% fail within 3 years due to unmitigated cash flow errors.</div>
+    <div class="notes-box">🎤 <strong>Key Message:</strong> We did not claim a national-failure statistic. The problem statement comes from founder interviews; replace with your own pilot interviews if presenting.</div>
   </div>
 
   <!-- Slide 3 -->
@@ -92,21 +91,21 @@
         <span>Our Solution</span>
       </div>
       <h2 class="slide-title">Introducing UrsBiz</h2>
-      <div class="slide-subtitle">An Integrated AI-Powered Business Intelligence Platform</div>
+      <div class="slide-subtitle">Profile → Deterministic Engines → Grounded Explanations → Reports</div>
       <div class="slide-body">
         <div class="grid-2">
           <div class="card-item">
             <h4>Core Modules</h4>
-            <p style="font-size: 0.85rem; color: var(--muted);">• Business Digital Twin & Executive Dashboard<br>• AI Business Advisor & Health Score (0-100)<br>• Government Scheme Discovery & Analytics Reports</p>
+            <p style="font-size: 0.85rem; color: var(--muted);">• Business Digital Twin &amp; Executive Dashboard<br>• Deterministic Profile Readiness Score (0–100, profile-completeness)<br>• Government Scheme Profile-Matching &amp; Audit-Ready Reports</p>
           </div>
           <div class="card-item">
-            <h4>Workflow Pipeline</h4>
-            <p style="font-size: 0.85rem; color: var(--accent);">Business Profile → AI Analysis → Health Score → Recommendations → Government Schemes → Business Growth</p>
+            <h4>Trust Boundary</h4>
+            <p style="font-size: 0.85rem; color: var(--accent);">Rule engines compute every score. Generative AI only rephrases the deterministic evidence bundle — values are labeled, never invented.</p>
           </div>
         </div>
       </div>
     </div>
-    <div class="notes-box">🎤 <strong>Key Value:</strong> UrsBiz unifies bookkeeping, scheme discovery, and growth strategy into one seamless operating system.</div>
+    <div class="notes-box">🎤 <strong>Key Value:</strong> We do not call any number an AI hallucination. Every figure is reproducible from the stored business profile.</div>
   </div>
 
   <!-- Slide 4 -->
@@ -114,20 +113,20 @@
     <div>
       <div class="slide-header">
         <span class="slide-num">Slide 04 / 08</span>
-        <span>AI Innovation</span>
+        <span>AI Architecture</span>
       </div>
-      <h2 class="slide-title">AI That Delivers Actionable Intelligence</h2>
-      <div class="slide-subtitle">Zero-Hallucination Deterministic Engine + Hybrid RAG</div>
+      <h2 class="slide-title">How The AI Layer Is Built</h2>
+      <div class="slide-subtitle">Deterministic First, Generative Synthesis Grounded In The Evidence Bundle</div>
       <div class="slide-body">
         <ul>
-          <li><strong>Business Health Score:</strong> Multi-variate mathematical scoring across 8 operational dimensions.</li>
-          <li><strong>Zero Hallucinations:</strong> 100% deterministic rule firings for financial compliance and scheme eligibility.</li>
-          <li><strong>Hybrid Vector RAG:</strong> Contextual query pipeline over official Ministry gazettes (msme.gov.in).</li>
-          <li><strong>SWOT & Risk Identification:</strong> Automatically detects working capital bottlenecks before they occur.</li>
+          <li><strong>Deterministic engines:</strong> Profile Readiness Score, Scheme profile-match, Scenario horizons are rule-driven and reproducible.</li>
+          <li><strong>Grounded synthesis:</strong> An optional OpenAI-compatible provider rewrites the evidence bundle in natural language. Provider falls back to a safe placeholder if no API key is set.</li>
+          <li><strong>No embeddings, no vector store:</strong> The repo explicitly ships without vector search. Retrieval is from the deterministic engine outputs.</li>
+          <li><strong>Trust labels in UI:</strong> Every value is tagged <em>rule-engine</em>, <em>scenario estimate</em>, <em>retrieved</em>, or <em>generated</em>.</li>
         </ul>
       </div>
     </div>
-    <div class="notes-box">🎤 <strong>Key Value:</strong> Every MSME gets an AI-powered virtual Business Consultant for a fraction of traditional advisory costs.</div>
+    <div class="notes-box">🎤 <strong>Honesty Statement:</strong> We removed "Zero-Hallucination" and "Hybrid RAG" from earlier drafts because the codebase does not contain a vector layer.</div>
   </div>
 
   <!-- Slide 5 -->
@@ -135,24 +134,24 @@
     <div>
       <div class="slide-header">
         <span class="slide-num">Slide 05 / 08</span>
-        <span>Community Impact</span>
+        <span>Measured Outcomes</span>
       </div>
-      <h2 class="slide-title">Creating Real Impact for MSMEs</h2>
-      <div class="slide-subtitle">Democratic Access to Capital, Guidance & Economic Growth</div>
+      <h2 class="slide-title">What You Can Reproduce Today</h2>
+      <div class="slide-subtitle">Numbers From The Public Demo, Not Marketing Claims</div>
       <div class="slide-body">
         <div class="grid-2">
           <div class="card-item">
-            <h4>Impact Areas</h4>
-            <p style="font-size: 0.85rem; color: var(--muted);">• Replaces guesswork with empirical business health metrics<br>• Reduces manual reporting time by 80%<br>• Aligned with UN SDG 8 (Decent Work & Economic Growth)</p>
+            <h4>Demo Workspace (Acme Textiles, Tirupur)</h4>
+            <p style="font-size: 0.85rem; color: var(--muted);">• Profile Readiness Score across 4 lenses (financial, operational, sales, compliance).<br>• 7 curated scheme and registration programs with official authorities, links, verification status, and profile-match explanations.<br>• 3m / 6m / 12m scenario horizons, each with confidence and a "no guarantee" label.<br>• 1-click PDF + CSV report.</p>
           </div>
           <div class="card-item">
-            <h4>Target User Personas</h4>
-            <p style="font-size: 0.85rem; color: #FFF;">Small Manufacturers | Retailers | Service Providers | Women Entrepreneurs | Rural MSMEs | Startups</p>
+            <h4>Stack</h4>
+            <p style="font-size: 0.85rem; color: #FFF;">Next.js 15 + FastAPI (Python 3.12) + PostgreSQL/SQLite. JWT auth via HTTPOnly cookies. Health endpoints at <code>/api/v1/health/{live,ready}</code>.</p>
           </div>
         </div>
       </div>
     </div>
-    <div class="notes-box">🎤 <strong>Key Message:</strong> Technology should not only solve problems—it must create economic opportunities for all entrepreneurs.</div>
+    <div class="notes-box">🎤 <strong>Key Message:</strong> These are the figures the public demo actually produces — not projections of impact.</div>
   </div>
 
   <!-- Slide 6 -->
@@ -160,20 +159,20 @@
     <div>
       <div class="slide-header">
         <span class="slide-num">Slide 06 / 08</span>
-        <span>Technology & Scalability</span>
+        <span>Security &amp; Operations</span>
       </div>
-      <h2 class="slide-title">Built for Scale & Security</h2>
-      <div class="slide-subtitle">Sub-50ms API Latency & Modular Architecture</div>
+      <h2 class="slide-title">Honest Security &amp; Ops Posture</h2>
+      <div class="slide-subtitle">JWT HS256, HTTPOnly Cookies, Container Compose, /health Endpoints</div>
       <div class="slide-body">
         <ul>
-          <li><strong>Modern Stack:</strong> Next.js 15 (Turbopack, TypeScript) + FastAPI (Python 3.12, Pydantic v2).</li>
-          <li><strong>Data Flow:</strong> User → Next.js → FastAPI APIs → AI Business Engine → Analytics Engine → PostgreSQL.</li>
-          <li><strong>Enterprise Security:</strong> JWT OAuth2 authentication, CORS isolation, AES-256 encryption.</li>
-          <li><strong>High Performance:</strong> Sub-50ms API response latency, 100% test pass rate across 16 sprint suites.</li>
+          <li><strong>Auth:</strong> JWT signed with HS256, delivered via the <code>atlas_access_token</code> HTTPOnly cookie. No OAuth provider.</li>
+          <li><strong>At-rest encryption:</strong> None — we did not implement AES-256 envelope encryption. Document the deployment's DB-at-rest posture separately if relevant.</li>
+          <li><strong>Deployment:</strong> Docker Compose (nginx + backend + frontend + prometheus + grafana) or native uvicorn + standalone Next.js.</li>
+          <li><strong>Health &amp; readiness:</strong> <code>/api/v1/health/live</code> (process liveness) and <code>/api/v1/health/ready</code> (DB + knowledge base + AI provider + migrations).</li>
         </ul>
       </div>
     </div>
-    <div class="notes-box">🎤 <strong>Key Message:</strong> Engineered for enterprise performance with zero TypeScript compile errors and modular microservices.</div>
+    <div class="notes-box">🎤 <strong>Key Message:</strong> We removed "sub-50ms latency" and "AES-256" claims because no benchmark exists and the codebase uses HS256 JWTs, not AES-256.</div>
   </div>
 
   <!-- Slide 7 -->
@@ -183,27 +182,27 @@
         <span class="slide-num">Slide 07 / 08</span>
         <span>Why UrsBiz?</span>
       </div>
-      <h2 class="slide-title">Why UrsBiz Stands Out</h2>
-      <div class="slide-subtitle">Replaces Manual Guesswork with Data-Driven Precision</div>
+      <h2 class="slide-title">What Changes For The Founder</h2>
+      <div class="slide-subtitle">Reproduction-Friendly Outputs, Not Sales Promises</div>
       <div class="slide-body">
         <table>
           <thead>
             <tr>
-              <th>Traditional Approach</th>
-              <th>UrsBiz Platform</th>
+              <th>Before</th>
+              <th>With UrsBiz</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>Manual Analysis & Guesswork</td><td><strong>Real-Time AI-Powered Insights</strong></td></tr>
-            <tr><td>Static Paper Reports</td><td><strong>Interactive Dashboard & 1-Click PDF</strong></td></tr>
-            <tr><td>Manual Search Across 40+ Portals</td><td><strong>Intelligent Scheme Discovery Engine</strong></td></tr>
-            <tr><td>Fragmented Tools (Tally + Excel)</td><td><strong>One Integrated Operating System</strong></td></tr>
+            <tr><td>Manual spreadsheet reports re-typed per bank visit</td><td><strong>1-click PDF &amp; CSV exports, every figure traceable</strong></td></tr>
+            <tr><td>Manual search across multiple ministry portals</td><td><strong>Profile-matched schemes with %, source &amp; last-verified date</strong></td></tr>
+            <tr><td>Intuition-only forward view</td><td><strong>3m / 6m / 12m scenario estimates with horizon &amp; confidence labels</strong></td></tr>
+            <tr><td>Profile details re-entered on every form</td><td><strong>Single Business Digital Twin reused across all modules</strong></td></tr>
           </tbody>
         </table>
-        <p style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--accent);">Future Roadmap: AI Copilot → Loan & Export Readiness → Financial Forecasting → Multi-Language Support.</p>
+        <p style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--accent);">Roadmap: lender-grade audit bundle, Udyam portal data import, multi-language scheme explanations.</p>
       </div>
     </div>
-    <div class="notes-box">🎤 <strong>Closing Vision:</strong> Our vision is to become the AI Operating System for MSMEs worldwide.</div>
+    <div class="notes-box">🎤 <strong>Closing Vision:</strong> UrsBiz is a deterministic decision-support tool for small businesses, not an autonomous agent that promises outcomes.</div>
   </div>
 
   <!-- Slide 8 -->
@@ -214,14 +213,14 @@
         <span>Thank You</span>
       </div>
       <h2 class="slide-title">Thank You</h2>
-      <div class="slide-subtitle">Empowering Every MSME with AI-Driven Business Intelligence</div>
+      <div class="slide-subtitle">Built Honestly. Judges can clone, run, and verify every claim.</div>
       <div class="slide-body" style="text-align: center; margin-top: 2rem;">
-        <p style="font-size: 1.75rem; color: var(--accent); font-weight: 800;">Smarter Decisions. Stronger Businesses.</p>
-        <p style="margin-top: 1.5rem; color: var(--muted); font-size: 1rem;">We believe technology should not only solve problems—it should create opportunities.<br>UrsBiz is our step toward making advanced business intelligence accessible to every entrepreneur.</p>
+        <p style="font-size: 1.75rem; color: var(--accent); font-weight: 800;">Reproducible Numbers. Clear Limits.</p>
+        <p style="margin-top: 1.5rem; color: var(--muted); font-size: 1rem;">Every figure in this deck is something you can reproduce from the public demo or the H7 verification suite.<br>Where we do not have evidence, we say so.</p>
         <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #FFF;">Project: UrsBiz | Hack4Good – AKKA 2026</p>
       </div>
     </div>
-    <div class="notes-box">🎤 <strong>Contact:</strong> founders@ursbiz.com | GitHub Repository & Live Demo</div>
+    <div class="notes-box">🎤 <strong>Contact:</strong> founders@ursbiz.com | GitHub Repository &amp; Live Demo</div>
   </div>
 
   <!-- Controls -->
@@ -245,7 +244,7 @@
     if (currentSlide < 0) currentSlide = 0;
     if (currentSlide >= slides.length) currentSlide = slides.length - 1;
     slides[currentSlide].classList.add('active');
-    
+
     counter.textContent = `Slide ${currentSlide + 1} of ${slides.length}`;
     prevBtn.disabled = currentSlide === 0;
     nextBtn.disabled = currentSlide === slides.length - 1;

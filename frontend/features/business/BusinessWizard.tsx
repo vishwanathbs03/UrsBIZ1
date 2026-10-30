@@ -159,8 +159,11 @@ function emptyDraft(): DraftState {
 // --------------------------------------------------------------------------- //
 
 export function BusinessWizard() {
-  // eslint-disable-next-line no-console
-  console.log("[BUSWIZ] render");
+  // Dev-only render trace — stripped from production bundles.
+  if (process.env.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
+    console.log("[BUSWIZ] render");
+  }
   const [stepIndex, setStepIndex] = useState(0);
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -250,11 +253,33 @@ export function BusinessWizard() {
       onSuccess: () => setSuccess(true),
       onError: (err) => {
         if (err instanceof ApiError) {
-          setServerError(
-            typeof err.body === "object" && err.body && "detail" in err.body
-              ? String((err.body as { detail: unknown }).detail)
-              : err.message,
-          );
+          // H7.1 Part 5 — distinguish the failure class so the UI tells
+          // the user what actually happened instead of a generic message.
+          if (err.isTimeout || err.isNetworkError) {
+            setServerError(
+              "Could not reach the server. Check your connection and try again.",
+            );
+          } else if (err.isUnauthenticated) {
+            setServerError(
+              "Your session has expired. Please log in again to save your profile.",
+            );
+          } else if (err.isValidationError) {
+            setServerError(
+              typeof err.body === "object" && err.body && "detail" in err.body
+                ? String((err.body as { detail: unknown }).detail)
+                : "Some details failed validation. Review the highlighted fields.",
+            );
+          } else if (err.isConflict) {
+            setServerError(
+              "A business profile already exists for this account. Reload to edit it.",
+            );
+          } else if (err.isServerError) {
+            setServerError(
+              "The server hit an internal error while saving. Please retry in a moment.",
+            );
+          } else {
+            setServerError(err.message || "Could not save your business profile.");
+          }
         } else {
           setServerError(err.message || "Could not save your business profile.");
         }

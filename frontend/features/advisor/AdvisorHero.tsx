@@ -57,9 +57,9 @@ export function AdvisorHero({ advisor }: AdvisorHeroProps) {
     const score = Math.round(Number(summary.overall_score) || 0);
     return {
       text:
-        `Atlas is observing ${summary.legal_name || "your business"} ` +
+        `UrsBiz is observing ${summary.legal_name || "your business"} ` +
         `(${summary.industry || "unspecified industry"}). The current ` +
-        `overall readiness score is ${score}/100, with the ` +
+        `Business Health Score is ${score}/100, with the ` +
         `${summary.archetype || "foundation"} archetype dominant. ` +
         `Acting on the top five recommendations below is the fastest ` +
         `path to a measurable lift in this score.`,
@@ -99,8 +99,8 @@ export function AdvisorHero({ advisor }: AdvisorHeroProps) {
   return (
     <DashboardCard
       badge="Executive Summary"
-      title="Atlas Advisor"
-      caption="A one-screen read on what Atlas is seeing and what to do next."
+      title="Business Advisor"
+      caption="A one-screen read on what UrsBiz is seeing and what to do next."
       icon={<Sparkles className="size-4 text-primary" aria-hidden="true" />}
     >
       <div className="flex flex-col gap-5">
@@ -184,7 +184,7 @@ export function AdvisorHero({ advisor }: AdvisorHeroProps) {
             trailing={
               <LevelBadge
                 level={confidence.badge}
-                tone={confidenceToTone(confidence.percent).tone}
+                tone={confidence.percent == null ? "muted" : confidenceToTone(confidence.percent).tone}
               />
             }
           />
@@ -246,7 +246,7 @@ function DemoBadge({ compact = false }: { compact?: boolean }) {
         "inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-700",
         compact ? "px-1.5 py-0 text-[9px] font-medium uppercase tracking-wider" : "px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider",
       )}
-      title="This value is a deterministic demo placeholder; the backend does not return it yet."
+      title="This value is a qualitative estimate from the advisor pass; not a calculated confidence."
     >
       <Sparkles className="size-2.5" aria-hidden="true" />
       Demo
@@ -259,12 +259,11 @@ function DemoBadge({ compact = false }: { compact?: boolean }) {
 // --------------------------------------------------------------------------- //
 
 function estimateTimeline(advisor: AdvisorResponse) {
-  // Real data: look at the next-highest priority item. The advisor
-  // sections do not carry a per-item timeline, so we map the top
-  // priority band to a deterministic 1-3 month range.
+  // H6.1 — removed the fabricated 1-3 month fallback. We do NOT
+  // pretend we know the timeline when no priority data exists.
   const top = pickTopPriority(advisor);
   if (!top) {
-    return { label: "1-3 months", hint: "Estimated total timeline", isDemo: true };
+    return { label: "Not quantified", hint: "Timeline requires at least one priority item.", isDemo: true };
   }
   const bucket: Record<string, { label: string; hint: string }> = {
     Critical: { label: "0-1 month", hint: "Critical priority · start now" },
@@ -272,22 +271,37 @@ function estimateTimeline(advisor: AdvisorResponse) {
     Medium:   { label: "3-6 months", hint: "Medium priority · this half" },
     Low:      { label: "6-12 months", hint: "Low priority · next planning cycle" },
   };
-  const b = bucket[top.priority] ?? bucket.Medium!;
-  return { label: b.label, hint: b.hint, isDemo: true };
+  const b = bucket[top.priority];
+  if (!b) {
+    return { label: "Not quantified", hint: "Priority band has no mapped timeline.", isDemo: true };
+  }
+  // The mapped bucket is a deterministic lookup, not a calculated
+  // timeline. H6.1: label clearly as "qualitative" — the user must
+  // not read this as a calculated project plan.
+  return { label: b.label, hint: `${b.hint} (qualitative estimate)`, isDemo: false };
 }
 
 function estimateConfidence(advisor: AdvisorResponse) {
-  // Deterministic 0..100 confidence score derived from the advisor
-  // response's `generated_at` so the badge is stable for the same
-  // advisor response but visibly changes when the user regenerates.
-  const seed = hashString(`${advisor.generated_at}|${advisor.advisor_id}`);
-  const percent = 60 + (seed % 30); // 60..89 range — "atlas is moderately sure"
-  const tone = confidenceToTone(percent);
+  // H6.1 — removed the fabricated 60..89 deterministic confidence
+  // hash. We do NOT compute a "confidence percentage" out of thin
+  // air when the backend does not return one. The hero tile now
+  // surfaces "Not quantified" and lets the user know that the
+  // current advisor pass does not include a calculated confidence.
+  const hasAdvisor = advisor && advisor.advisor_id;
+  if (!hasAdvisor) {
+    return {
+      percent: null,
+      label: "Not quantified",
+      hint: "Confidence requires the backend advisor response.",
+      badge: "Not available",
+      isDemo: true,
+    };
+  }
   return {
-    percent,
-    label: `${percent}%`,
-    hint: "Deterministic confidence in this advisor pass",
-    badge: tone.label,
+    percent: null,
+    label: "Not quantified",
+    hint: "Advisor confidence is qualitative for this pass.",
+    badge: "Qualitative",
     isDemo: true,
   };
 }

@@ -24,6 +24,7 @@ Outputs PASS / FAIL per check, then an aggregate at the end. Exits 0 on PASS.
 """
 
 from __future__ import annotations
+import io
 import json
 import os
 import re
@@ -31,6 +32,13 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+# The PART C labels print '₹'; Windows consoles default to cp1252 and crash.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except io.UnsupportedOperation:
+        pass
 
 ROOT = Path(r"D:\MSME\UrsAi")
 FRONTEND = ROOT / "frontend"

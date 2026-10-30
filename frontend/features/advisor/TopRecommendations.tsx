@@ -323,7 +323,7 @@ function timelineFor(priority: AdvisorPriority): BandMeta {
 function buildExplanation(item: NormalizedItem): string {
   const why: string[] = [];
   why.push(
-    `Priority is "${item.priority}", so Atlas is recommending this before ` +
+    `Priority is "${item.priority}", so UrsBiz is recommending this before ` +
       `lower-priority items.`,
   );
   if (item.source) {

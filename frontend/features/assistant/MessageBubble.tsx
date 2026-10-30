@@ -13,8 +13,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage as ChatMessageModel } from "./types";
-import { ConsultantRenderer } from "./ConsultantRenderer";
+import { TrustFirstResponse } from "./TrustFirstResponse";
 import { formatAssistantBody } from "./AssistantRenderer";
+import type { TrustLabel } from "./TrustBadge";
+import type { AssistantContext } from "./types";
 
 interface MessageBubbleProps {
   message: ChatMessageModel;
@@ -22,6 +24,15 @@ interface MessageBubbleProps {
   memoryTopics?: string[];
   /** Called when the user clicks a smart follow-up chip. */
   onFollowUp?: (label: string) => void;
+  /**
+   * Optional AssistantContext snapshot — used by the AI-6
+   * TrustFirstResponse shell to surface concrete evidence
+   * values ("Revenue ₹1.80 Cr", "Health score 68/100",
+   * "Supplier concentration 75%") instead of raw evidence
+   * IDs. The shell tolerates absence by falling back to
+   * generic labels.
+   */
+  context?: AssistantContext | null;
 }
 
 /**
@@ -41,21 +52,52 @@ interface MessageBubbleProps {
  */
 export function MessageBubble({
   message,
-  memoryTopics,
+  memoryTopics: _memoryTopics,
   onFollowUp,
+  context,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
   const [vote, setVote] = useState<"up" | "down" | null>(null);
-  const isStructured = !isUser && !!message.consultant;
+  // The legacy 3-state derivation is still exported because
+  // downstream tests + the TrustFirstResponse shell consume it.
+  // The path-selection itself now lives in the shell.
 
   const handleCopy = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
-      const text = message.consultant
-        ? message.consultant.sections
-            .map((s) => `${s.title}\n${s.body ?? ""}`)
-            .join("\n\n")
-        : message.content;
+      const groundedPayload = message.generation?.grounded_payload ?? null;
+      let text = message.content;
+      if (groundedPayload) {
+        // H7.8C — the GroundedResponseRenderer renders nine
+        // sections. The clipboard copy should match what the
+        // user sees: executive summary + each section's
+        // textual content. A future iteration can produce a
+        // markdown variant.
+        const parts: string[] = [groundedPayload.executive_summary];
+        for (const f of groundedPayload.key_findings) {
+          parts.push(`- ${f.title}${f.detail ? ` — ${f.detail}` : ""}`);
+        }
+        for (const r of groundedPayload.recommendations) {
+          parts.push(`- ${r.title} (${r.recommendation_id})`);
+        }
+        for (const p of groundedPayload.thirty_day_plan) {
+          parts.push(`- Week ${p.week}: ${p.task}`);
+        }
+        for (const s of groundedPayload.scheme_matches) {
+          parts.push(`- Scheme profile match: ${s.match_explanation}`);
+        }
+        for (const a of groundedPayload.assumptions) {
+          parts.push(`Assumption: ${a}`);
+        }
+        for (const l of groundedPayload.limitations) {
+          parts.push(`Limitation: ${l}`);
+        }
+        text = parts.join("\n");
+      } else if (message.consultant) {
+        text = message.consultant.sections
+          .map((s) => `${s.title}\n${s.body ?? ""}`)
+          .join("\n\n");
+      }
       void navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -87,17 +129,42 @@ export function MessageBubble({
           isUser ? "items-end" : "items-start",
         )}
       >
-        {isStructured ? (
+        {/* Sprint AI-6 — Trust-first visual UI.
+            Every assistant message renders through the
+            TrustFirstResponse shell:
+              1. Direct Answer (1-3 sentences)
+              2. TrustBar (5 mutually-exclusive labels)
+              3. Top Recommendation
+              4. Secondary cards (all collapsed by default)
+              5. Technical provenance (collapsed)
+            For user messages, the legacy bubble still
+            renders. The standalone TrustBadge / TrustMeta
+            pair below the bubble is removed — the shell
+            embeds them now. The GroundedResponseRenderer
+            and ConsultantRenderer are kept mounted inside
+            the "What I found" card so the original 9-section
+            / 6-section detail is preserved. */}
+        {!isUser ? (
           <div
+            data-testid="assistant-message-bubble"
             className={cn(
               "relative group w-full rounded-2xl border border-border bg-card text-card-foreground shadow-soft transition-shadow",
               "hover:shadow-md",
             )}
           >
             <div className="space-y-3 p-3 sm:p-4">
-              <ConsultantRenderer
-                response={message.consultant!}
-                memoryTopics={memoryTopics}
+              <TrustFirstResponse
+                message={message}
+                context={
+                  context
+                    ? {
+                        score: context.score,
+                        recommendations: context.recommendations,
+                        dnaArchetype: context.dna.archetype,
+                        dnaMatch: context.dna.match,
+                      }
+                    : null
+                }
                 onFollowUp={onFollowUp}
               />
             </div>
@@ -122,20 +189,12 @@ export function MessageBubble({
             ) : (
               <TypedBody text={message.content} />
             )}
-            {!isUser && (
-              <ActionToolbar
-                copied={copied}
-                onCopy={handleCopy}
-                vote={vote}
-                onVote={setVote}
-              />
-            )}
           </div>
         )}
-        {!isUser && message.sources && message.sources.length > 0 && !isStructured && (
+        {!isUser && message.sources && message.sources.length > 0 && (
           <SourceList sources={message.sources} />
         )}
-        {!isUser && !isStructured && (
+        {!isUser && (
           <FollowUpChips message={message} />
         )}
         <time
@@ -213,8 +272,11 @@ function ActionToolbar({
 
 function FollowUpChips({ message }: { message: ChatMessageModel }) {
   const followUps = useMemo(() => deriveFollowUps(message), [message]);
-  if (followUps.length === 0) return null;
+  // Hooks must run unconditionally. We always allocate the
+  // busy state even when there are no follow-ups so we
+  // never violate the rules-of-hooks invariant.
   const [busy, setBusy] = useState<string | null>(null);
+  if (followUps.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 px-1">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -418,6 +480,37 @@ function TypedBody({ text }: { text: string }) {
 // --------------------------------------------------------------------------- //
 // Helpers                                                                    //
 // --------------------------------------------------------------------------- //
+
+/**
+ * Derive the 3-state trust label from the message envelope.
+ *
+ * H7.8C — the source-of-truth is the ``generation`` envelope
+ * the backend persists. The legacy ``fallback_used`` flag is
+ * used only when the generation envelope is absent (the
+ * client-side deterministic consultant, which never hits the
+ * backend).
+ *
+ * The label derivation is deterministic and safe to log; the
+ * verifier can grep the rendered output for these exact strings.
+ */
+export function deriveTrustLabel(message: ChatMessageModel): TrustLabel {
+  const gen = message.generation;
+  if (gen) {
+    if (gen.generation_method === "offline_snapshot" || gen.fallback_reason === "offline_snapshot") {
+      return "offline_snapshot";
+    }
+    if (gen.fallback_used) return "rule_engine";
+    if (gen.mode === "open") {
+      if (gen.context_manifest && gen.context_manifest.records_used > 0) {
+        return "open_business";
+      }
+      return "open_domain";
+    }
+    if (gen.grounding_validated) return "generated";
+    return "generated";
+  }
+  return message.fallback_used === false ? "generated" : "rule_engine";
+}
 
 function formatTime(iso: string): string {
   try {

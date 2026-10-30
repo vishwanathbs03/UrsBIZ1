@@ -4,7 +4,7 @@ verify_sprint7_part3.py - ad-hoc verifier for Sprint 7 Part 3
 
 In-tree copy lives at D:/MSME/UrsAi/scripts/verify_sprint7_part3.py.
 
-The verifier drives the running uvicorn dev server (port 8000)
+The verifier drives the running uvicorn dev server (port 8001)
 through the full CRUD cycle for the /api/v1/chat surface:
 
   1.  POST /api/v1/auth/register           -> register a throwaway user
@@ -70,7 +70,7 @@ ASSISTANT_PAGE = FRONTEND / "app" / "(app)" / "assistant" / "page.tsx"
 ASSISTANT_FEATURES = FRONTEND / "features" / "assistant"
 VENV_PY = BACKEND / ".venv" / "Scripts" / "python.exe"
 
-BASE = "http://127.0.0.1:8000"
+BASE = "http://127.0.0.1:8001"
 API = f"{BASE}/api/v1"
 
 ok = True

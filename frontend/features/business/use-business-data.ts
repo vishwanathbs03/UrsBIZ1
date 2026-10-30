@@ -62,12 +62,10 @@ export function useUpdateBusiness() {
   });
 }
 
-export function useDeleteBusiness() {
-  const queryClient = useQueryClient();
-  return useMutation<{ detail: string; id: number }, Error, void>({
-    mutationFn: () => businessService.delete(),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["business"] });
-    },
-  });
-}
+// Sprint 23 — the legacy "delete the active business, no args" hook
+// was removed. The single source of truth for business deletion is now
+// ``useDeleteBusinessById`` (see features/profile/use-businesses.ts),
+// which takes the explicit business id and calls the new
+// DELETE /api/v1/business/{business_id} route. The previous
+// ``businessService.delete()`` (no-arg, active-only) endpoint was
+// retired alongside it.

@@ -124,15 +124,44 @@ class ChatSessionRepository:
         content: str,
         kind: str = "",
         sources: list[dict] | None = None,
+        fallback_used: bool | None = None,
+        generation_meta: dict | str | None = None,
     ) -> ChatMessage:
-        """Append a message to the session and return it."""
+        """Append a message to the session and return it.
+
+        H7.8A P2 — ``fallback_used`` is propagated to the per-message
+        row when supplied, so the frontend ``MessageBubble`` can render
+        the correct trust label ("Calculated by UrsBiz rule engine"
+        vs "Generated explanation"). User messages always store
+        ``fallback_used=False`` because the trust label only applies
+        to assistant turns.
+
+        H7.8C — ``generation_meta`` is the structured
+        ``ChatGenerationMeta`` payload the provider layer stamps on
+        every assistant turn. The repository serialises a dict
+        via ``json.dumps(..., separators=(",", ":"))`` (compact
+        form, no whitespace) and accepts a pre-serialised string
+        for callers that already have one. User messages and any
+        caller that does not need provenance pass ``None`` and the
+        stored value defaults to ``""``.
+        """
         import json
+        if isinstance(generation_meta, dict):
+            generation_meta_json = json.dumps(
+                generation_meta, separators=(",", ":"), ensure_ascii=False
+            )
+        elif isinstance(generation_meta, str):
+            generation_meta_json = generation_meta
+        else:
+            generation_meta_json = ""
         msg = ChatMessage(
             session_id=session.id,
             role=role,
             kind=kind or "",
             content=content,
             sources_json=json.dumps(sources or [], ensure_ascii=False),
+            fallback_used=bool(fallback_used) if fallback_used is not None else False,
+            generation_meta_json=generation_meta_json,
         )
         self._db.add(msg)
         self._db.flush()

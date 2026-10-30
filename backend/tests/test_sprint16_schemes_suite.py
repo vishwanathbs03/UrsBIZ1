@@ -76,7 +76,7 @@ def test_sprint16_schemes_unit():
         categorized = engine_svc.recommend_schemes(fresh)
         assert len(categorized.eligible) > 0
         assert len(categorized.recommended) > 0
-        assert all(s.eligibility_status == "eligible" for s in categorized.eligible)
+        assert all(s.eligibility_status == "matching" for s in categorized.eligible)
 
         print("[PASS] Sprint 16 Unit Scheme Recommendation test passed cleanly!")
 

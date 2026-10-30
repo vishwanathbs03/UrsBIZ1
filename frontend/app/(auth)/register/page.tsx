@@ -3,7 +3,8 @@ import { RegisterForm } from "@/components/auth/RegisterForm";
 import { RedirectIfAuthed } from "@/components/auth/RedirectIfAuthed";
 
 export const metadata: Metadata = {
-  title: "Get started",
+  title: "Get started with UrsBiz",
+  description: "Create your free UrsBiz account in less than a minute.",
 };
 
 export default function RegisterPage() {

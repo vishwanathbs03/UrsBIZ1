@@ -2,28 +2,28 @@ import { Building, Globe, Flame, Clock } from "lucide-react";
 
 const stats = [
   {
-    val: "63M+",
-    label: "Indian MSMEs",
-    desc: "Empowered small businesses driving regional innovation.",
+    val: "0–100",
+    label: "Profile Readiness Score",
+    desc: "Deterministic measure of how completely the business profile is filled in across six weighted sections. Same inputs always produce the same score.",
     icon: Building,
   },
   {
-    val: "30%",
-    label: "GDP Contribution",
-    desc: "Core economic backbone of emerging national markets.",
+    val: "7",
+    label: "Curated Schemes & Registrations",
+    desc: "CGTMSE, ZED, PMEGP, MAI, MUDRA Shishu, NSIC, Udyam — each with official authority, last-verified date and disclaimer.",
     icon: Globe,
   },
   {
-    val: "110M+",
-    label: "Employment Impact",
-    desc: "Jobs created across manufacturing and service sectors.",
-    icon: Flame,
+    val: "3m / 6m / 12m",
+    label: "Scenario Horizons",
+    desc: "Forecast engine with horizon, confidence, and ‘no guarantee’ labels.",
+    icon: Clock,
   },
   {
-    val: "24×7",
-    label: "AI Decision Intelligence",
-    desc: "Continuous autonomous monitoring and priority briefings.",
-    icon: Clock,
+    val: "1-click",
+    label: "Audit-Ready Reports",
+    desc: "PDF + CSV exports with health snapshot, scheme recommendations, and forecasts.",
+    icon: Globe,
   },
 ];
 

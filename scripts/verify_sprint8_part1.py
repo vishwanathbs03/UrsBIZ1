@@ -215,7 +215,7 @@ for name in ["build.sh", "deploy.sh", "restart.sh", "backup.sh", "logs.sh", "hea
 
 backend_running = False
 try:
-    with urllib.request.urlopen("http://127.0.0.1:8000/api/v1/health", timeout=2) as r:
+    with urllib.request.urlopen("http://127.0.0.1:8001/api/v1/health", timeout=2) as r:
         if r.status == 200:
             body = json.loads(r.read())
             backend_running = body == {"status": "ok"}
@@ -225,7 +225,7 @@ except Exception:
 if backend_running:
     chk("backend /api/v1/health still returns {'status':'ok'}", True)
 else:
-    print("[SKIP] backend not running on :8000 — cannot probe health endpoint")
+    print("[SKIP] backend not running on :8001 — cannot probe health endpoint")
     print("       (this is a Sprint 7 contract check; the docker image is the real proof)")
 
 # --------------------------------------------------------------------------- #

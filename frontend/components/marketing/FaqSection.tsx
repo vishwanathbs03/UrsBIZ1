@@ -6,15 +6,15 @@ import { ChevronDown, HelpCircle } from "lucide-react";
 const faqs = [
   {
     q: "What is UrsBiz and how does it help my business?",
-    a: "UrsBiz is an AI-powered Business Intelligence Platform designed for MSMEs. It creates a digital twin of your business profile to compute a 0-100 Business Health Score, automatically match 25+ government schemes (like PMEGP, CGTMSE, Mudra), generate daily priority briefings, and export bank-ready PDF executive reports.",
+    a: "UrsBiz is an AI-powered Business Intelligence Platform designed for MSMEs. It creates a digital twin of your business profile to compute a 0-100 Profile Readiness Score (a measure of how completely the founder has filled in the digital twin — not a measure of business risk), profile-match 7 curated scheme and registration programs with official authorities (PMEGP, CGTMSE, MUDRA Shishu, MAI, ZED, NSIC, Udyam), generate daily priority briefings, and export bank-ready PDF executive reports.",
   },
   {
     q: "Does UrsBiz guarantee government scheme approval?",
-    a: "UrsBiz evaluates your operational profile against official ministry eligibility rules to deliver high-confidence match scores (%) and step-by-step application document checklists. Final sanctioning rests with the respective government sanctioning authority.",
+    a: "No. UrsBiz evaluates your operational profile against official ministry eligibility rules to deliver high-confidence match scores (%) and step-by-step application document checklists. The catalog has 7 entries (CGTMSE, ZED, PMEGP, MAI, MUDRA Shishu, NSIC, Udyam). Final sanctioning rests with the respective government sanctioning authority.",
   },
   {
     q: "How does the AI engine avoid hallucinations?",
-    a: "UrsBiz uses a deterministic rule engine for financial scoring and subsidy eligibility so every score and matching percentage is traceable to the input business profile and the cited rule. For natural language queries, it pairs vector RAG search over official government gazette guidelines, and the UI clearly distinguishes calculated scores from scenario estimates.",
+    a: "UrsBiz uses a deterministic rule engine for profile readiness scoring and scheme profile-matching, so every score and matching percentage is traceable to the input business profile and the cited rule. For natural-language questions, the assistant is grounded in the deterministic evidence bundle — the same data the rule engines produced — and the UI clearly labels each value (Calculated by UrsBiz rule engine, scenario estimate, retrieved from official source, or Generated explanation). The Generated explanation label only appears when a real OpenAI-compatible / Ollama provider answered; deterministic replies are never labelled as generated.",
   },
   {
     q: "How long does it take to onboard my business profile?",

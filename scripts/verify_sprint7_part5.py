@@ -2,7 +2,7 @@
 verify_sprint7_part5.py - ad-hoc verifier for Sprint 7 Part 5
 (Autonomous Business Advisor).
 
-Drives the running uvicorn dev server (port 8000) through the
+Drives the running uvicorn dev server (port 8001) through the
 Sprint 7 Part 5 advisor endpoint and the advisor frontend
 bundle. Checks:
 
@@ -56,7 +56,7 @@ BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
 VENV_PY = BACKEND / ".venv" / "Scripts" / "python.exe"
 
-BASE = "http://127.0.0.1:8000"
+BASE = "http://127.0.0.1:8001"
 API = f"{BASE}/api/v1"
 
 ok = True

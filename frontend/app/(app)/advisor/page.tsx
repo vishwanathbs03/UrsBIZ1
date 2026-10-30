@@ -1,28 +1,25 @@
 import type { Metadata } from "next";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { AdvisorView } from "@/features/advisor";
+import { AdvisorExecutiveView } from "@/features/advisor/AdvisorExecutiveView";
 
 export const metadata: Metadata = {
-  title: "Advisor",
+  title: "Business Advisor | UrsBiz",
+  description:
+    "What should this business prioritize now? Three priorities, strengths and concerns, and detailed analysis.",
 };
 
 /**
- * Autonomous Business Advisor — Sprint 7 Part 5.
+ * Autonomous Business Advisor — Sprint H6.2 executive simplification.
  *
- * Frontend only. The view is a client component (it owns
- * data loading + state) and is wrapped in
- * <ProtectedRoute> so unauthenticated visitors are redirected.
- *
- * The advisor is read-only — the page never renders
- * action-trigger buttons. The seven sections + the
- * business summary + the inputs sidecar are all derived
- * from the existing GET /api/v1/advisor endpoint that the
- * backend exposes.
+ * The page renders the executive orchestrator (brief + top 3
+ * priorities + strengths/concerns + impact/effort buckets) and
+ * preserves the pre-H6.2 detailed analysis inside a collapsible
+ * accordion.
  */
 export default function AdvisorPage() {
   return (
     <ProtectedRoute>
-      <AdvisorView />
+      <AdvisorExecutiveView />
     </ProtectedRoute>
   );
 }

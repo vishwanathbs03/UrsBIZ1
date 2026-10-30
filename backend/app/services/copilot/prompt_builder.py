@@ -50,7 +50,7 @@ from app.services.copilot.base import CopilotContext, CopilotPrompt
 # (return a JSON-shaped object that fits the
 # envelope) is fixed.
 _SYSTEM = (
-    "You are Atlas AI Copilot, a business "
+    "You are UrsBiz Copilot, a business "
     "consultant for an Indian SMB. You receive a "
     "structured snapshot of the user's business "
     "and the detected intent of their question. "

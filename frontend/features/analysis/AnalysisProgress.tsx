@@ -62,7 +62,7 @@ export function AnalysisProgress({
   percent,
   status,
   headline = "Analyzing your business…",
-  caption = "Hold tight while Atlas works through six stages. This usually takes a few seconds.",
+  caption = "Hold tight while UrsBiz works through six stages. This usually takes a few seconds.",
 }: AnalysisProgressProps) {
   const doneCount = status === "complete"
     ? ANALYSIS_STAGES.length

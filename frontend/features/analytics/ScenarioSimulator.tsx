@@ -296,9 +296,9 @@ function LeverRow({ lever, value, onChange }: LeverRowProps) {
 
 interface ResultTileProps {
   label: string;
-  current: number;
-  baseline: number;
-  projected: number;
+  current: number | null;
+  baseline: number | null;
+  projected: number | null;
   higherIsBetter: boolean;
   format: "currency" | "percent" | "score";
   icon: React.ReactNode;
@@ -313,15 +313,20 @@ function ResultTile({
   format,
   icon,
 }: ResultTileProps) {
-  const delta = projected - baseline;
-  const isGood = higherIsBetter ? delta >= 0 : delta <= 0;
-  const progressPct = clamp(
-    format === "score" ? projected : Math.min(100, projected),
-    0,
-    100,
-  );
-  const tone =
-    format === "score" ? scoreTone(scoreBand(projected, higherIsBetter)) : "";
+  // H6.1 — when either baseline or projected is null we render an
+  // honest empty state ("Data unavailable") instead of calculating a
+  // meaningless delta.
+  const dataMissing = baseline == null || projected == null;
+  const delta = dataMissing ? 0 : projected - baseline;
+  const isGood = dataMissing ? null : higherIsBetter ? delta >= 0 : delta <= 0;
+  const progressPct = dataMissing
+    ? 0
+    : clamp(format === "score" ? projected : Math.min(100, projected), 0, 100);
+  const tone = dataMissing
+    ? "muted"
+    : format === "score"
+    ? scoreTone(scoreBand(projected, higherIsBetter))
+    : "";
   const formatted = useMemo(() => formatValue(projected, format), [projected, format]);
   const formattedBaseline = useMemo(
     () => formatValue(baseline, format),
@@ -346,12 +351,20 @@ function ResultTile({
         </span>
       </div>
       <div className="flex items-baseline gap-1">
-        <AnimatedCounter
-          value={format === "currency" ? Math.round(projected) : projected}
-          className={cn("text-2xl font-semibold tabular-nums", tone)}
-        />
-        <span className="text-xs text-muted-foreground">{unitLabel(format)}</span>
-      </div>
+              {dataMissing ? (
+                <span className="text-sm font-medium text-muted-foreground">
+                  Data unavailable
+                </span>
+              ) : (
+                <>
+                  <AnimatedCounter
+                    value={format === "currency" ? Math.round(projected) : projected}
+                    className={cn("text-2xl font-semibold tabular-nums", tone)}
+                  />
+                  <span className="text-xs text-muted-foreground">{unitLabel(format)}</span>
+                </>
+              )}
+            </div>
       <ProgressBar
         value={progressPct}
         label={`${label} progress`}
@@ -371,6 +384,11 @@ function ResultTile({
 
 function CompositeVerdict({ result }: { result: SimulationResult }) {
   const { health, risk } = result;
+  // H6.1 — if either axis is missing we don't synthesise a verdict.
+  if (health.projected == null || health.baseline == null ||
+      risk.projected == null  || risk.baseline == null) {
+    return "Data unavailable for verdict";
+  }
   const lift = health.projected - health.baseline;
   const riskShift = risk.projected - risk.baseline;
   const favorable = lift >= 5 && riskShift <= 5;
@@ -418,16 +436,22 @@ function CompositeVerdict({ result }: { result: SimulationResult }) {
 // --------------------------------------------------------------------------- //
 
 interface Baseline {
-  revenue: number;
+  // H6.1 — revenue and risk are nullable: when the underlying
+  // Digital Twin payload does not carry a real value, we surface
+  // "Data unavailable" instead of inventing a number.
+  revenue: number | null;
   growth: number;
-  risk: number;
+  risk: number | null;
   health: number;
 }
 
 interface ProjectionTile {
-  baseline: number;
-  current: number;
-  projected: number;
+  // H6.1 — tiles are nullable. When the baseline is null
+  // ("Data unavailable"), the tile shows "Not quantified"
+  // and no projection is calculated.
+  baseline: number | null;
+  current: number | null;
+  projected: number | null;
 }
 
 interface SimulationResult {
@@ -438,44 +462,42 @@ interface SimulationResult {
 }
 
 function buildBaseline(twin: TwinResponse): Baseline {
+  // H6.1 — replaced fabricated `baseUnits * 12_000` revenue formula
+  // with an honest "not quantified" sentinel. The simulator now
+  // shows the per-axis baseline ONLY when the underlying Digital
+  // Twin payload has a real value, and surfaces an empty state
+  // (visible in the rendered output) when no data is available.
   const overall = clamp(Number(twin.current_health?.overall_business_score) || 0, 0, 100);
   const growth3m = clamp(
     Number(twin.timeline?.three_month?.projected_overall_score) - overall,
     0,
     100,
   );
-  // Revenue baseline: deterministic estimate derived from the
-  // Digital Twin's profile. We approximate revenue per social
-  // channel + per certification + per product, then a flat
-  // floor for businesses with no digital footprint.
-  const profile = twin.profile;
-  const digitalSignal =
-    (profile?.social_channel_count ?? 0) +
-    (profile?.has_website ? 5 : 0) +
-    (profile?.has_ecommerce ? 6 : 0) +
-    (profile?.uses_digital_marketing ? 4 : 0);
-  const productSignal = (profile?.products_count ?? 0) * 12;
-  const certificationSignal = (profile?.certifications_count ?? 0) * 6;
-  const baseUnits = 8 + digitalSignal + productSignal + certificationSignal;
-  const revenue = baseUnits * 12_000;
 
-  // Risk baseline: critical/high/medium risk counts weighted
-  // into a 0-100 score (higher = riskier).
-  const risk =
-    twin.risk_matrix
-      ? Math.min(
-          100,
-          (twin.risk_matrix.critical_risks?.length ?? 0) * 35 +
-            (twin.risk_matrix.high_risks?.length ?? 0) * 18 +
-            (twin.risk_matrix.medium_risks?.length ?? 0) * 8 +
-            (twin.risk_matrix.emerging_risks?.length ?? 0) * 4,
-        )
-      : 50;
+  // Revenue baseline: NOT computed from a fabricated formula. We
+  // surface a sentinel `null` so the UI renders a "No verified
+  // estimate is available" state instead of an invented revenue
+  // number. The scenario simulator remains useful for the levers
+  // it CAN model (growth, risk, health).
+  const revenue: number | null = null;
+
+  // Risk baseline: if the Digital Twin payload carries a risk
+  // matrix we honour it; otherwise we DO NOT silently inject a
+  // fabricated mid-score. The UI surfaces "Data unavailable".
+  const risk: number | null = twin.risk_matrix
+    ? Math.min(
+        100,
+        (twin.risk_matrix.critical_risks?.length ?? 0) * 35 +
+          (twin.risk_matrix.high_risks?.length ?? 0) * 18 +
+          (twin.risk_matrix.medium_risks?.length ?? 0) * 8 +
+          (twin.risk_matrix.emerging_risks?.length ?? 0) * 4,
+      )
+    : null;
 
   return {
-    revenue: clamp(revenue, 0, 100_000_000),
+    revenue,
     growth: clamp(growth3m, 0, 100),
-    risk: clamp(risk, 0, 100),
+    risk,
     health: overall,
   };
 }
@@ -503,34 +525,36 @@ function simulate(baseline: Baseline, inputs: Inputs): SimulationResult {
     return acc + (v / 100) * l.weightHealth * 0.9;
   }, 0);
 
-  const revenueProjected = baseline.revenue * (1 + revenueGain);
-  const growthProjected = clamp(baseline.growth + growthGain * 6, 0, 100);
-  const riskProjected = clamp(baseline.risk + riskGain * 4, 0, 100);
-  const healthProjected = clamp(baseline.health + healthGain * 8, 0, 100);
+  const revenueProjected =
+      baseline.revenue == null ? null : baseline.revenue * (1 + revenueGain);
+    const growthProjected = clamp(baseline.growth + growthGain * 6, 0, 100);
+    const riskProjected =
+      baseline.risk == null ? null : clamp(baseline.risk + riskGain * 4, 0, 100);
+    const healthProjected = clamp(baseline.health + healthGain * 8, 0, 100);
 
-  return {
-    revenue: {
-      baseline: baseline.revenue,
-      current: baseline.revenue,
-      projected: revenueProjected,
-    },
-    growth: {
-      baseline: baseline.growth,
-      current: baseline.growth,
-      projected: growthProjected,
-    },
-    risk: {
-      baseline: baseline.risk,
-      current: baseline.risk,
-      projected: riskProjected,
-    },
-    health: {
-      baseline: baseline.health,
-      current: baseline.health,
-      projected: healthProjected,
-    },
-  };
-}
+    return {
+      revenue: {
+        baseline: baseline.revenue,
+        current: baseline.revenue,
+        projected: revenueProjected,
+      },
+      growth: {
+        baseline: baseline.growth,
+        current: baseline.growth,
+        projected: growthProjected,
+      },
+      risk: {
+        baseline: baseline.risk,
+        current: baseline.risk,
+        projected: riskProjected,
+      },
+      health: {
+        baseline: baseline.health,
+        current: baseline.health,
+        projected: healthProjected,
+      },
+    };
+  }
 
 function diminishing(value: number): number {
   // 0..100 in. Soft cap above 60.
@@ -542,7 +566,8 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
-function scoreBand(score: number, higherIsBetter: boolean): string {
+function scoreBand(score: number | null, higherIsBetter: boolean): string {
+  if (score == null) return "Not quantified";
   if (higherIsBetter) {
     if (score >= 70) return "High";
     if (score >= 40) return "Medium";
@@ -554,7 +579,8 @@ function scoreBand(score: number, higherIsBetter: boolean): string {
   return "Low";
 }
 
-function formatValue(value: number, format: "currency" | "percent" | "score"): string {
+function formatValue(value: number | null, format: "currency" | "percent" | "score"): string {
+  if (value == null) return "Not quantified";
   if (format === "currency") {
     if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
     if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;

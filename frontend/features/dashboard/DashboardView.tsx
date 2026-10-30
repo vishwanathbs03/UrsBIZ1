@@ -18,10 +18,10 @@
  * Section 9 (Recent Activity) keeps an audit trail concise.
  *
  * Reuses the existing widgets (HealthScoreCard, AISummaryCard,
- * KPIGrid, QuickActionsCard, RecentActivityCard) where they
- * already meet H5.2 requirements — we do NOT delete them. The
- * widgets that didn't fit (GovernmentSchemesWidget had hardcoded
- * stubs) are wrapped by new command-center components.
+  * QuickActionsCard, RecentActivityCard) where they
+  * already meet H5.2 requirements — we do NOT delete them. The
+  * widgets that didn't fit (GovernmentSchemesWidget had hardcoded
+  * stubs) are wrapped by new command-center components.
  */
 
 import React from "react";
@@ -41,7 +41,7 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 
-import { KPIGrid } from "./KPIGrid";
+
 import { QuickActionsCard } from "./QuickActionsCard";
 import { RecentActivityCard } from "./RecentActivityCard";
 
@@ -221,7 +221,7 @@ export function DashboardView() {
             <h2 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
               Secondary Details — View in detail
             </h2>
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <Button asChild size="sm" variant="ghost" className="gap-1">
                 <Link href="/intelligence">
                   Open Intelligence
@@ -242,11 +242,17 @@ export function DashboardView() {
               </Button>
             </div>
           </div>
-          {/* P0.13 — KPIGrid was wired with kpis={null}, rendering
+          {/* P0.13 — the widget was a no-data placeholder, rendering
               "N/A" placeholder cards. Removed from the Command Center
               because the widget is not connected to a real data
               source. Reusable widget still exported for other routes
-              that have a real KPI payload. */}
+              that have a real data source. */}
+          <p className="pt-1 text-center text-[11px] italic text-muted-foreground">
+            All values shown are derived from your live business profile.
+            No number on this page is never fabricated — missing data
+            renders as an explicit empty state (Not yet assessed / Not
+            quantified / Data unavailable).
+          </p>
         </section>
       </main>
     </PageContainer>

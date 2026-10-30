@@ -3,7 +3,9 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { DashboardView } from "@/features/dashboard";
 
 export const metadata: Metadata = {
-  title: "Dashboard",
+  title: "Executive Command Center | UrsBiz",
+  description:
+    "How is my business doing, what deserves attention, and what should I do next? Health, top priorities, biggest risk, biggest opportunity.",
 };
 
 /**

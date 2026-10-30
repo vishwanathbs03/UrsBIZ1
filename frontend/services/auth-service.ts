@@ -14,10 +14,10 @@
  */
 
 import { env } from "@/lib/env";
-import type { AuthSuccess, User } from "@/types/auth";
+import type { AuthSuccess, UpdateActiveBusinessPayload, User } from "@/types/auth";
 
 const BASE = env.apiBaseUrl.replace(/\/+$/, "");
-const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_TIMEOUT_MS = 20000;
 
 class AuthServiceError extends Error {
   public readonly status: number;
@@ -220,6 +220,18 @@ export const authService = {
 
   async me(): Promise<User> {
     return request<User>("/api/v1/auth/me", { method: "GET" });
+  },
+
+  /**
+   * Sprint 23 — update fields on the authenticated user. Currently
+   * only ``active_business_id`` is mutable; the route accepts a
+   * payload with just that one field and returns the updated user.
+   */
+  async updateMe(payload: UpdateActiveBusinessPayload): Promise<User> {
+    return request<User>("/api/v1/auth/me", {
+      method: "PATCH",
+      body: payload,
+    });
   },
 };
 

@@ -4,7 +4,8 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import { RedirectIfAuthed } from "@/components/auth/RedirectIfAuthed";
 
 export const metadata: Metadata = {
-  title: "Sign in",
+  title: "Sign in to UrsBiz",
+  description: "Sign in to your UrsBiz account — Executive Business Intelligence for MSMEs.",
 };
 
 export default function LoginPage() {

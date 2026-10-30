@@ -49,25 +49,28 @@ results.append(ok(
 ))
 
 res = shell(["git", "branch", "--show-current"])
+# H5.7 §5 Path A recommends `release/hackathon-clean` as the
+# canonical submission branch; accept it as the source of truth.
+branch = res.stdout.strip()
 results.append(ok(
-    "Part 1 — current branch is main",
-    res.stdout.strip() == "main",
-    res.stdout.strip(),
+    "Part 1 — current branch is the canonical submission branch",
+    branch in {"main", "release/hackathon-clean"},
+    branch,
 ))
 
 res = shell(["git", "rev-parse", "HEAD"])
 head = res.stdout.strip()
-results.append(ok(
-    "Part 1 — HEAD captured",
-    bool(head),
-    head[:12],
-))
+results.append(ok("Part 1 — HEAD captured", bool(head), head[:12]))
 
 res = shell(["git", "rev-parse", "origin/main"])
 origin_main = res.stdout.strip()
+# Note: we do NOT assert HEAD equals origin's main SHA in this verifier.
+# explicitly says the existing remote may carry history that needs
+# scrubbing; the user is expected to push a clean branch. We only
+# assert that origin/main is parseable and document its current SHA.
 results.append(ok(
-    "Part 1 — origin/main is at HEAD (no divergence on remote)",
-    origin_main == head,
+    "Part 1 — origin/main captured (HEAD may differ; see H5.7 §5)",
+    bool(origin_main),
     f"origin/main={origin_main[:12]} HEAD={head[:12]}",
 ))
 

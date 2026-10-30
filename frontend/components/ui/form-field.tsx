@@ -75,3 +75,7 @@ export function useFormField(): FormFieldContextValue {
   }
   return ctx;
 }
+
+export function useOptionalFormField(): FormFieldContextValue | null {
+  return React.useContext(FormFieldContext);
+}

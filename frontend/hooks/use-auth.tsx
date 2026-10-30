@@ -26,6 +26,14 @@ interface AuthContextValue {
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  /**
+   * Sprint 23 — local setter used by the active-business switcher.
+   * ``refresh()`` is unchanged: it still re-fetches from the
+   * server. ``setUser`` is the surgical update when the panel
+   * already has the new User payload in hand (returned by
+   * ``PATCH /auth/me``).
+   */
+  setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -96,7 +104,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, register, logout, refresh }),
+    () => ({
+      status,
+      user,
+      login,
+      register,
+      logout,
+      refresh,
+      setUser,
+    }),
     [status, user, login, register, logout, refresh],
   );
 

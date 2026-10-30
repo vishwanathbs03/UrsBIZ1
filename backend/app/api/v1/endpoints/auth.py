@@ -12,11 +12,13 @@ from sqlalchemy.orm import Session
 from app.config.settings import get_settings
 from app.middleware.auth_deps import get_current_user
 from app.models.user import User
+from app.repositories.business_repository import BusinessRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
     TokenResponse,
+    UserActiveBusinessUpdate,
     UserPublic,
 )
 from app.services.auth_service import AuthService
@@ -59,7 +61,15 @@ def _clear_auth_cookie(response: Response) -> None:
 
 
 def _service(db: Session = Depends(get_db)) -> AuthService:
-    return AuthService(UserRepository(db))
+    # Sprint 23 — the auth service now also needs to look up
+    # businesses (so the active-business validator on PATCH /auth/me
+    # can confirm the target business belongs to the caller). The
+    # BusinessRepository is constructed against the same session so
+    # both repositories participate in the same transaction.
+    return AuthService(
+        user_repo=UserRepository(db),
+        business_repo=BusinessRepository(db),
+    )
 
 
 # ---- Routes --------------------------------------------------------------
@@ -110,3 +120,25 @@ def logout(response: Response) -> Response:
 def me(current_user: User = Depends(get_current_user)) -> UserPublic:
     """Return the currently authenticated user."""
     return UserPublic.model_validate(current_user)
+
+
+@router.patch(
+    "/me",
+    response_model=UserPublic,
+    summary="Update fields on the authenticated user (Sprint 23: active_business_id).",
+)
+def update_me(
+    payload: UserActiveBusinessUpdate,
+    current_user: User = Depends(get_current_user),
+    service: AuthService = Depends(_service),
+) -> UserPublic:
+    """Sprint 23 — set the user's ``active_business_id``.
+
+    The service validates that the target business belongs to the
+    caller (else 403); a missing business id returns 404; ``None``
+    is accepted and clears the active id.
+    """
+    return service.set_active_business(
+        user=current_user,
+        business_id=payload.active_business_id,
+    )
