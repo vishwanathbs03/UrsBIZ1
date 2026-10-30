@@ -61,8 +61,12 @@ class RevenuePredictionService:
         f_6m = round(rev * (1.0 + (base_annual_growth * 0.50)), 2)
         f_12m = round(rev * (1.0 + base_annual_growth), 2)
 
-        conf = min(95, max(50, round((health.score + readiness.overall_score) / 2.0)))
-        trend = "Upward Growth" if base_annual_growth > 0.12 else ("Stable" if base_annual_growth >= 0.05 else "Downward Risk")
+        if rev <= 0:
+            conf = 0
+            trend = "Insufficient Data"
+        else:
+            conf = min(95, max(50, round((health.score + readiness.overall_score) / 2.0)))
+            trend = "Upward Growth" if base_annual_growth > 0.12 else ("Stable" if base_annual_growth >= 0.05 else "Downward Risk")
 
         return RevenuePredictionReport(
             current_annual_revenue=rev,

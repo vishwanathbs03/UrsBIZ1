@@ -24,8 +24,8 @@ class AnalyticsV1Service:
         self._repo = repo
 
     def calculate_overview(self, business: Business) -> AnalyticsOverviewData:
-        rev = business.annual_revenue or 120000.0
-        emp = max(1, business.employee_count or 1)
+        rev = float(business.annual_revenue or 0.0)
+        emp = max(0, business.employee_count or 0)
         curr_year = datetime.now(tz=timezone.utc).year
         est_year = business.established_year or curr_year
         years = max(0, curr_year - est_year)
