@@ -443,6 +443,9 @@ def seed() -> int:
     try:
         user = _get_or_create_user(db)
         biz = _get_or_create_business(db, user)
+        if user.active_business_id != biz.id:
+            user.active_business_id = biz.id
+            db.flush()
         _ensure_digital_presence(db, biz)
         _ensure_products(db, biz)
         _ensure_certifications(db, biz)
