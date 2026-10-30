@@ -32,11 +32,7 @@ export const metadata: Metadata = {
 
 import { LanguageProvider } from "@/context/language-context";
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -48,9 +44,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html:
               "(function(){try{var t=localStorage.getItem('ursbiz.theme');" +
-              "if(t==='dark'||t==='light'){" +
-              "document.documentElement.classList[t==='dark'?'add':'remove']('dark');" +
-              "}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){" +
+              "if(t==='light'){" +
+              "document.documentElement.classList.remove('dark');" +
+              "}else{" +
               "document.documentElement.classList.add('dark');" +
               "}}catch(e){}})();",
           }}
