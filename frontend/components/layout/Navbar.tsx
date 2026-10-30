@@ -62,7 +62,7 @@ export function Navbar({ className }: NavbarProps) {
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 w-full border-b border-border/70 bg-background/80 backdrop-blur-md transition-all",
+        "sticky top-0 z-40 w-full border-b border-border/80 bg-background/85 backdrop-blur-xl transition-all duration-300",
         className,
       )}
     >
@@ -79,7 +79,7 @@ export function Navbar({ className }: NavbarProps) {
         </div>
 
         {/* Center: Desktop Navigation Links (Collision-proof, never overflows) */}
-        <nav aria-label="Primary" className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink-0">
+        <nav aria-label="Primary" className="hidden shrink-0 items-center gap-1 lg:flex xl:gap-2">
           {/* Core Flagship Links */}
           {coreLinks.map((link) => {
             const active = isActiveLink(pathname, link.href);
@@ -89,10 +89,10 @@ export function Navbar({ className }: NavbarProps) {
                 href={link.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  "whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150",
                   active
-                    ? "bg-primary/10 text-primary font-semibold shadow-xs"
-                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                    ? "border border-primary/30 bg-primary/15 font-semibold text-accent shadow-[0_0_10px_rgba(37,99,235,0.25)]"
+                    : "text-muted-foreground hover:border hover:border-border/60 hover:bg-card hover:text-foreground",
                 )}
               >
                 {link.label}
@@ -109,10 +109,10 @@ export function Navbar({ className }: NavbarProps) {
                 href={link.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "hidden 2xl:inline-flex whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  "hidden whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-150 2xl:inline-flex",
                   active
-                    ? "bg-primary/10 text-primary font-semibold shadow-xs"
-                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                    ? "border border-primary/30 bg-primary/15 font-semibold text-accent shadow-[0_0_10px_rgba(37,99,235,0.25)]"
+                    : "text-muted-foreground hover:border hover:border-border/60 hover:bg-card hover:text-foreground",
                 )}
               >
                 {link.label}
@@ -125,20 +125,20 @@ export function Navbar({ className }: NavbarProps) {
             href="/assistant"
             aria-current={isAssistantActive ? "page" : undefined}
             className={cn(
-              "group relative inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] font-semibold transition-all duration-200",
+              "group relative inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition-all duration-200",
               isAssistantActive
-                ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/25"
-                : "border-primary/30 bg-primary/5 text-primary hover:border-primary/60 hover:bg-primary/10 hover:shadow-xs",
+                ? "border-accent bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-[0_0_18px_rgba(6,182,212,0.45)]"
+                : "border-primary/40 bg-primary/10 text-accent hover:border-primary/80 hover:bg-primary/20 hover:shadow-[0_0_14px_rgba(37,99,235,0.35)]",
             )}
           >
             <Sparkles className="size-3.5 animate-pulse text-current" aria-hidden="true" />
             <span>{t("nav.assistant")}</span>
             <span
               className={cn(
-                "rounded-md px-1 py-0.2 text-[9px] font-bold uppercase tracking-wider",
+                "rounded-md px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider",
                 isAssistantActive
-                  ? "bg-primary-foreground/20 text-primary-foreground"
-                  : "bg-primary/15 text-primary",
+                  ? "bg-white/20 text-white"
+                  : "border border-primary/40 bg-primary/25 text-accent",
               )}
             >
               AI
@@ -154,18 +154,20 @@ export function Navbar({ className }: NavbarProps) {
               aria-label="More navigation modules"
               aria-expanded={moreOpen}
               className={cn(
-                "inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors",
+                "inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
                 moreOpen
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                  ? "border border-border bg-card text-foreground"
+                  : "text-muted-foreground hover:bg-card hover:text-foreground",
               )}
             >
               <span>More</span>
-              <ChevronDown className={cn("size-3.5 transition-transform", moreOpen && "rotate-180")} />
+              <ChevronDown
+                className={cn("size-3.5 transition-transform", moreOpen && "rotate-180")}
+              />
             </button>
 
             {moreOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl border border-border/80 bg-popover/95 p-1.5 shadow-elevated backdrop-blur-md animate-in fade-in-0 zoom-in-95 z-50">
+              <div className="animate-in fade-in-0 zoom-in-95 absolute right-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-border/80 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl">
                 {dropdownLinks.map((item) => {
                   const Icon = item.icon;
                   const active = isActiveLink(pathname, item.href);
@@ -174,10 +176,10 @@ export function Navbar({ className }: NavbarProps) {
                       key={item.href}
                       href={item.href}
                       className={cn(
-                        "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+                        "flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors",
                         active
-                          ? "bg-primary/10 text-primary font-semibold"
-                          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                          ? "border border-primary/25 bg-primary/15 font-semibold text-accent"
+                          : "text-muted-foreground hover:bg-accent/80 hover:text-foreground",
                       )}
                     >
                       <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
@@ -200,7 +202,7 @@ export function Navbar({ className }: NavbarProps) {
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground hover:bg-accent lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
             aria-label="Open menu"
             aria-expanded={drawerOpen}
             aria-controls="mobile-drawer"
