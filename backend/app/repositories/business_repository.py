@@ -204,6 +204,7 @@ class BusinessRepository:
         )
         self._db.add(business)
         self._db.flush()  # assigns id, makes business.id available below
+        self.invalidate_cache(owner_id)
         return business
 
     # ---- Update --------------------------------------------------------
