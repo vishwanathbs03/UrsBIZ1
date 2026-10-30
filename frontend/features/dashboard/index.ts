@@ -7,6 +7,9 @@
  */
 
 export { DashboardView } from "./DashboardView";
+export { DashboardKpiCards } from "./DashboardKpiCards";
+export { DashboardPerformanceChart } from "./DashboardPerformanceChart";
+export { DashboardAssistantSpotlight } from "./DashboardAssistantSpotlight";
 export { useDashboardData } from "./use-dashboard-data";
 export { useDashboardEndpointData } from "./use-dashboard-endpoint-data";
 export { KPICard } from "./KPICard";

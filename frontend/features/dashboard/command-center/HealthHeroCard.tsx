@@ -29,11 +29,13 @@ function gradeFor(score: number): { grade: string; status: string; tone: string 
   return { grade: "D", status: "Critical", tone: "rose" };
 }
 
-function topDriver(analyzers: IntelligenceAnalyzer[] | undefined): { title: string; delta: number } | null {
+function topDriver(
+  analyzers: IntelligenceAnalyzer[] | undefined,
+): { title: string; delta: number } | null {
   if (!analyzers || analyzers.length < 2) return null;
   // Pick the analyzer with the largest gap from 100 — the biggest
   // single lever. This is deterministic.
-  const arr = [...analyzers].sort((a, b) => (100 - b.score) - (100 - a.score));
+  const arr = [...analyzers].sort((a, b) => 100 - b.score - (100 - a.score));
   const t = arr[0];
   return t ? { title: t.title, delta: 100 - t.score } : null;
 }
@@ -67,26 +69,41 @@ export const HealthHeroCard: React.FC<HealthHeroCardProps> = ({ intelligence }) 
       badge="Hero Health"
       title="Business Health Score"
       caption="Composite index across your profile, operations, financials, compliance, and digital presence."
-      className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-card via-card to-primary/5 shadow-soft hover-lift"
+      className="shadow-soft relative overflow-hidden border-border/80 bg-card/90 backdrop-blur-md transition-all duration-300 hover:border-primary/50"
       data-testid="command-center-health-hero"
     >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-blue-500 via-cyan-400 to-transparent"
+      />
+
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
-          <div className="relative flex size-20 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 shadow-inner">
+          <div className="relative flex size-20 items-center justify-center rounded-2xl border border-primary/40 bg-primary/10 shadow-[0_0_20px_rgba(37,99,235,0.25)]">
             <ShieldCheck className="absolute size-16 text-primary/10" aria-hidden="true" />
             <div className="flex flex-col items-center">
-              <AnimatedCounter value={score} className="text-3xl font-black text-foreground" durationMs={600} />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">/ 100</span>
+              <AnimatedCounter
+                value={score}
+                className="text-3xl font-black text-foreground drop-shadow-[0_0_10px_rgba(59,130,246,0.4)]"
+                durationMs={600}
+              />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                / 100
+              </span>
             </div>
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs uppercase tracking-widest font-bold text-muted-foreground">Health Grade</span>
+              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Health Grade
+              </span>
               <LevelBadge level={status} tone={levelToTone(status)} />
             </div>
-            <h3 className="mt-0.5 text-2xl font-black text-foreground">{grade} <span className="text-sm font-normal text-muted-foreground">({status})</span></h3>
-            <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-              <TrendingUp className="size-3 text-emerald-500" aria-hidden="true" />
+            <h3 className="mt-0.5 text-2xl font-black text-foreground">
+              {grade} <span className="text-sm font-normal text-muted-foreground">({status})</span>
+            </h3>
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <TrendingUp className="size-3.5 text-emerald-400" aria-hidden="true" />
               <span>Evaluated live by the deterministic rule engine</span>
             </p>
           </div>
@@ -94,11 +111,11 @@ export const HealthHeroCard: React.FC<HealthHeroCardProps> = ({ intelligence }) 
       </div>
 
       {driver && (
-        <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-2.5 text-xs text-muted-foreground">
-          <Sparkles className="size-4 shrink-0 text-primary" aria-hidden="true" />
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-border/80 bg-secondary/60 p-3 text-xs text-muted-foreground">
+          <Sparkles className="size-4 shrink-0 animate-pulse text-accent" aria-hidden="true" />
           <span>
-            <strong className="text-foreground">Key driver:</strong>{" "}
-            Your score is most influenced by <strong className="text-foreground">{driver.title}</strong>
+            <strong className="text-foreground">Key driver:</strong> Your score is most influenced
+            by <strong className="text-accent">{driver.title}</strong>
             {driver.delta > 0 && <> — {driver.delta} points of headroom remaining.</>}
           </span>
         </div>
@@ -108,15 +125,26 @@ export const HealthHeroCard: React.FC<HealthHeroCardProps> = ({ intelligence }) 
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="mt-3 flex w-full items-center justify-between rounded-md border border-border/50 bg-background px-3 py-2 text-left text-xs font-semibold text-foreground transition-colors hover:bg-muted/40"
+        className="mt-3 flex w-full items-center justify-between rounded-lg border border-border/70 bg-secondary/40 px-3.5 py-2.5 text-left text-xs font-semibold text-foreground transition-colors hover:border-primary/40 hover:bg-secondary/70"
         aria-expanded={expanded}
         aria-controls="why-my-score-expansion"
       >
-        <span>Why is my score this way?</span>
-        {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        <span className="flex items-center gap-1.5">
+          <ShieldCheck className="size-3.5 text-accent" aria-hidden="true" />
+          Why is my score calculated this way?
+        </span>
+        {expanded ? (
+          <ChevronUp className="size-4 text-accent" />
+        ) : (
+          <ChevronDown className="size-4 text-muted-foreground" />
+        )}
       </button>
       {expanded && (
-        <div id="why-my-score-expansion" className="mt-3 space-y-2" data-testid="health-why-expansion">
+        <div
+          id="why-my-score-expansion"
+          className="mt-3 space-y-2"
+          data-testid="health-why-expansion"
+        >
           {analyzers.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               No analyzer breakdown available. Complete more of your profile to surface drivers.

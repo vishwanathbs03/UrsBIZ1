@@ -18,10 +18,10 @@
  * Section 9 (Recent Activity) keeps an audit trail concise.
  *
  * Reuses the existing widgets (HealthScoreCard, AISummaryCard,
-  * QuickActionsCard, RecentActivityCard) where they
-  * already meet H5.2 requirements — we do NOT delete them. The
-  * widgets that didn't fit (GovernmentSchemesWidget had hardcoded
-  * stubs) are wrapped by new command-center components.
+ * QuickActionsCard, RecentActivityCard) where they
+ * already meet H5.2 requirements — we do NOT delete them. The
+ * widgets that didn't fit (GovernmentSchemesWidget had hardcoded
+ * stubs) are wrapped by new command-center components.
  */
 
 import React from "react";
@@ -41,7 +41,6 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 
-
 import { QuickActionsCard } from "./QuickActionsCard";
 import { RecentActivityCard } from "./RecentActivityCard";
 
@@ -52,6 +51,9 @@ import { TopPriorities } from "./command-center/TopPriorities";
 import { BiggestRisk } from "./command-center/BiggestRisk";
 import { BiggestOpportunity } from "./command-center/BiggestOpportunity";
 import { GovernmentOpportunityCard } from "./command-center/GovernmentOpportunityCard";
+import { DashboardKpiCards } from "./DashboardKpiCards";
+import { DashboardPerformanceChart } from "./DashboardPerformanceChart";
+import { DashboardAssistantSpotlight } from "./DashboardAssistantSpotlight";
 
 export function DashboardView() {
   // We compose from the same hook the existing assistant uses.
@@ -101,7 +103,7 @@ export function DashboardView() {
   if (anyLoading && !intelligence && !twin) {
     return (
       <PageContainer width="wide">
-        <div className="flex flex-col gap-6 py-2 md:gap-8 animate-in fade-in duration-200">
+        <div className="animate-in fade-in flex flex-col gap-6 py-2 duration-200 md:gap-8">
           <DashboardSkeleton rows={2} />
           <DashboardSkeleton rows={3} />
         </div>
@@ -114,7 +116,7 @@ export function DashboardView() {
   if (noBusiness) {
     return (
       <PageContainer width="wide">
-        <div className="py-8 animate-in fade-in duration-300">
+        <div className="animate-in fade-in py-8 duration-300">
           <EmptyState
             illustration="building"
             title="No business profile yet"
@@ -123,9 +125,13 @@ export function DashboardView() {
               "Set up your business profile to view your executive command center."
             }
             actionLabel="Create business profile"
-            onAction={() => { if (typeof window !== "undefined") window.location.href = "/business"; }}
+            onAction={() => {
+              if (typeof window !== "undefined") window.location.href = "/business";
+            }}
             secondaryActionLabel="See assistant"
-            onSecondaryAction={() => { if (typeof window !== "undefined") window.location.href = "/assistant"; }}
+            onSecondaryAction={() => {
+              if (typeof window !== "undefined") window.location.href = "/assistant";
+            }}
           />
         </div>
       </PageContainer>
@@ -136,7 +142,7 @@ export function DashboardView() {
   if (anyError && !intelligence && !twin) {
     return (
       <PageContainer width="wide">
-        <div className="py-8 animate-in fade-in duration-300">
+        <div className="animate-in fade-in py-8 duration-300">
           <ErrorState
             title="Could not load the executive command center"
             description={
@@ -158,7 +164,7 @@ export function DashboardView() {
   }
 
   const recs = (recommendations && (recommendations as any).recommendations) || [];
-  const opportunities = (intelligence?.opportunities?.opportunities) || [];
+  const opportunities = intelligence?.opportunities?.opportunities || [];
   const analyzers = intelligence?.analyzers || [];
   const hasWeakestDimension = analyzers.length > 0;
   const businessExists = Boolean(twin);
@@ -166,37 +172,45 @@ export function DashboardView() {
   return (
     <PageContainer width="wide">
       <main
-        className="flex flex-col gap-6 py-2 md:gap-8 animate-in fade-in duration-300"
+        className="animate-in fade-in flex flex-col gap-6 py-2 duration-300 md:gap-8"
         aria-label="Executive Command Center"
       >
-        {/* SECTION 1 — Executive Header */}
+        {/* 1. Welcome section and business identity */}
         <ExecutiveHeader twin={twin} intelligence={intelligence} />
 
-        {/* SECTION 2 — Hero Business Health */}
-        <section className="grid grid-cols-1 gap-6" aria-label="Hero Business Health">
-          <HealthHeroCard intelligence={intelligence} />
-        </section>
+        {/* 2. Key performance indicator cards */}
+        <DashboardKpiCards twin={twin} intelligence={intelligence} />
 
-        {/* SECTION 3 — Executive Brief */}
-        <ExecutiveBrief twin={twin} intelligence={intelligence} recommendations={recommendations} />
+        {/* 3. Business performance chart (8-lens maturity distribution & trajectory) */}
+        <DashboardPerformanceChart intelligence={intelligence} />
 
-        {/* SECTION 4 — Today's Top 3 Priorities */}
+        {/* 4. Product & Operational performance insights */}
         <TopPriorities
           recommendations={recs}
           businessExists={businessExists}
           hasWeakestDimension={hasWeakestDimension}
         />
 
-        {/* SECTION 5 + SECTION 6 — Biggest Risk + Biggest Opportunity (side-by-side) */}
-        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2" aria-label="Risk and Opportunity">
+        <section
+          className="grid grid-cols-1 gap-6 lg:grid-cols-2"
+          aria-label="Risk and Opportunity Insights"
+        >
           <BiggestRisk twin={twin} />
           <BiggestOpportunity opportunities={opportunities} />
         </section>
 
-        {/* SECTION 7 — Government Opportunity */}
-        <GovernmentOpportunityCard schemes={schemes} isLoading={schemesQuery.isLoading} />
+        {/* 5. AI business insights */}
+        <ExecutiveBrief twin={twin} intelligence={intelligence} recommendations={recommendations} />
 
-        {/* SECTION 8 — Quick Actions */}
+        {/* 6. Business health score */}
+        <section className="grid grid-cols-1 gap-6" aria-label="Hero Business Health">
+          <HealthHeroCard intelligence={intelligence} />
+        </section>
+
+        {/* 7. Recent activity */}
+        <RecentActivityCard activities={[]} />
+
+        {/* 8. Quick actions */}
         <QuickActionsCard
           businessExists={businessExists}
           profileCompletion={
@@ -205,53 +219,59 @@ export function DashboardView() {
           healthScore={intelligence?.overall?.score ?? 0}
         />
 
-        {/* SECTION 9 — Recent Activity (collapsed on small screens) */}
-        <RecentActivityCard
-          activities={
-            // Surface a minimal timeline derived from real business signals.
-            // We do NOT invent events. If no activity payload exists, this
-            // section renders its existing "no recent activity" empty state.
-            []
-          }
+        {/* 9. AI assistant entry point */}
+        <DashboardAssistantSpotlight
+          businessName={twin?.identity?.legal_name || "Your Enterprise"}
         />
 
-        {/* SECTION 10 — Secondary Details */}
-        <section className="flex flex-col gap-3" aria-label="Secondary Details">
+        {/* 10. Government scheme discovery */}
+        <GovernmentOpportunityCard schemes={schemes} isLoading={schemesQuery.isLoading} />
+
+        {/* Secondary Details & Honest Evidence Assurance */}
+        <section className="flex flex-col gap-3 pt-2" aria-label="Secondary Details">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
-              Secondary Details — View in detail
+              Deep-Dive Modules
             </h2>
             <div className="flex flex-wrap items-center gap-2 text-xs">
-              <Button asChild size="sm" variant="ghost" className="gap-1">
+              <Button
+                asChild
+                size="sm"
+                variant="ghost"
+                className="gap-1 text-accent hover:text-white"
+              >
                 <Link href="/intelligence">
-                  Open Intelligence
+                  Health Score
                   <ArrowRight className="size-3.5" aria-hidden="true" />
                 </Link>
               </Button>
-              <Button asChild size="sm" variant="ghost" className="gap-1">
+              <Button
+                asChild
+                size="sm"
+                variant="ghost"
+                className="gap-1 text-accent hover:text-white"
+              >
                 <Link href="/analytics">
-                  Open Analytics
+                  Analytics
                   <ArrowRight className="size-3.5" aria-hidden="true" />
                 </Link>
               </Button>
-              <Button asChild size="sm" variant="ghost" className="gap-1">
+              <Button
+                asChild
+                size="sm"
+                variant="ghost"
+                className="gap-1 text-accent hover:text-white"
+              >
                 <Link href="/reports">
-                  Open Reports
+                  Reports
                   <ArrowRight className="size-3.5" aria-hidden="true" />
                 </Link>
               </Button>
             </div>
           </div>
-          {/* P0.13 — the widget was a no-data placeholder, rendering
-              "N/A" placeholder cards. Removed from the Command Center
-              because the widget is not connected to a real data
-              source. Reusable widget still exported for other routes
-              that have a real data source. */}
-          <p className="pt-1 text-center text-[11px] italic text-muted-foreground">
-            All values shown are derived from your live business profile.
-            No number on this page is never fabricated — missing data
-            renders as an explicit empty state (Not yet assessed / Not
-            quantified / Data unavailable).
+          <p className="pt-1 text-center text-[11px] text-muted-foreground/80">
+            All metrics shown are derived strictly from your verified business digital twin. Missing
+            values render as explicit empty states — zero fabricated data.
           </p>
         </section>
       </main>
