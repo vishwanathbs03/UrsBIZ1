@@ -4,50 +4,79 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    /* URSBIZ Dark Neon Design System Tokens */
+    --background: 221 50% 6.3%; /* #080D18 */
+    --foreground: 210 40% 98%; /* #F8FAFC */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card: 217 46% 12.4%; /* #111C2E */
+    --card-foreground: 210 40% 98%;
 
-    --primary: 221 83% 53%;
+    --elevated: 217 45% 15.7%; /* #16243A */
+    --elevated-foreground: 210 40% 98%;
+
+    --primary: 221 83% 53%; /* #2563EB */
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 219 47% 9.6%; /* #0D1524 */
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 217 45% 15.7%; /* #16243A */
+    --muted-foreground: 215 16% 65%; /* #94A3B8 */
 
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 217 91% 60%; /* #3B82F6 */
+    --accent-foreground: 210 40% 98%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 221 83% 53%;
+    --cyan: 189 94% 43%; /* #06B6D4 */
+
+    --border: 216 36% 23.1%; /* #263750 */
+    --input: 216 36% 23.1%; /* #263750 */
+    --ring: 217 91% 60%; /* #3B82F6 */
 
     --radius: 0.75rem;
 
-    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-      "Noto Sans Kannada", "Tunga", "Kedage", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Kannada",
+      "Tunga", "Kedage", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   }
 
   .dark {
-    --background: 222 47% 6%;
+    --background: 221 50% 6.3%;
     --foreground: 210 40% 98%;
-    --card: 222 47% 8%;
+    --card: 217 46% 12.4%;
     --card-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 6%;
-    --secondary: 217 33% 17%;
+    --elevated: 217 45% 15.7%;
+    --elevated-foreground: 210 40% 98%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 219 47% 9.6%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
+    --muted: 217 45% 15.7%;
+    --muted-foreground: 215 16% 65%;
+    --accent: 217 91% 60%;
     --accent-foreground: 210 40% 98%;
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
+    --cyan: 189 94% 43%;
+    --border: 216 36% 23.1%;
+    --input: 216 36% 23.1%;
     --ring: 217 91% 60%;
+  }
+
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --elevated: 210 40% 96%;
+    --elevated-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
   }
 
   * {
@@ -89,8 +118,7 @@
   }
 
   .bg-grid {
-    background-image:
-      linear-gradient(to right, hsl(var(--border) / 0.5) 1px, transparent 1px),
+    background-image: linear-gradient(to right, hsl(var(--border) / 0.5) 1px, transparent 1px),
       linear-gradient(to bottom, hsl(var(--border) / 0.5) 1px, transparent 1px);
     background-size: 32px 32px;
   }
@@ -106,6 +134,62 @@
   /* ------------------------------------------------------------------------- */
   /* Executive Intelligence Layer (Sprint H3) — premium polish                 */
   /* ------------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------------- */
+  /* Dark Neon Executive Design System (Phase 1)                               */
+  /* ------------------------------------------------------------------------- */
+  .glass-neon {
+    background: hsl(var(--card) / 0.7);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid hsl(var(--border) / 0.85);
+  }
+
+  .glass-neon-elevated {
+    background: hsl(var(--elevated, 217 45% 15.7%) / 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid hsl(var(--accent) / 0.3);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  }
+
+  .neon-glow-blue {
+    box-shadow: 0 0 16px -2px rgba(37, 99, 235, 0.4);
+  }
+
+  .neon-glow-cyan {
+    box-shadow: 0 0 16px -2px rgba(6, 182, 212, 0.4);
+  }
+
+  .neon-border-blue {
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 12px -2px rgba(59, 130, 246, 0.3);
+  }
+
+  .neon-border-cyan {
+    border-color: rgba(6, 182, 212, 0.6);
+    box-shadow: 0 0 12px -2px rgba(6, 182, 212, 0.3);
+  }
+
+  .neon-text-blue {
+    color: #3b82f6;
+    text-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+  }
+
+  .neon-text-cyan {
+    color: #06b6d4;
+    text-shadow: 0 0 12px rgba(6, 182, 212, 0.5);
+  }
+
+  .gradient-neon-btn {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #06b6d4 100%);
+    box-shadow: 0 0 20px -3px rgba(37, 99, 235, 0.45);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .gradient-neon-btn:hover {
+    box-shadow: 0 0 25px -1px rgba(6, 182, 212, 0.6);
+    transform: translateY(-1px);
+  }
+
   .glass-panel {
     background: hsl(var(--card) / 0.75);
     backdrop-filter: blur(12px);
@@ -114,13 +198,12 @@
   }
 
   .glass-hero {
-    background:
-      linear-gradient(
-        135deg,
-        hsl(var(--primary) / 0.12) 0%,
-        hsl(var(--primary) / 0.04) 35%,
-        transparent 100%
-      );
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary) / 0.12) 0%,
+      hsl(var(--primary) / 0.04) 35%,
+      transparent 100%
+    );
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border: 1px solid hsl(var(--primary) / 0.18);
@@ -153,21 +236,21 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-      180deg,
-      hsl(var(--foreground) / 0.04) 0%,
-      transparent 28%
-    );
+    background: linear-gradient(180deg, hsl(var(--foreground) / 0.04) 0%, transparent 28%);
     pointer-events: none;
   }
 
   .hover-lift {
-    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transition:
+      transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .hover-lift:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    box-shadow:
+      0 10px 25px -5px rgba(0, 0, 0, 0.1),
+      0 8px 10px -6px rgba(0, 0, 0, 0.05);
   }
 
   .animate-page-fade {
@@ -177,16 +260,34 @@
   .exec-rise {
     animation: riseIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-  .exec-rise-1 { animation-delay: 50ms; }
-  .exec-rise-2 { animation-delay: 110ms; }
-  .exec-rise-3 { animation-delay: 170ms; }
-  .exec-rise-4 { animation-delay: 230ms; }
-  .exec-rise-5 { animation-delay: 290ms; }
-  .exec-rise-6 { animation-delay: 350ms; }
+  .exec-rise-1 {
+    animation-delay: 50ms;
+  }
+  .exec-rise-2 {
+    animation-delay: 110ms;
+  }
+  .exec-rise-3 {
+    animation-delay: 170ms;
+  }
+  .exec-rise-4 {
+    animation-delay: 230ms;
+  }
+  .exec-rise-5 {
+    animation-delay: 290ms;
+  }
+  .exec-rise-6 {
+    animation-delay: 350ms;
+  }
 
   @keyframes riseIn {
-    from { opacity: 0; transform: translateY(12px) scale(0.985); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   .shimmer {
@@ -200,8 +301,12 @@
     animation: shimmer 1.8s linear infinite;
   }
   @keyframes shimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
   }
 
   .glow-primary {
@@ -211,19 +316,67 @@
   }
 
   /* Confidence / health chip tones (executive ribbon) */
-  .tone-success   { background: hsl(152 60% 96%); color: hsl(152 65% 24%); border: 1px solid hsl(152 50% 86%); }
-  .tone-info      { background: hsl(212 90% 96%); color: hsl(217 75% 32%); border: 1px solid hsl(212 80% 86%); }
-  .tone-warn      { background: hsl(36 100% 96%); color: hsl(28 70% 30%); border: 1px solid hsl(36 90% 86%); }
-  .tone-danger    { background: hsl(0 90% 96%); color: hsl(0 75% 36%); border: 1px solid hsl(0 80% 88%); }
-  .tone-neutral   { background: hsl(210 30% 96%); color: hsl(215 25% 28%); border: 1px solid hsl(214 25% 88%); }
-  .tone-violet    { background: hsl(258 80% 97%); color: hsl(258 55% 32%); border: 1px solid hsl(258 60% 88%); }
+  .tone-success {
+    background: hsl(152 60% 96%);
+    color: hsl(152 65% 24%);
+    border: 1px solid hsl(152 50% 86%);
+  }
+  .tone-info {
+    background: hsl(212 90% 96%);
+    color: hsl(217 75% 32%);
+    border: 1px solid hsl(212 80% 86%);
+  }
+  .tone-warn {
+    background: hsl(36 100% 96%);
+    color: hsl(28 70% 30%);
+    border: 1px solid hsl(36 90% 86%);
+  }
+  .tone-danger {
+    background: hsl(0 90% 96%);
+    color: hsl(0 75% 36%);
+    border: 1px solid hsl(0 80% 88%);
+  }
+  .tone-neutral {
+    background: hsl(210 30% 96%);
+    color: hsl(215 25% 28%);
+    border: 1px solid hsl(214 25% 88%);
+  }
+  .tone-violet {
+    background: hsl(258 80% 97%);
+    color: hsl(258 55% 32%);
+    border: 1px solid hsl(258 60% 88%);
+  }
 
-  .dark .tone-success { background: hsl(152 40% 14%); color: hsl(152 60% 80%); border: 1px solid hsl(152 35% 24%); }
-  .dark .tone-info    { background: hsl(217 40% 14%); color: hsl(217 75% 80%); border: 1px solid hsl(217 40% 24%); }
-  .dark .tone-warn    { background: hsl(28 40% 14%); color: hsl(36 90% 82%); border: 1px solid hsl(28 40% 24%); }
-  .dark .tone-danger  { background: hsl(0 40% 14%); color: hsl(0 80% 82%); border: 1px solid hsl(0 40% 24%); }
-  .dark .tone-neutral { background: hsl(215 30% 14%); color: hsl(215 25% 84%); border: 1px solid hsl(215 25% 22%); }
-  .dark .tone-violet  { background: hsl(258 40% 16%); color: hsl(258 70% 86%); border: 1px solid hsl(258 40% 28%); }
+  .dark .tone-success {
+    background: hsl(152 40% 14%);
+    color: hsl(152 60% 80%);
+    border: 1px solid hsl(152 35% 24%);
+  }
+  .dark .tone-info {
+    background: hsl(217 40% 14%);
+    color: hsl(217 75% 80%);
+    border: 1px solid hsl(217 40% 24%);
+  }
+  .dark .tone-warn {
+    background: hsl(28 40% 14%);
+    color: hsl(36 90% 82%);
+    border: 1px solid hsl(28 40% 24%);
+  }
+  .dark .tone-danger {
+    background: hsl(0 40% 14%);
+    color: hsl(0 80% 82%);
+    border: 1px solid hsl(0 40% 24%);
+  }
+  .dark .tone-neutral {
+    background: hsl(215 30% 14%);
+    color: hsl(215 25% 84%);
+    border: 1px solid hsl(215 25% 22%);
+  }
+  .dark .tone-violet {
+    background: hsl(258 40% 16%);
+    color: hsl(258 70% 86%);
+    border: 1px solid hsl(258 40% 28%);
+  }
 
   /* Hairline accent bar that animates left-to-right (executive KPI) */
   .accent-bar {
@@ -239,13 +392,23 @@
     animation: barFill 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
   @keyframes barFill {
-    from { width: 0%; }
-    to   { width: var(--bar-fill, 100%); }
+    from {
+      width: 0%;
+    }
+    to {
+      width: var(--bar-fill, 100%);
+    }
   }
 
   @keyframes exec-spark {
-    from { stroke-dashoffset: 220; opacity: 0; }
-    to   { stroke-dashoffset: 0;   opacity: 1; }
+    from {
+      stroke-dashoffset: 220;
+      opacity: 0;
+    }
+    to {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
   }
 
   @keyframes fadeIn {

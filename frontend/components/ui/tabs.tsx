@@ -14,14 +14,7 @@
  */
 "use client";
 
-import {
-  KeyboardEvent,
-  ReactNode,
-  useCallback,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { KeyboardEvent, ReactNode, useCallback, useId, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export interface TabItem {
@@ -98,9 +91,7 @@ export function Tabs({
         aria-label="Sections"
         className={cn(
           "flex w-full items-center gap-1 overflow-x-auto",
-          variant === "underline"
-            ? "border-b border-border"
-            : "rounded-lg bg-secondary/40 p-1",
+          variant === "underline" ? "border-b border-border" : "rounded-lg bg-secondary/40 p-1",
         )}
       >
         {tabs.map((tab, idx) => {
@@ -122,18 +113,20 @@ export function Tabs({
               className={cn(
                 "inline-flex shrink-0 items-center gap-2 px-3 py-2 text-sm font-medium transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                variant === "underline" && cn(
-                  "border-b-2 -mb-px",
-                  selected
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
-                ),
-                variant === "pill" && cn(
-                  "rounded-md",
-                  selected
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                ),
+                variant === "underline" &&
+                  cn(
+                    "-mb-px border-b-2 transition-all duration-200",
+                    selected
+                      ? "border-accent font-semibold text-accent drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+                      : "border-transparent text-muted-foreground hover:border-border/80 hover:text-foreground",
+                  ),
+                variant === "pill" &&
+                  cn(
+                    "rounded-md transition-all duration-200",
+                    selected
+                      ? "border border-primary/40 bg-primary/20 font-semibold text-accent shadow-[0_0_10px_rgba(37,99,235,0.25)]"
+                      : "text-muted-foreground hover:bg-card/60 hover:text-foreground",
+                  ),
               )}
             >
               {tab.icon}
