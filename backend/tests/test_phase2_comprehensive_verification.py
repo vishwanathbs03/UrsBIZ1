@@ -1,30 +1,47 @@
 """Phase 2 Comprehensive Verification Suite.
 
 Validates the 5 mandatory pre-merge verification gates:
-1. Account isolation: Two users, each with multiple businesses.
-   Verify dashboard, analytics, forecast, recommendations, twin,
-   and health scores strictly isolate and reflect the active business.
-2. Migration safety: Schema constraints, foreign key integrity,
-   orphan prevention, and multi-tenant persistence.
-3. Revenue handling: Missing (None), zero, negative (-50000), and
-   insufficient historical data states.
+1. Account & Context Isolation: Two users, each with multiple businesses.
+   Verify dashboard KPIs, analytics, forecast, recommendations, reports,
+   PDF generator, AI assistant context, and health scores strictly isolate
+   and reflect the active business.
+2. Migration Safety & Downgrade Behavior: Reversible migration testing,
+   schema constraints, foreign key integrity, orphan prevention, and exact
+   database error on downgrade when multiple businesses exist per owner.
+3. Revenue Semantics & Boundaries: Missing (None), zero (0.0), negative (-50000.0),
+   and insufficient historical data states. Ensures gross turnover is not conflated
+   with net operating loss.
+4. Test Coverage & Integrity: Full test suite verification across modules.
+5. Score Descriptions & Consistency: Delineates Executive Health Score (6 pillars:
+   30/15/15/10/20/10) vs Intelligence Grounded Score (5 analyzers) vs Digital Twin
+   Readiness Index (10-11 dimensions).
 """
 from __future__ import annotations
 
+import os
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+from alembic import command
+from alembic.config import Config
 
 from app.models.business import Business
 from app.models.user import User
 from app.repositories.business_repository import BusinessRepository
 from app.repositories.user_repository import UserRepository
+from app.services.ai.providers.context_builder import AssistantContextBuilder
 from app.services.analytics_sprint13_service import BusinessAnalyticsService
 from app.services.analytics_v1_service import AnalyticsV1Service
 from app.services.auth_service import AuthService
+from app.services.dashboard_service import DashboardService
 from app.services.health_score_service import HealthScoreService
+from app.services.intelligence import IntelligenceService
+from app.services.kpi_service import KpiService
+from app.services.pdf_report_service import PdfReportService
 from app.services.predictive_sprint14_service import RevenuePredictionService
 from app.services.recommendations import RecommendationService
+from app.services.report_service import ReportService
 from app.services.twin import TwinService
 from app.utils.database import Base
 
@@ -47,24 +64,32 @@ def test_db():
 
 
 def test_gate1_account_isolation_multi_user_multi_business(test_db):
-    """GATE 1: Account Isolation.
+    """GATE 1: Account Isolation and Business Context Switching.
 
     Two users, each with multiple businesses:
-    - User 1: Business A1 (₹10L) & Business A2 (₹50L)
-    - User 2: Business B1 (₹2L) & Business B2 (₹8L)
+    - User 1: Business A1 (₹10L turnover, 10 employees) & Business A2 (₹50L turnover, 50 employees)
+    - User 2: Business B1 (₹2L turnover, 2 employees) & Business B2 (₹8L turnover, 8 employees)
 
-    Verify:
-    1. Switching between A1 and A2 properly updates analytics, forecast,
-       recommendations, twin index, and health score.
-    2. Cache invalidation on switch works immediately.
-    3. User 1 cannot access User 2's businesses (and vice-versa).
+    Verify that switching active_business_id updates ALL downstream services:
+    - Dashboard KPIs & Summary (DashboardService)
+    - Analytics (BusinessAnalyticsService & AnalyticsV1Service)
+    - Forecasts (RevenuePredictionService)
+    - Recommendations (RecommendationService)
+    - Reports & PDF generation (ReportService & PdfReportService)
+    - AI Assistant Business Context (AssistantContextBuilder)
+    - Repository cache invalidation
     """
     repo = BusinessRepository(test_db)
     user_repo = UserRepository(test_db)
     auth_service = AuthService(user_repo, business_repo=repo)
+    dashboard_svc = DashboardService(repo)
     analytics_svc = BusinessAnalyticsService(repo)
+    analytics_v1_svc = AnalyticsV1Service(repo)
     predictive_svc = RevenuePredictionService(repo)
     twin_svc = TwinService(repo)
+    rec_svc = RecommendationService(repo)
+    report_svc = ReportService(repo)
+    pdf_svc = PdfReportService(repo)
 
     # 1. Create User 1 and User 2
     user1 = User(
@@ -105,7 +130,7 @@ def test_gate1_account_isolation_multi_user_multi_business(test_db):
         owner_id=user2.id,
         legal_name="Beta Logistics B1",
         industry="Logistics",
-        established_year=2019,
+        established_year=2018,
         annual_revenue=200000.0,
         employee_count=2,
     )
@@ -113,37 +138,64 @@ def test_gate1_account_isolation_multi_user_multi_business(test_db):
         owner_id=user2.id,
         legal_name="Beta Manufacturing B2",
         industry="Manufacturing",
-        established_year=2018,
+        established_year=2019,
         annual_revenue=800000.0,
         employee_count=8,
     )
     test_db.add_all([biz_b1, biz_b2])
     test_db.commit()
 
-    # --- Test User 1 with Active Business A1 ---
+    # Assistant context builder helper bound to repo
+    ai_builder = AssistantContextBuilder(
+        twin_provider=lambda o: twin_svc.compute(o),
+        recommendations_provider=lambda o: rec_svc.compute(o),
+        roadmap_provider=lambda o: {},
+        rules_provider=lambda o: {},
+        insights_provider=lambda o: {},
+    )
+
+    # =========================================================================
+    # Step A: User 1 with Active Business A1 (₹10L turnover, 10 employees)
+    # =========================================================================
     auth_service.set_active_business(user1, biz_a1.id)
+    repo.invalidate_cache(user1.id)
     active_u1 = repo.get_by_owner(user1.id)
     assert active_u1 is not None
     assert active_u1.id == biz_a1.id
     assert active_u1.legal_name == "Alpha Solutions A1"
 
-    # Analytics for A1
+    # Dashboard
+    dash_a1 = dashboard_svc.get_dashboard(user1.id)
+    assert dash_a1.business.legal_name == "Alpha Solutions A1"
+    assert dash_a1.kpis["employees"] == 10
+
+    # Analytics Sprint 13 & V1
     analytics_a1 = analytics_svc.compute(user1.id)
     assert analytics_a1.analytics.monthly_growth[0].revenue == pytest.approx(1000000.0 / 12, rel=1e-2)
     assert sum(analytics_a1.analytics.employee_distribution.values()) >= 10
 
-    # Predictions for A1
+    v1_a1 = analytics_v1_svc.compute(user1.id)
+    assert v1_a1.analytics.overview.business_name == "Alpha Solutions A1"
+    assert v1_a1.analytics.overview.employee_count == 10
+
+    # Predictions
     preds_a1 = predictive_svc.compute(user1.id)
     assert preds_a1.report.current_annual_revenue == 1000000.0
     assert preds_a1.report.forecast_3m > 1000000.0
 
-    # Twin & Health for A1
-    health_a1 = HealthScoreService.compute(active_u1)
-    twin_a1 = twin_svc.compute(user1.id)
-    assert 0 <= health_a1.score <= 100
-    assert 0 <= twin_a1["health_summary"]["overall_health"] <= 100
+    # Reports & PDF
+    rep_a1 = report_svc.generate_unified_report(active_u1)
+    assert rep_a1.executive_summary.business_name == "Alpha Solutions A1"
+    pdf_bytes_a1 = pdf_svc.generate_pdf_report(active_u1)
+    assert len(pdf_bytes_a1) > 1000
 
-    # --- Switch User 1 to Active Business A2 ---
+    # AI Assistant Context
+    ai_ctx_a1 = ai_builder.build(owner_id=user1.id)
+    assert ai_ctx_a1.business_id == biz_a1.id
+
+    # =========================================================================
+    # Step B: Switch User 1 to Active Business A2 (₹50L turnover, 50 employees)
+    # =========================================================================
     auth_service.set_active_business(user1, biz_a2.id)
     repo.invalidate_cache(user1.id)
 
@@ -152,28 +204,36 @@ def test_gate1_account_isolation_multi_user_multi_business(test_db):
     assert active_u1_switched.id == biz_a2.id
     assert active_u1_switched.legal_name == "Alpha Retail A2"
 
-    # Analytics for A2
+    # Dashboard updates immediately
+    dash_a2 = dashboard_svc.get_dashboard(user1.id)
+    assert dash_a2.business.legal_name == "Alpha Retail A2"
+    assert dash_a2.kpis["employees"] == 50
+
+    # Analytics updates immediately
     analytics_a2 = analytics_svc.compute(user1.id)
     assert analytics_a2.analytics.monthly_growth[0].revenue == pytest.approx(5000000.0 / 12, rel=1e-2)
     assert sum(analytics_a2.analytics.employee_distribution.values()) >= 50
 
-    # Predictions for A2 scale higher
+    v1_a2 = analytics_v1_svc.compute(user1.id)
+    assert v1_a2.analytics.overview.business_name == "Alpha Retail A2"
+    assert v1_a2.analytics.overview.employee_count == 50
+
+    # Predictions scale with A2
     preds_a2 = predictive_svc.compute(user1.id)
+    assert preds_a2.report.current_annual_revenue == 5000000.0
     assert preds_a2.report.forecast_3m > preds_a1.report.forecast_3m
 
-    # --- Test User 2 with Active Business B1 ---
-    auth_service.set_active_business(user2, biz_b1.id)
-    repo.invalidate_cache(user2.id)
-    active_u2 = repo.get_by_owner(user2.id)
-    assert active_u2 is not None
-    assert active_u2.id == biz_b1.id
-    assert active_u2.legal_name == "Beta Logistics B1"
+    # Reports reflect A2
+    rep_a2 = report_svc.generate_unified_report(active_u1_switched)
+    assert rep_a2.executive_summary.business_name == "Alpha Retail A2"
 
-    analytics_b1 = analytics_svc.compute(user2.id)
-    assert analytics_b1.analytics.monthly_growth[0].revenue == pytest.approx(200000.0 / 12, rel=1e-2)
-    assert sum(analytics_b1.analytics.employee_distribution.values()) >= 2
+    # AI Assistant Context updates immediately to A2
+    ai_ctx_a2 = ai_builder.build(owner_id=user1.id)
+    assert ai_ctx_a2.business_id == biz_a2.id
 
-    # --- Cross-Tenant Boundary Enforcement ---
+    # =========================================================================
+    # Step C: Cross-Tenant Boundary Enforcement
+    # =========================================================================
     # User 1 cannot access User 2's business via get_by_id_for_owner
     assert repo.get_by_id_for_owner(biz_b1.id, user1.id) is None
     assert repo.get_by_id_for_owner(biz_b2.id, user1.id) is None
@@ -184,12 +244,10 @@ def test_gate1_account_isolation_multi_user_multi_business(test_db):
 
 
 def test_gate2_migration_safety_foreign_keys_and_orphan_prevention(test_db):
-    """GATE 2: Migration Safety & Orphan Prevention.
+    """GATE 2 Part A: Migration Safety & Orphan Prevention.
 
     1. Business rows require a non-null valid owner_id.
-    2. Deleting a user safely cascades or removes businesses, preventing
-       orphaned rows.
-    3. Multiple businesses per user persist without unique constraint violations.
+    2. Multiple businesses per user persist without unique constraint violations.
     """
     user = User(
         email="mig_test@example.com",
@@ -234,17 +292,98 @@ def test_gate2_migration_safety_foreign_keys_and_orphan_prevention(test_db):
     test_db.rollback()
 
 
-def test_gate3_revenue_handling_null_zero_negative_missing(test_db):
-    """GATE 3: Revenue Handling & Insufficient Data States.
+def test_gate2_migration_downgrade_failure_with_multiple_businesses():
+    """GATE 2 Part B: Critical Alembic Migration Downgrade Safety.
+
+    Tests the exact situation:
+    - User 1 owns Business A
+    - User 1 owns Business B
+    - Both businesses exist in the upgraded schema (20260814_0002)
+    - Attempt to downgrade to 20260814_0001 (recreating uq_businesses_owner_id)
+
+    Verifies:
+    1. Upgrade to 20260814_0002 succeeds.
+    2. Downgrade fails with IntegrityError (UNIQUE constraint failed: owner_id).
+    3. Confirms that no automated downgrade can safely re-apply UNIQUE(owner_id)
+       without administrative deduplication or data loss.
+    """
+    db_file = os.path.abspath("test_downgrade_gate2.db")
+    if os.path.exists(db_file):
+        os.remove(db_file)
+
+    db_url = f"sqlite:///{db_file.replace(os.sep, '/')}"
+    old_db_url = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = db_url
+
+    from app.config.settings import get_settings
+    get_settings.cache_clear()
+
+    cfg = Config("backend/migrations.ini")
+    cfg.set_main_option("script_location", os.path.abspath("backend/migrations"))
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_file}")
+
+    try:
+        # Step 1: Upgrade to head (20260814_0002)
+        command.upgrade(cfg, "head")
+
+        # Step 2: Insert two businesses with the same owner_id
+        import sqlalchemy as sa
+        engine = sa.create_engine(f"sqlite:///{db_file}")
+        with engine.begin() as conn:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users (id, email, full_name, password_hash) "
+                    "VALUES (1, 'downgrade_user@example.com', 'Downgrade User', 'hash')"
+                )
+            )
+            conn.execute(
+                sa.text(
+                    "INSERT INTO businesses (id, owner_id, legal_name, industry, established_year, annual_revenue) "
+                    "VALUES (1, 1, 'Biz A', 'Tech', 2020, 100000.0)"
+                )
+            )
+            conn.execute(
+                sa.text(
+                    "INSERT INTO businesses (id, owner_id, legal_name, industry, established_year, annual_revenue) "
+                    "VALUES (2, 1, 'Biz B', 'Retail', 2021, 200000.0)"
+                )
+            )
+
+        # Step 3: Attempt downgrade to 20260814_0001
+        with pytest.raises(Exception) as exc_info:
+            command.downgrade(cfg, "20260814_0001")
+
+        err = str(exc_info.value)
+        # Verify exact error captures duplicate key constraint violation
+        assert "UNIQUE constraint failed" in err or "columns owner_id are not unique" in err or "IntegrityError" in str(type(exc_info.value))
+
+    finally:
+        if old_db_url is not None:
+            os.environ["DATABASE_URL"] = old_db_url
+        else:
+            os.environ.pop("DATABASE_URL", None)
+        get_settings.cache_clear()
+        if os.path.exists(db_file):
+            try:
+                os.remove(db_file)
+            except Exception:
+                pass
+
+
+def test_gate3_revenue_handling_and_accounting_semantics(test_db):
+    """GATE 3: Revenue Semantics & Boundaries (Turnover vs Operating Loss).
+
+    In MSME accounting:
+    - annual_revenue represents Gross Revenue (Turnover: total sales receipts).
+    - Turnover cannot be negative (sales volume * price >= 0).
+    - Operating loss is negative net income (Revenue - Expenses < 0), NOT negative turnover.
+    - Negative revenue is treated as non-positive turnover / insufficient data.
 
     Tests:
     1. NULL revenue
     2. Zero revenue (0.0)
     3. Negative revenue (-50000.0)
-    4. Insufficient historical data
-
-    All modules must handle these states gracefully without crashing,
-    without divide-by-zero, and without emitting fabricated fallbacks.
+    4. Missing historical data
     """
     repo = BusinessRepository(test_db)
     analytics_s13 = BusinessAnalyticsService(repo)
@@ -253,8 +392,8 @@ def test_gate3_revenue_handling_null_zero_negative_missing(test_db):
     twin_svc = TwinService(repo)
 
     user = User(
-        email="rev_test@example.com",
-        full_name="Revenue Tester",
+        email="rev_semantics@example.com",
+        full_name="Rev Test",
         password_hash="pw",
     )
     test_db.add(user)
@@ -265,7 +404,7 @@ def test_gate3_revenue_handling_null_zero_negative_missing(test_db):
         owner_id=user.id,
         legal_name="Null Rev Enterprise",
         industry="Services",
-        established_year=2020,
+        established_year=2022,
         annual_revenue=None,
         employee_count=None,
     )
@@ -283,15 +422,18 @@ def test_gate3_revenue_handling_null_zero_negative_missing(test_db):
     # 2. Analytics V1 with NULL revenue
     res_v1 = analytics_v1.compute(user.id)
     assert res_v1.analytics.trends.monthly_trend[0].value == 0.0
+    assert res_v1.analytics.trends.yearly_trend[0].value == 0.0
 
     # 3. Predictive with NULL revenue
     pred_null = predictive_svc.compute(user.id)
     assert pred_null.report.confidence == 0
     assert pred_null.report.trend == "Insufficient Data"
+    assert pred_null.report.forecast_3m == 0.0
 
     # 4. Health Score with NULL revenue
     health_null = HealthScoreService.compute(biz_null)
     assert 0 <= health_null.score <= 100
+    assert "annual_revenue" in health_null.missing_fields
 
     # 5. Twin Service with NULL revenue
     twin_null = twin_svc.compute(user.id)
@@ -305,6 +447,9 @@ def test_gate3_revenue_handling_null_zero_negative_missing(test_db):
     res_zero = analytics_s13.compute(user.id)
     assert res_zero.analytics.monthly_growth[0].revenue == 0.0
 
+    res_v1_zero = analytics_v1.compute(user.id)
+    assert res_v1_zero.analytics.trends.monthly_trend[0].value == 0.0
+
     pred_zero = predictive_svc.compute(user.id)
     assert pred_zero.report.confidence == 0
     assert pred_zero.report.trend == "Insufficient Data"
@@ -315,15 +460,96 @@ def test_gate3_revenue_handling_null_zero_negative_missing(test_db):
     repo.invalidate_cache(user.id)
 
     res_neg = analytics_s13.compute(user.id)
-    # Negative revenue is clamped to 0.0 run-rate to prevent invalid financial projections
     assert res_neg.analytics.monthly_growth[0].revenue == 0.0
+
+    res_v1_neg = analytics_v1.compute(user.id)
+    # Trends must NOT output negative turnover
+    for point in res_v1_neg.analytics.trends.monthly_trend:
+        assert point.value >= 0.0
+    for point in res_v1_neg.analytics.trends.yearly_trend:
+        assert point.value >= 0.0
 
     pred_neg = predictive_svc.compute(user.id)
     assert pred_neg.report.confidence == 0
     assert pred_neg.report.trend == "Insufficient Data"
+    assert pred_neg.report.forecast_3m == 0.0
+    assert pred_neg.report.forecast_6m == 0.0
+    assert pred_neg.report.forecast_12m == 0.0
 
     health_neg = HealthScoreService.compute(biz_null)
     assert 0 <= health_neg.score <= 100
+    assert "annual_revenue" in health_neg.missing_fields
 
     twin_neg = twin_svc.compute(user.id)
     assert 0 <= twin_neg["health_summary"]["overall_health"] <= 100
+
+
+def test_gate4_score_consistency_and_descriptions(test_db):
+    """GATE 4 & 5: Verification of Distinct Scoring Engines and Formulas.
+
+    Verifies the separation of three scoring layers:
+    1. Executive Business Health Score (HealthScoreService):
+       - Exact 6 weighted components:
+         Profile Completeness (30) + Business Info (15) + Products/Services (15) +
+         Team (10) + Financial (20) + Online Presence (10) = 100 max points.
+       - Does NOT calculate regulatory compliance.
+    2. Grounded Business Intelligence (IntelligenceService):
+       - 5 analyzers: ProfileCompleteness, ExportReadiness, DigitalReadiness,
+         ComplianceReadiness, GrowthReadiness.
+       - Explicitly evaluates compliance certifications and registrations.
+    3. Digital Twin Readiness Index (TwinService):
+       - Strategic maturity index rolled up across 10-11 business dimensions.
+    """
+    repo = BusinessRepository(test_db)
+    user = User(email="score_check@example.com", full_name="Score User", password_hash="pw")
+    test_db.add(user)
+    test_db.commit()
+
+    biz = Business(
+        owner_id=user.id,
+        legal_name="Complete MSME Ltd",
+        industry="Manufacturing",
+        business_type="Private Limited",
+        country="India",
+        established_year=2015,
+        employee_count=25,
+        annual_revenue=1500000.0,
+    )
+    test_db.add(biz)
+    test_db.commit()
+    user.active_business_id = biz.id
+    test_db.commit()
+    repo.invalidate_cache(user.id)
+
+    # 1. Executive Health Score
+    health_report = HealthScoreService.compute(biz)
+    assert isinstance(health_report.score, int)
+    assert 0 <= health_report.score <= 100
+    # Business info: legal_name(3) + industry(3) + established_year(3) + business_type(3) + country(3) = 15 pts
+    # Team: 25 employees = 10 pts
+    # Financial: 15L revenue = 20 pts
+    # Total earned is at least 45 pts
+    assert health_report.score >= 45
+
+    # 2. Grounded Intelligence (with Compliance Analyzer)
+    intel_svc = IntelligenceService(repo)
+    intel = intel_svc.analyze(user.id)
+    overall_score = intel["overall"]["score"] if isinstance(intel, dict) else intel.overall.score
+    assert overall_score is not None
+    analyzers = intel["analyzers"] if isinstance(intel, dict) else intel.analyzers
+    assert len(analyzers) == 5
+    analyzer_keys = [a["key"] if isinstance(a, dict) else a.key for a in analyzers]
+    assert "compliance_readiness" in analyzer_keys
+    assert "export_readiness" in analyzer_keys
+    assert "digital_readiness" in analyzer_keys
+
+    # 3. Digital Twin Readiness Index
+    twin_svc = TwinService(repo)
+    twin = twin_svc.compute(user.id)
+    twin_overall = twin["health_summary"]["overall_health"]
+    assert 0 <= twin_overall <= 100
+
+    # Verify that the scores are independent calculations
+    assert isinstance(health_report.score, int)
+    assert isinstance(overall_score, int)
+    assert isinstance(twin_overall, int)

@@ -35,9 +35,11 @@ def test_kpi_engine():
     assert kpi_none.profileCompletion == 0 or kpi_none.profile_completion == 0
 
     # 2. Test active business model computation
+    import uuid
+    test_email = f"kpiuser_{uuid.uuid4().hex[:8]}@example.com"
     db = SessionLocal()
     try:
-        user = User(email="kpiuser@example.com", password_hash="hash", full_name="KPI User")
+        user = User(email=test_email, password_hash="hash", full_name="KPI User")
         db.add(user)
         db.commit()
         db.refresh(user)

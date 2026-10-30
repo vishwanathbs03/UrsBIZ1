@@ -77,7 +77,8 @@ class BusinessAnalyticsService:
         }
 
         # Deterministic monthly run-rate estimates based on annual revenue
-        rev = float(business.annual_revenue or 0.0)
+        raw_rev = float(business.annual_revenue or 0.0)
+        rev = max(0.0, raw_rev)
         m_base = rev / 12.0
         months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
         growth_items = []
