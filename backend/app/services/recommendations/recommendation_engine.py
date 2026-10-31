@@ -34,6 +34,8 @@ from app.repositories.recommendation_lifecycle_repository import (
 from app.schemas.advanced_recommendations import (
     AdvancedRecommendationsOverviewResponse,
     PersonalizedGrowthStrategy,
+    RecommendationAskRequest,
+    RecommendationAskResponse,
     RecommendationFeedbackCreate,
     RecommendationFeedbackResponse,
     ScenarioSimulationRequest,
@@ -47,6 +49,9 @@ from app.schemas.smart_recommendations import (
     SmartRecommendationsResponse,
 )
 from app.services.recommendations.context_service import RecommendationContextService
+from app.services.recommendations.conversational_advisor import (
+    ConversationalRecommendationAdvisor,
+)
 from app.services.recommendations.growth_strategy_engine import GrowthStrategyEngine
 from app.services.recommendations.multi_signal_engine import MultiSignalEngine
 from app.services.recommendations.next_best_action_engine import NextBestActionEngine
@@ -81,6 +86,7 @@ class SmartRecommendationEngine:
         self.next_best_action_engine = NextBestActionEngine()
         self.scenario_engine = ScenarioSimulationEngine()
         self.growth_strategy_engine = GrowthStrategyEngine()
+        self.conversational_advisor = ConversationalRecommendationAdvisor()
 
     def generate_recommendations(
         self,
@@ -335,3 +341,10 @@ class SmartRecommendationEngine:
             outcome_notes=feedback.outcome_notes,
             created_at=feedback.created_at.isoformat() if feedback.created_at else "",
         )
+
+    def ask_recommendation_question(
+        self, business: Business, req: RecommendationAskRequest
+    ) -> RecommendationAskResponse:
+        """Answer natural language business questions using cross-signal intelligence, calculations, and boundaries."""
+        ctx = self.context_service.build_context(business)
+        return self.conversational_advisor.answer_question(ctx=ctx, req=req)

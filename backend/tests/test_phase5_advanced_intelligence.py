@@ -25,8 +25,9 @@ from app.models.product import Product
 from app.models.sales import SalesTransaction
 from app.models.user import User
 from app.schemas.advanced_recommendations import (
-    ScenarioSimulationRequest,
+    RecommendationAskRequest,
     RecommendationFeedbackCreate,
+    ScenarioSimulationRequest,
 )
 from app.schemas.recommendation_context import (
     BusinessProfileContext,
@@ -487,5 +488,48 @@ def test_advanced_recommendations_endpoints_integration(test_db_session):
     assert fb_data["feedback_type"] == "Already implemented"
     assert fb_data["suppress_recommendation"] is True
 
+    # 5. Test POST /api/v1/recommendations/ask
+    ask_payload = {
+        "question": "Which government schemes can I apply for with my manufacturing turnover?"
+    }
+    resp = client.post("/api/v1/recommendations/ask", json=ask_payload)
+    assert resp.status_code == 200, resp.text
+    ask_data = resp.json()
+    assert ask_data["intent"] == "government_funding_schemes"
+    assert len(ask_data["direct_answer"]) > 20
+    assert len(ask_data["evidence_points"]) > 0
+    assert len(ask_data["follow_up_questions"]) >= 1
+    assert len(ask_data["situational_recommendations"]) >= 1
+
     # Clean up dependency overrides
     app.dependency_overrides.clear()
+
+
+def test_conversational_advisor_unit(mock_context):
+    """Verify ConversationalRecommendationAdvisor handles arbitrary questions with calculations and data limitations."""
+    from app.services.recommendations.conversational_advisor import ConversationalRecommendationAdvisor
+    advisor = ConversationalRecommendationAdvisor()
+
+    # Query 1: Unpredefined question on customer concentration risk
+    q1 = RecommendationAskRequest(question="Why is my sales turnover so vulnerable to a single client leaving?")
+    res1 = advisor.answer_question(mock_context, q1)
+
+    assert res1.intent == "customer_retention_concentration"
+    assert any("Bharat Heavy Machining" in e for e in res1.evidence_points)
+    assert len(res1.calculations) >= 2
+    calc_names = [c.name for c in res1.calculations]
+    assert "Top Client Revenue Concentration Share" in calc_names
+    assert len(res1.follow_up_questions) >= 2
+    assert len(res1.situational_recommendations) >= 1
+    assert "Losing this relationship" in res1.situational_recommendations[0].cost_of_delay
+
+    # Query 2: Product demand forecast inquiry
+    q2 = RecommendationAskRequest(question="What is the forecast trajectory for my CNC Lathe Shaft next quarter?")
+    res2 = advisor.answer_question(mock_context, q2)
+
+    assert res2.intent == "product_demand_forecasting"
+    assert any("CNC Lathe Shaft" in e for e in res2.evidence_points)
+    assert any("auto_arima" in e for e in res2.evidence_points)
+    # Check that inventory boundary is preserved
+    assert any("warehouse stock counts" in g.lower() for g in res2.data_limitations_and_gaps)
+

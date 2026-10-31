@@ -223,3 +223,37 @@ export interface AdvancedRecommendationsOverviewResponse {
   opportunities: OpportunityItem[];
   evidence_summary: Record<string, any>;
 }
+
+export interface RecommendationAskRequest {
+  question: string;
+  session_id?: string | null;
+}
+
+export interface CalculationStep {
+  name: string;
+  formula: string;
+  result: string;
+}
+
+export interface SituationalRecommendation {
+  title: string;
+  category: string;
+  priority: "Critical" | "High" | "Medium" | "Low";
+  situational_rationale: string;
+  action_steps: string[];
+  timeframe: string;
+  cost_of_delay: string;
+}
+
+export interface RecommendationAskResponse {
+  question: string;
+  intent: string;
+  direct_answer: string;
+  evidence_points: string[];
+  calculations: CalculationStep[];
+  situational_recommendations: SituationalRecommendation[];
+  data_limitations_and_gaps: string[];
+  follow_up_questions: string[];
+  is_ai_generated: boolean;
+  generated_at: string;
+}

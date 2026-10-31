@@ -48,6 +48,7 @@ import { NextBestActionHero } from "@/features/advisor/NextBestActionHero";
 import { MultiSignalInsightsPanel } from "@/features/advisor/MultiSignalInsightsPanel";
 import { GrowthStrategyRoadmap } from "@/features/advisor/GrowthStrategyRoadmap";
 import { ScenarioSimulationModal } from "@/features/advisor/ScenarioSimulationModal";
+import { ConversationalAdvisorDrawer } from "@/features/advisor/ConversationalAdvisorDrawer";
 import { useAdvancedRecommendations } from "@/features/advisor/use-advanced-recommendations";
 import type {
   AdvisorAction,
@@ -304,6 +305,9 @@ export function AdvisorExecutiveView() {
         {strategy && (
           <GrowthStrategyRoadmap strategy={strategy} />
         )}
+
+        {/* Phase 5: Interactive Conversational AI Business Advisory */}
+        <ConversationalAdvisorDrawer />
 
         {/* Context-Aware Smart Recommendations (Phase 5) */}
         <SmartRecommendationsSection />

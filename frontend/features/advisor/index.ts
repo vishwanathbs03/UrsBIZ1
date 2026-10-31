@@ -15,6 +15,7 @@ export { NextBestActionHero } from "./NextBestActionHero";
 export { MultiSignalInsightsPanel } from "./MultiSignalInsightsPanel";
 export { GrowthStrategyRoadmap } from "./GrowthStrategyRoadmap";
 export { ScenarioSimulationModal } from "./ScenarioSimulationModal";
+export { ConversationalAdvisorDrawer } from "./ConversationalAdvisorDrawer";
 export { useSmartRecommendations } from "./use-smart-recommendations";
 export { useAdvancedRecommendations } from "./use-advanced-recommendations";
 export {

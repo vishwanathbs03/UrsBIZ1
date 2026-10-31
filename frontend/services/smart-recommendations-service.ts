@@ -6,6 +6,8 @@ import { apiClient } from "@/services/api-client";
 import type {
   AdvancedRecommendationsOverviewResponse,
   PersonalizedGrowthStrategy,
+  RecommendationAskRequest,
+  RecommendationAskResponse,
   RecommendationExplainResponse,
   RecommendationFeedbackCreate,
   RecommendationFeedbackResponse,
@@ -88,6 +90,15 @@ export const smartRecommendationsService = {
     return apiClient.post(
       `/api/v1/recommendations/${encodeURIComponent(recommendationId)}/explain`,
       {}
+    );
+  },
+
+  askQuestion: async (
+    payload: RecommendationAskRequest
+  ): Promise<RecommendationAskResponse> => {
+    return apiClient.post<RecommendationAskResponse>(
+      "/api/v1/recommendations/ask",
+      payload
     );
   },
 };

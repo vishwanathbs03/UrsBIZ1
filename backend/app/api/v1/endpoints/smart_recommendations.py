@@ -25,6 +25,8 @@ from app.repositories.recommendation_lifecycle_repository import (
 from app.schemas.advanced_recommendations import (
     AdvancedRecommendationsOverviewResponse,
     PersonalizedGrowthStrategy,
+    RecommendationAskRequest,
+    RecommendationAskResponse,
     RecommendationFeedbackCreate,
     RecommendationFeedbackResponse,
     ScenarioSimulationRequest,
@@ -138,6 +140,22 @@ def submit_recommendation_feedback(
     business = _get_active_business(current_user, db)
     engine = SmartRecommendationEngine(db)
     return engine.record_feedback(business=business, req=payload)
+
+
+@router.post(
+    "/ask",
+    response_model=RecommendationAskResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Ask natural language questions to the AI Recommendation Consultant",
+)
+def ask_recommendation_question(
+    payload: RecommendationAskRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RecommendationAskResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.ask_recommendation_question(business=business, req=payload)
 
 
 @router.patch(

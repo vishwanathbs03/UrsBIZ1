@@ -213,3 +213,53 @@ class AdvancedRecommendationsOverviewResponse(BaseModel):
     root_cause_analyses: list[RootCauseAnalysisItem] = Field(default_factory=list)
     opportunities: list[OpportunityItem] = Field(default_factory=list)
     evidence_summary: dict[str, Any] = Field(default_factory=dict)
+
+
+class RecommendationAskRequest(BaseModel):
+    """Payload for asking natural language questions to the AI Recommendation Consultant."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    question: str = Field(..., min_length=2, description="Natural language business question")
+    session_id: Optional[str] = Field(None, description="Optional conversational session ID")
+
+
+class CalculationStep(BaseModel):
+    """Specific verifiable calculation demonstrating reasoning lineage."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+    formula: str
+    result: str
+
+
+class SituationalRecommendation(BaseModel):
+    """Recommendation dynamically synthesized for the specific business situation."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    title: str
+    category: str
+    priority: str = Field(..., description="'Critical' | 'High' | 'Medium' | 'Low'")
+    situational_rationale: str
+    action_steps: list[str] = Field(default_factory=list)
+    timeframe: str
+    cost_of_delay: str
+
+
+class RecommendationAskResponse(BaseModel):
+    """Comprehensive natural-language answer with evidence, calculations, gaps, and follow-ups."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    question: str
+    intent: str
+    direct_answer: str
+    evidence_points: list[str] = Field(default_factory=list)
+    calculations: list[CalculationStep] = Field(default_factory=list)
+    situational_recommendations: list[SituationalRecommendation] = Field(default_factory=list)
+    data_limitations_and_gaps: list[str] = Field(default_factory=list)
+    follow_up_questions: list[str] = Field(default_factory=list)
+    is_ai_generated: bool
+    generated_at: str
