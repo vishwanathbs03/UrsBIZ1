@@ -520,8 +520,18 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                           </span>
                         </div>
                         <p className="text-[11px] text-dark-text-muted">
-                          Candidate models were trained and selected strictly on earlier history. This final evaluation was conducted on an untouched {productDetail.independent_test_metrics[0].test_periods}-period holdout segment never seen during model selection.
+                          Candidate models were trained and selected strictly on earlier history. This final evaluation was conducted on an untouched {productDetail.independent_test_metrics[0].test_periods}-period holdout segment never seen during model selection ({productDetail.independent_test_metrics[0].non_zero_periods ?? productDetail.independent_test_metrics[0].test_periods} positive sales, {productDetail.independent_test_metrics[0].zero_periods ?? 0} zero sales).
                         </p>
+
+                        {/* Four-Period Test Horizon Limitation Notice */}
+                        <div className="rounded border border-neon-emerald/20 bg-dark-bg/60 p-2.5 text-[11px] text-dark-text-muted flex items-start gap-2">
+                          <Info className="h-3.5 w-3.5 text-neon-emerald flex-shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="text-dark-text-primary">Short-Horizon Empirical Check:</strong>{" "}
+                            This holdout covers {productDetail.independent_test_metrics[0].test_periods} test periods. While it confirms the model was not chosen through holdout overfitting, 4 periods cannot establish long-term reliability across seasonal shifts, holidays, or market cycles. Longitudinal tracking over successive quarters is recommended.
+                          </div>
+                        </div>
+
                         <div className="overflow-x-auto rounded border border-dark-border/60">
                           <table className="w-full text-left text-xs">
                             <thead className="border-b border-dark-border bg-dark-bg/80 text-dark-text-muted">
@@ -530,8 +540,12 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                                 <th className="p-2">Model Name</th>
                                 <th className="p-2 text-right">Test MAE</th>
                                 <th className="p-2 text-right">RMSE</th>
-                                <th className="p-2 text-right">WAPE</th>
-                                <th className="p-2 text-right">MASE</th>
+                                <th className="p-2 text-right" title="Weighted Absolute Percentage Error (sum(|e|) / sum(actuals)). Undefined if holdout demand is zero.">
+                                  WAPE*
+                                </th>
+                                <th className="p-2 text-right" title="Mean Absolute Scaled Error relative to naive in-sample diffs. < 1.0 beats naive.">
+                                  MASE**
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-dark-border/50">
@@ -559,6 +573,16 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                               ))}
                             </tbody>
                           </table>
+                        </div>
+
+                        {/* Metric Caveats & Sample Size Explanations */}
+                        <div className="text-[10px] text-dark-text-muted/80 space-y-0.5 border-t border-dark-border/40 pt-2">
+                          <p>* <strong>WAPE:</strong> Weighted absolute error divided by total actual demand. Undefined (—) when holdout has zero total demand.</p>
+                          <p>** <strong>MASE:</strong> Scaled by training in-sample naive diffs. Values &lt; 1.0 indicate outperforming the training naive walk.</p>
+                          {productDetail.independent_test_metrics[0].metric_notes &&
+                            productDetail.independent_test_metrics[0].metric_notes.map((note, idx) => (
+                              <p key={idx} className="text-neon-emerald/90">• {note}</p>
+                            ))}
                         </div>
                       </div>
                     )}

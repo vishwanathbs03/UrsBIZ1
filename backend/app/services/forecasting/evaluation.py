@@ -52,21 +52,26 @@ def compute_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,
     y_train: np.ndarray,
-) -> dict[str, float | None]:
-    """Calculate MAE, RMSE, WAPE, guarded MAPE, and MASE."""
+) -> dict[str, Any]:
+    """Calculate MAE, RMSE, WAPE, guarded MAPE, and MASE with sample size and zero-demand metadata."""
     errors = y_true - y_pred
     abs_errors = np.abs(errors)
 
     mae = float(np.mean(abs_errors))
     rmse = float(np.sqrt(np.mean(errors**2)))
 
+    # Sample counts
+    n_pts = len(y_true)
+    non_zero_mask = y_true > 0
+    n_nonzero = int(np.sum(non_zero_mask))
+    n_zero = n_pts - n_nonzero
+
     # WAPE = sum(|actual - pred|) / sum(actual)
     sum_actual = float(np.sum(y_true))
     wape = round(float(np.sum(abs_errors) / sum_actual), 4) if sum_actual > 0 else None
 
     # Guarded MAPE: evaluate only on non-zero actuals to prevent divide-by-zero or infinity
-    non_zero_mask = y_true > 0
-    if np.any(non_zero_mask):
+    if n_nonzero > 0:
         pct_errors = abs_errors[non_zero_mask] / y_true[non_zero_mask]
         mape = round(float(np.mean(pct_errors) * 100.0), 2)
     else:
@@ -82,12 +87,29 @@ def compute_metrics(
     else:
         mase = None
 
+    # Interpretive notes for metric reliability and zero-demand caveats
+    metric_notes: list[str] = []
+    if sum_actual == 0:
+        metric_notes.append("WAPE is undefined because total actual demand in this evaluation segment is zero.")
+    if n_zero > 0:
+        metric_notes.append(
+            f"MAPE is evaluated on {n_nonzero}/{n_pts} positive period(s); "
+            f"it does not penalize over-forecasting on the {n_zero} zero-sales period(s)."
+        )
+    if mase is not None:
+        metric_notes.append(f"MASE is scaled by in-sample 1-step naive difference on training history (N={len(y_train)}).")
+    metric_notes.append(f"Sample size: evaluated on {n_pts} period(s) (empirical check, not asymptotic validation).")
+
     return {
         "mae": round(mae, 4),
         "rmse": round(rmse, 4),
         "wape": wape,
         "mape": mape,
         "mase": mase,
+        "test_periods": n_pts,
+        "non_zero_periods": n_nonzero,
+        "zero_periods": n_zero,
+        "metric_notes": metric_notes,
     }
 
 
@@ -332,9 +354,20 @@ def run_model_selection_tournament(
         tourn_info["selection_wape"] = None
         return fallback_model, fallback_model, [], tourn_info
 
-    # Baseline Superiority Selection: Advanced models win only if > 2% MAE improvement
-    baseline_evals = [m for m in evaluated_metrics if m[1]]
-    advanced_evals = [m for m in evaluated_metrics if not m[1]]
+    # Identify standard general-purpose reference baselines (used for fair baseline comparison)
+    standard_baseline_names = {
+        "Naive (Latest Demand)",
+        "Moving Average (3-Period)",
+        "Weighted Moving Average",
+    }
+    standard_evals = [m for m in evaluated_metrics if m[0] in standard_baseline_names]
+    best_standard = min(standard_evals, key=lambda x: x[2]["mae"]) if standard_evals else min(evaluated_metrics, key=lambda x: x[2]["mae"])
+    best_standard_name = best_standard[0]
+
+    # Baseline pool for standard time series (excluding intermittent rate so intermittent rate has a separate reference baseline)
+    baseline_evals = [m for m in evaluated_metrics if m[1] and m[0] != "Intermittent Rate (Expected Demand)"]
+    if not baseline_evals:
+        baseline_evals = [best_standard]
 
     best_baseline = min(baseline_evals, key=lambda x: x[2]["mae"])
     best_baseline_name = best_baseline[0]
@@ -345,6 +378,21 @@ def run_model_selection_tournament(
     selected_cov_count = best_baseline[4]
     selected_total_count = best_baseline[5]
 
+    # Evaluate Intermittent Demand model if present (selected if it beats the standard baseline)
+    intermittent_evals = [m for m in evaluated_metrics if m[0] == "Intermittent Rate (Expected Demand)"]
+    if intermittent_evals:
+        interm = intermittent_evals[0]
+        interm_mae = interm[2]["mae"]
+        if interm_mae < best_mae:
+            selected_name = interm[0]
+            best_mae = interm_mae
+            best_wape = interm[2]["wape"]
+            selected_cov = interm[3]
+            selected_cov_count = interm[4]
+            selected_total_count = interm[5]
+
+    # Evaluate Advanced ML / Smoothing models (must beat baseline hurdle by > 2% MAE)
+    advanced_evals = [m for m in evaluated_metrics if not m[1]]
     if advanced_evals:
         best_advanced = min(advanced_evals, key=lambda x: x[2]["mae"])
         adv_mae = best_advanced[2]["mae"]
@@ -449,8 +497,17 @@ def backtest_and_select_model(
         )
 
         # Stage 2: Independent Final Evaluation on y_test (trained on y_selection)
+        # Guarantee a standard reference benchmark for side-by-side comparison on y_test
+        ref_baseline = best_baseline
+        if ref_baseline == selected_model:
+            alt_candidates = ["Moving Average (3-Period)", "Naive (Latest Demand)", "Weighted Moving Average"]
+            for alt in alt_candidates:
+                if alt != selected_model:
+                    ref_baseline = alt
+                    break
+
         pred_selected = np.maximum(0.0, fit_and_project(selected_model, y_selection, h_test))
-        pred_baseline = np.maximum(0.0, fit_and_project(best_baseline, y_selection, h_test))
+        pred_baseline = np.maximum(0.0, fit_and_project(ref_baseline, y_selection, h_test))
 
         metrics_selected = compute_metrics(y_test, pred_selected, y_selection)
         metrics_baseline = compute_metrics(y_test, pred_baseline, y_selection)
@@ -470,22 +527,28 @@ def backtest_and_select_model(
                 mape=metrics_selected["mape"],
                 mase=metrics_selected["mase"],
                 test_periods=len(y_test),
-                is_baseline=(selected_model == best_baseline),
+                non_zero_periods=metrics_selected.get("non_zero_periods", len(y_test)),
+                zero_periods=metrics_selected.get("zero_periods", 0),
+                is_baseline=(selected_model == ref_baseline),
                 is_selected=True,
+                metric_notes=metrics_selected.get("metric_notes", []),
             )
         ]
-        if selected_model != best_baseline:
+        if selected_model != ref_baseline:
             indep_items.append(
                 IndependentEvaluationItem(
-                    model_name=best_baseline,
+                    model_name=ref_baseline,
                     mae=metrics_baseline["mae"],
                     rmse=metrics_baseline["rmse"],
                     wape=metrics_baseline["wape"],
                     mape=metrics_baseline["mape"],
                     mase=metrics_baseline["mase"],
                     test_periods=len(y_test),
+                    non_zero_periods=metrics_baseline.get("non_zero_periods", len(y_test)),
+                    zero_periods=metrics_baseline.get("zero_periods", 0),
                     is_baseline=True,
                     is_selected=False,
+                    metric_notes=metrics_baseline.get("metric_notes", []),
                 )
             )
 
@@ -507,7 +570,7 @@ def backtest_and_select_model(
             "independent_wape": metrics_selected["wape"],
             "selection_mae": tourn_info.get("selection_mae"),
             "selection_wape": tourn_info.get("selection_wape"),
-            "best_baseline": best_baseline,
+            "best_baseline": ref_baseline,
             "required_periods": min_periods_for_independent_test,
         }
 

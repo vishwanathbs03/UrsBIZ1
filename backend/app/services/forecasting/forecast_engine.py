@@ -298,6 +298,11 @@ def generate_product_forecast(
         limitations.append(
             f"Model was selected on {holdout_info.get('selection_periods', 8)} earlier periods and independently tested on {holdout_info.get('final_test_size', 4)} separate holdout periods."
         )
+        limitations.append(
+            f"Four-Period Test Horizon Limitation: The independent evaluation segment contains {holdout_info.get('final_test_size', 4)} periods. "
+            "While this verifies that model selection was not biased by optimizing on these observations, 4 periods cannot establish statistical stability "
+            "across seasonal transitions, annual cycles, or macroeconomic shifts. Ongoing longitudinal tracking across quarters is recommended."
+        )
     elif series.total_periods >= 4:
         limitations.append(
             f"Model performance represents internal tournament selection diagnostics. "
@@ -318,6 +323,12 @@ def generate_product_forecast(
         "selected_model": selected_model,
         "evaluation_stage": eval_stage,
         "is_independent_evaluation": is_indep,
+        "test_limitation_notice": (
+            f"Independent test evaluated on {holdout_info.get('final_test_size', 4)} holdout periods. "
+            "Empirical check against selection bias; multi-season validation requires extended longitudinal data."
+            if is_indep
+            else "Series under threshold for separate holdout test; tournament diagnostics reported."
+        ),
         "independent_mae": holdout_info.get("independent_mae"),
         "independent_wape": holdout_info.get("independent_wape"),
         "selection_mae": holdout_info.get("selection_mae"),

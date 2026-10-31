@@ -56,8 +56,11 @@ class IndependentEvaluationItem(BaseModel):
     mape: Optional[float] = Field(None, description="Mean Absolute Percentage Error (evaluated on non-zero actuals only)")
     mase: Optional[float] = Field(None, description="Mean Absolute Scaled Error relative to naive in-sample baseline")
     test_periods: int = Field(..., description="Number of independent final test periods")
+    non_zero_periods: Optional[int] = Field(None, description="Number of holdout periods with positive demand (> 0)")
+    zero_periods: Optional[int] = Field(None, description="Number of holdout periods with zero recorded demand")
     is_baseline: bool = Field(False, description="Whether this model is the reference baseline")
     is_selected: bool = Field(False, description="Whether this model was the selected winner")
+    metric_notes: list[str] = Field(default_factory=list, description="Metric interpretation notes including sample size and zero-demand caveats")
 
 
 class ForecastPeriodPoint(BaseModel):

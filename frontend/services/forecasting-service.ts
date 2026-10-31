@@ -34,8 +34,11 @@ export interface IndependentEvaluationItem {
   mape?: number | null;
   mase?: number | null;
   test_periods: number;
+  non_zero_periods?: number | null;
+  zero_periods?: number | null;
   is_baseline: boolean;
   is_selected: boolean;
+  metric_notes?: string[];
 }
 
 export interface ForecastPeriodPoint {

@@ -798,3 +798,82 @@ def test_preprocessing_and_intermittency_fitted_strictly_on_selection_split_with
         "Intermittent model should have been included based on y_selection sparsity (>70%). "
         "Failure indicates y_test future sales leaked into selection preprocessing!"
     )
+
+def test_intermittent_demand_fairly_evaluated_against_reference_baseline_on_holdout():
+    """Verify that when Intermittent Rate is selected, the independent holdout evaluation
+    fairly compares it against a standard reference baseline (e.g. Moving Average)."""
+    # 10 periods of intermittent sales (8 selection periods, 2 holdout periods)
+    # Series engineered where Intermittent Rate wins tournament on y_selection
+    y_intermittent = np.array(
+        [0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 10.0],
+        dtype=np.float64,
+    )
+
+    selected_model, tournament_metrics, holdout_info = backtest_and_select_model(
+        y_intermittent, horizon=2
+    )
+
+    assert holdout_info["evaluation_stage"] == "independent_test_evaluated"
+    indep_metrics = holdout_info["independent_test_metrics"]
+    assert indep_metrics is not None
+    assert len(indep_metrics) == 2, "Must evaluate both the selected intermittent winner AND reference baseline"
+
+    winner_item = next(m for m in indep_metrics if m.is_selected)
+    baseline_item = next(m for m in indep_metrics if m.is_baseline and not m.is_selected)
+
+    assert winner_item.model_name == "Intermittent Rate (Expected Demand)"
+    assert baseline_item.model_name == "Moving Average (3-Period)"
+    # Both models evaluated on the same 2 test periods
+    assert winner_item.test_periods == 2
+    assert baseline_item.test_periods == 2
+    assert winner_item.mae >= 0.0
+    assert baseline_item.mae >= 0.0
+
+
+def test_metric_interpretation_exposes_sample_sizes_and_zero_demand_caveats():
+    """Verify that compute_metrics exposes sample counts, non-zero counts, and zero-demand caveats."""
+    # Test segment with 2 zeros and 2 positive sales
+    y_true = np.array([0.0, 10.0, 0.0, 20.0], dtype=np.float64)
+    y_pred = np.array([2.5, 8.0, 3.0, 18.0], dtype=np.float64)
+    y_train = np.array([0.0, 5.0, 0.0, 15.0, 0.0, 10.0], dtype=np.float64)
+
+    metrics = compute_metrics(y_true, y_pred, y_train)
+
+    assert metrics["test_periods"] == 4
+    assert metrics["non_zero_periods"] == 2
+    assert metrics["zero_periods"] == 2
+    assert metrics["wape"] is not None
+    assert metrics["mape"] is not None
+    assert metrics["mase"] is not None
+
+    notes = metrics["metric_notes"]
+    assert len(notes) >= 3
+    # Confirms MAPE limitation on zero periods is documented
+    assert any("MAPE is evaluated on 2/4 positive period(s)" in n for n in notes)
+    # Confirms sample size limitation is documented
+    assert any("Sample size: evaluated on 4 period(s)" in n for n in notes)
+
+
+def test_four_period_test_horizon_limitation_notice_in_detail_response():
+    """Verify that ProductForecastDetailResponse transparently documents the 4-period test limitation."""
+    base_date = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    txns = [
+        {
+            "transaction_date": base_date + timedelta(days=7 * i),
+            "product_name": "Valve Core",
+            "quantity": 15.0 + i,
+            "is_duplicate": False,
+        }
+        for i in range(12)
+    ]
+
+    detail = generate_product_forecast(txns, "Valve Core", horizon=4)
+
+    assert detail.evaluation_stage == "independent_test_evaluated"
+    # Limitation notice in limitations
+    assert any("Four-Period Test Horizon Limitation" in lim for lim in detail.limitations)
+    # Limitation notice in provenance
+    assert "test_limitation_notice" in detail.provenance
+    assert "4 holdout periods" in detail.provenance["test_limitation_notice"]
+    assert "multi-season validation requires extended longitudinal data" in detail.provenance["test_limitation_notice"]
+
