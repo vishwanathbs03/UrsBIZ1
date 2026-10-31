@@ -27,11 +27,18 @@ from app.schemas.advanced_recommendations import (
 )
 from app.schemas.recommendation_context import UnifiedRecommendationContext
 
+from app.services.recommendations.open_ended_bi_engine import (
+    OpenEndedBusinessIntelligenceEngine,
+)
+
 logger = logging.getLogger(__name__)
 
 
 class ConversationalRecommendationAdvisor:
     """Natural Language Business Advisor for Context-Aware Recommendations."""
+
+    def __init__(self) -> None:
+        self._bi_engine = OpenEndedBusinessIntelligenceEngine()
 
     def answer_question(
         self,
@@ -39,70 +46,7 @@ class ConversationalRecommendationAdvisor:
         req: RecommendationAskRequest,
     ) -> RecommendationAskResponse:
         """Process a natural language business question and generate an evidence-backed advisory response."""
-        now_iso = datetime.now(timezone.utc).isoformat()
-        q = req.question.strip()
-        q_lower = q.lower()
-
-        # Step 1: Intent Classification
-        intent = self._classify_intent(q_lower)
-
-        # Step 2: Retrieve Relevant Evidence & Calculations
-        evidence, calculations, data_gaps, follow_ups = self._extract_evidence_and_calculations(
-            ctx, intent, q_lower
-        )
-
-        # Step 3: Synthesize Situational Recommendations
-        situational_recs = self._synthesize_situational_recommendations(
-            ctx, intent, evidence, calculations
-        )
-
-        # Step 4: Formulate Direct Answer
-        deterministic_answer = self._formulate_deterministic_answer(
-            ctx, intent, q, evidence, calculations, data_gaps, situational_recs
-        )
-
-        # Step 5: Attempt Bounded Gemini Reasoning for Natural Executive Polish
-        settings = get_settings()
-        if settings.ai_api_key and settings.ai_provider != "placeholder":
-            try:
-                ai_answer = self._call_gemini_advisory(
-                    ctx=ctx,
-                    question=q,
-                    intent=intent,
-                    evidence=evidence,
-                    calculations=calculations,
-                    data_gaps=data_gaps,
-                    deterministic_baseline=deterministic_answer,
-                )
-                if ai_answer:
-                    return RecommendationAskResponse(
-                        question=q,
-                        intent=intent,
-                        direct_answer=ai_answer,
-                        evidence_points=evidence,
-                        calculations=calculations,
-                        situational_recommendations=situational_recs,
-                        data_limitations_and_gaps=data_gaps,
-                        follow_up_questions=follow_ups,
-                        is_ai_generated=True,
-                        generated_at=now_iso,
-                    )
-            except Exception as e:
-                logger.warning(f"Gemini conversational advisory failed, using deterministic fallback: {e}")
-
-        # Deterministic Fallback Response
-        return RecommendationAskResponse(
-            question=q,
-            intent=intent,
-            direct_answer=deterministic_answer,
-            evidence_points=evidence,
-            calculations=calculations,
-            situational_recommendations=situational_recs,
-            data_limitations_and_gaps=data_gaps,
-            follow_up_questions=follow_ups,
-            is_ai_generated=False,
-            generated_at=now_iso,
-        )
+        return self._bi_engine.answer(ctx, req)
 
     def _classify_intent(self, q: str) -> str:
         """Classify user question into strategic business intelligence domains."""

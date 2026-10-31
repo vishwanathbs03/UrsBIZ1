@@ -227,6 +227,7 @@ export interface AdvancedRecommendationsOverviewResponse {
 export interface RecommendationAskRequest {
   question: string;
   session_id?: string | null;
+  conversation_history?: Array<{ role: string; content: string }> | null;
 }
 
 export interface CalculationStep {
@@ -245,6 +246,14 @@ export interface SituationalRecommendation {
   cost_of_delay: string;
 }
 
+export interface ToolExecutionTrace {
+  tool: string;
+  status: string;
+  duration_ms: number;
+  arguments?: Record<string, any>;
+  error?: string;
+}
+
 export interface RecommendationAskResponse {
   question: string;
   intent: string;
@@ -254,6 +263,8 @@ export interface RecommendationAskResponse {
   situational_recommendations: SituationalRecommendation[];
   data_limitations_and_gaps: string[];
   follow_up_questions: string[];
+  tool_executions?: ToolExecutionTrace[];
+  query_type?: string | null;
   is_ai_generated: boolean;
   generated_at: string;
 }

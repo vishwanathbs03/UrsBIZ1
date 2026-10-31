@@ -222,6 +222,9 @@ class RecommendationAskRequest(BaseModel):
 
     question: str = Field(..., min_length=2, description="Natural language business question")
     session_id: Optional[str] = Field(None, description="Optional conversational session ID")
+    conversation_history: list[dict[str, Any]] = Field(
+        default_factory=list, description="Optional previous conversation turns for multi-turn context"
+    )
 
 
 class CalculationStep(BaseModel):
@@ -261,5 +264,7 @@ class RecommendationAskResponse(BaseModel):
     situational_recommendations: list[SituationalRecommendation] = Field(default_factory=list)
     data_limitations_and_gaps: list[str] = Field(default_factory=list)
     follow_up_questions: list[str] = Field(default_factory=list)
+    tool_executions: list[dict[str, Any]] = Field(default_factory=list)
+    query_type: Optional[str] = None
     is_ai_generated: bool
     generated_at: str

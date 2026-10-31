@@ -149,6 +149,99 @@ class ActionBoardArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+# --------------------------------------------------------------------------- #
+# Phase 5 Open-Ended Business Intelligence Tools (Whitelisted 13 Tools)
+# --------------------------------------------------------------------------- #
+
+
+class BusinessProfileArgs(BaseModel):
+    """Args for ``get_business_profile`` (no extra args allowed)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class BusinessHealthArgs(BaseModel):
+    """Args for ``get_business_health`` (no extra args allowed)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SalesSummaryArgs(BaseModel):
+    """Args for ``get_sales_summary`` (no extra args allowed)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SalesTrendsArgs(BaseModel):
+    """Args for ``get_sales_trends``."""
+
+    model_config = ConfigDict(extra="forbid")
+    interval: str = Field(default="monthly", min_length=2, max_length=16)
+
+
+class ProductPerformanceArgs(BaseModel):
+    """Args for ``get_product_performance``."""
+
+    model_config = ConfigDict(extra="forbid")
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class CustomerInsightsArgs(BaseModel):
+    """Args for ``get_customer_insights``."""
+
+    model_config = ConfigDict(extra="forbid")
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class CustomerConcentrationArgs(BaseModel):
+    """Args for ``get_customer_concentration`` (no extra args allowed)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class FinancialIndicatorsArgs(BaseModel):
+    """Args for ``get_financial_indicators`` (no extra args allowed)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class DemandForecastArgs(BaseModel):
+    """Args for ``get_demand_forecast``."""
+
+    model_config = ConfigDict(extra="forbid")
+    product_id: str | None = Field(default=None, max_length=64)
+
+
+class ExistingRecommendationsArgs(BaseModel):
+    """Args for ``get_existing_recommendations``."""
+
+    model_config = ConfigDict(extra="forbid")
+    category: str | None = Field(default=None, max_length=64)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class SearchSchemesArgs(BaseModel):
+    """Args for ``search_official_schemes``."""
+
+    model_config = ConfigDict(extra="forbid")
+    category: str | None = Field(default=None, max_length=64)
+
+
+class BusinessComparisonArgs(BaseModel):
+    """Args for ``run_business_comparison``."""
+
+    model_config = ConfigDict(extra="forbid")
+    dimension: str = Field(default="revenue", min_length=2, max_length=32)
+
+
+class CalculateMetricsArgs(BaseModel):
+    """Args for ``calculate_business_metrics``."""
+
+    model_config = ConfigDict(extra="forbid")
+    metric: str = Field(min_length=2, max_length=64)
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
 # Tools that take NO arguments: empty BaseModel with extra="forbid"
 # would still require `{}`; we keep the public class around for
 # clarity but don't gate the router on it — step 2 of the
@@ -167,4 +260,17 @@ __all__ = [
     "KpiArgs",
     "CompareRecommendationsArgs",
     "ActionBoardArgs",
+    "BusinessProfileArgs",
+    "BusinessHealthArgs",
+    "SalesSummaryArgs",
+    "SalesTrendsArgs",
+    "ProductPerformanceArgs",
+    "CustomerInsightsArgs",
+    "CustomerConcentrationArgs",
+    "FinancialIndicatorsArgs",
+    "DemandForecastArgs",
+    "ExistingRecommendationsArgs",
+    "SearchSchemesArgs",
+    "BusinessComparisonArgs",
+    "CalculateMetricsArgs",
 ]
