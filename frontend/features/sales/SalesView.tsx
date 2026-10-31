@@ -14,6 +14,7 @@ import {
   Calendar,
   AlertCircle,
   Plus,
+  BarChart3,
 } from "lucide-react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -35,8 +36,9 @@ import { CustomerInsightsTab } from "./CustomerInsightsTab";
 import { ProductInsightsTab } from "./ProductInsightsTab";
 import { SalesTrendsTab } from "./SalesTrendsTab";
 import { UploadHistoryTab } from "./UploadHistoryTab";
+import { DemandForecastTab } from "./DemandForecastTab";
 
-type ActiveTab = "overview" | "customers" | "products" | "trends" | "history";
+type ActiveTab = "overview" | "customers" | "products" | "trends" | "forecasting" | "history";
 
 export function SalesView() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
@@ -183,6 +185,16 @@ export function SalesView() {
               <TrendingUp className="h-4 w-4" /> Sales Trends
             </button>
             <button
+              onClick={() => setActiveTab("forecasting")}
+              className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 font-medium transition-colors ${
+                activeTab === "forecasting"
+                  ? "border-neon-cyan text-neon-cyan"
+                  : "border-transparent text-dark-text-muted hover:text-dark-text-primary"
+              }`}
+            >
+              <BarChart3 className="h-4 w-4" /> Demand Forecasting
+            </button>
+            <button
               onClick={() => setActiveTab("history")}
               className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 font-medium transition-colors ${
                 activeTab === "history"
@@ -295,6 +307,26 @@ export function SalesView() {
                   </div>
                 </div>
               </div>
+
+              {/* Demand Forecasting CTA Banner */}
+              <div className="rounded-xl border border-dark-border bg-dark-card p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-bold text-dark-text-primary uppercase tracking-wider flex items-center gap-1.5">
+                    <BarChart3 className="h-3.5 w-3.5 text-neon-cyan" /> Ready for Predictive Demand Intelligence?
+                  </h4>
+                  <p className="text-[11px] text-dark-text-muted mt-0.5">
+                    Project product demand for the next 4, 8, or 12 periods using holdout-verified time-series models.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setActiveTab("forecasting")}
+                  className="h-8 border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/10 text-xs font-medium"
+                >
+                  View Demand Forecasts
+                </Button>
+              </div>
             </div>
           )}
 
@@ -307,7 +339,12 @@ export function SalesView() {
           {/* TAB 4: Sales Trends */}
           {activeTab === "trends" && <SalesTrendsTab initialData={timeSeries} />}
 
-          {/* TAB 5: Upload History */}
+          {/* TAB 5: Demand Forecasting */}
+          {activeTab === "forecasting" && (
+            <DemandForecastTab onUploadClick={() => setShowWizard(true)} />
+          )}
+
+          {/* TAB 6: Upload History */}
           {activeTab === "history" && (
             <UploadHistoryTab uploads={uploads} onUploadDeleted={loadData} />
           )}
