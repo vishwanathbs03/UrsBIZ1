@@ -12,8 +12,69 @@ Covers:
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class AnswerabilityStatus(str, Enum):
+    """Classification of whether a query can be answered reliably with available data."""
+
+    ANSWERABLE = "ANSWERABLE"
+    PARTIALLY_ANSWERABLE = "PARTIALLY_ANSWERABLE"
+    NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+    UNSUPPORTED_REQUEST = "UNSUPPORTED_REQUEST"
+
+
+class StatementClassification(str, Enum):
+    """Epistemic classification of individual claims and findings."""
+
+    VERIFIED_FACT = "VERIFIED_FACT"
+    CALCULATED_RESULT = "CALCULATED_RESULT"
+    FORECAST_ESTIMATE = "FORECAST_ESTIMATE"
+    AI_INTERPRETATION = "AI_INTERPRETATION"
+    GENERAL_BUSINESS_ADVICE = "GENERAL_BUSINESS_ADVICE"
+    HYPOTHESIS = "HYPOTHESIS"
+
+
+class GroundedFinding(BaseModel):
+    """A granular finding or assertion grounded in business data or domain expertise."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    claim_type: StatementClassification = StatementClassification.VERIFIED_FACT
+    statement: str
+    source_module: str = Field(
+        ...,
+        description="'sales' | 'customers' | 'demand_forecasting' | 'business_health' | 'financial_indicators' | 'government_schemes' | 'general_msme_knowledge'",
+    )
+    source_metric: Optional[str] = None
+    time_period: Optional[str] = None
+    value: Optional[Any] = None
+    unit: Optional[str] = None
+    currency: Optional[str] = None
+    calculation_methodology: Optional[str] = None
+    data_freshness_iso: Optional[str] = None
+    data_quality: str = Field("High", description="'High' | 'Moderate' | 'Limited' | 'Insufficient'")
+
+
+class AnswerQualityEvaluation(BaseModel):
+    """Comprehensive multi-dimensional evaluation of AI response quality."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    overall_quality_score: float = Field(..., ge=0.0, le=100.0, description="Overall quality score (0-100)")
+    normalized_score: float = Field(..., ge=0.0, le=10.0, description="Normalized score (0-10)")
+    dimension_scores: dict[str, float] = Field(
+        default_factory=dict,
+        description="Individual scores (0-10) for 10 evaluation dimensions",
+    )
+    evidence_coverage_pct: float = Field(..., ge=0.0, le=100.0)
+    missing_information: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    validation_status: str = Field(..., description="'PASSED' | 'WARNING' | 'FAILED'")
 
 
 class CrossSignalInsight(BaseModel):
@@ -181,7 +242,7 @@ class RecommendationFeedbackCreate(BaseModel):
     recommendation_id: str
     feedback_type: str = Field(
         ...,
-        description="'Useful' | 'Not relevant' | 'Already implemented' | 'Not feasible' | 'Need more explanation'",
+        description="'Helpful' | 'Useful' | 'Not helpful' | 'Incorrect information' | 'Missing information' | 'Not relevant to my business' | 'Not relevant' | 'Already implemented' | 'Need more explanation' | 'Not feasible'",
     )
     outcome_notes: Optional[str] = None
 
@@ -268,3 +329,13 @@ class RecommendationAskResponse(BaseModel):
     query_type: Optional[str] = None
     is_ai_generated: bool
     generated_at: str
+
+    # Grounding & Quality Evaluation enhancements (Phase 5 QA)
+    answerability: AnswerabilityStatus = AnswerabilityStatus.ANSWERABLE
+    answerability_reason: Optional[str] = None
+    grounded_findings: list[GroundedFinding] = Field(default_factory=list)
+    quality_evaluation: Optional[AnswerQualityEvaluation] = None
+    trust_label: str = Field(
+        "Verified Data Grounded",
+        description="'Verified Data Grounded' | 'High Confidence' | 'Partial Data Grounded' | 'Needs Clarification' | 'Data Upload Required' | 'General Advisory Only'",
+    )

@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
+  Award,
   Calculator,
   CheckCircle2,
   Cpu,
@@ -14,6 +15,7 @@ import {
   Search,
   Send,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Trash2,
   Wrench,
@@ -43,6 +45,21 @@ export function ConversationalAdvisorDrawer() {
   const [activeResponse, setActiveResponse] = useState<RecommendationAskResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [feedbackSuccess, setFeedbackSuccess] = useState<string | null>(null);
+
+  const handleFeedback = async (type: string) => {
+    try {
+      await smartRecommendationsService.submitFeedback({
+        recommendation_id: `advisor_${activeResponse?.intent || "general"}`,
+        feedback_type: type as any,
+        outcome_notes: `Owner feedback on answer to "${activeResponse?.question}"`,
+      });
+      setFeedbackSuccess(`Recorded: "${type}". Thank you!`);
+      setTimeout(() => setFeedbackSuccess(null), 3500);
+    } catch {
+      // ignore
+    }
+  };
 
   const handleAsk = async (queryToAsk?: string) => {
     const q = (queryToAsk || question).trim();
@@ -245,6 +262,52 @@ export function ConversationalAdvisorDrawer() {
             </div>
           </div>
 
+          {/* Trust Label, Answerability & Quality Score Banner */}
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-background/80 rounded-lg p-2.5 border border-border/60">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold border ${
+                  activeResponse.trust_label?.includes("Verified")
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                    : activeResponse.trust_label?.includes("High Confidence")
+                    ? "border-blue-500/40 bg-blue-500/10 text-blue-400"
+                    : activeResponse.trust_label?.includes("Partial")
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                    : "border-purple-500/40 bg-purple-500/10 text-purple-400"
+                }`}
+              >
+                <ShieldCheck className="size-3.5" />
+                {activeResponse.trust_label || "Verified Data Grounded"}
+              </span>
+
+              {activeResponse.answerability && (
+                <span className="rounded px-2 py-0.5 text-[10px] font-mono font-semibold border border-border/70 bg-secondary/60 text-muted-foreground uppercase">
+                  {activeResponse.answerability.replace(/_/g, " ")}
+                </span>
+              )}
+            </div>
+
+            {activeResponse.quality_evaluation && (
+              <div className="flex items-center gap-2 text-xs">
+                <span
+                  className={`inline-flex items-center gap-1 font-bold ${
+                    activeResponse.quality_evaluation.validation_status === "PASSED"
+                      ? "text-emerald-400"
+                      : activeResponse.quality_evaluation.validation_status === "WARNING"
+                      ? "text-amber-400"
+                      : "text-rose-400"
+                  }`}
+                >
+                  <Award className="size-3.5" />
+                  Quality: {Math.round(activeResponse.quality_evaluation.overall_quality_score)}/100
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  ({activeResponse.quality_evaluation.validation_status})
+                </span>
+              </div>
+            )}
+          </div>
+
           {/* Tool Execution Trace Badge Row */}
           {activeResponse.tool_executions && activeResponse.tool_executions.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] bg-background/50 rounded-lg p-2 border border-border/50">
@@ -313,6 +376,54 @@ export function ConversationalAdvisorDrawer() {
             </div>
           )}
 
+          {/* Grounded Findings Breakdown (Source Traceability & Claim Classification) */}
+          {activeResponse.grounded_findings && activeResponse.grounded_findings.length > 0 && (
+            <div className="space-y-2 border border-border/60 bg-background/50 rounded-lg p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                  <CheckCircle2 className="size-3.5 text-emerald-400" />
+                  Grounded Evidence Breakdown ({activeResponse.grounded_findings.length} findings)
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {activeResponse.quality_evaluation?.evidence_coverage_pct || 100}% verified coverage
+                </span>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2 pt-1">
+                {activeResponse.grounded_findings.map((f) => (
+                  <div key={f.id} className="rounded border border-border/50 bg-secondary/20 p-2 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                          f.claim_type === "VERIFIED_FACT"
+                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                            : f.claim_type === "CALCULATED_RESULT"
+                            ? "bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                            : f.claim_type === "FORECAST_ESTIMATE"
+                            ? "bg-purple-500/15 text-purple-400 border border-purple-500/30"
+                            : "bg-slate-500/15 text-slate-400 border border-slate-500/30"
+                        }`}
+                      >
+                        {f.claim_type.replace(/_/g, " ")}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {f.source_module}
+                      </span>
+                    </div>
+                    <div className="text-foreground/90 font-medium text-[11px] leading-snug">
+                      {f.statement}
+                    </div>
+                    {f.time_period && (
+                      <div className="text-[10px] text-muted-foreground">
+                        Period: {f.time_period}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Situational Recommendation */}
           {activeResponse.situational_recommendations.length > 0 && (
             <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3.5 space-y-2">
@@ -366,6 +477,48 @@ export function ConversationalAdvisorDrawer() {
               </ul>
             </div>
           )}
+
+          {/* Answer Quality Feedback Options */}
+          <div className="border-t border-border/40 pt-2 space-y-1.5 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-muted-foreground text-[11px]">Was this answer accurate & helpful?</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleFeedback("Helpful")}
+                  className="rounded border border-border/60 bg-secondary/30 hover:bg-emerald-500/15 hover:text-emerald-400 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors"
+                >
+                  👍 Helpful
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFeedback("Not helpful")}
+                  className="rounded border border-border/60 bg-secondary/30 hover:bg-rose-500/15 hover:text-rose-400 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors"
+                >
+                  👎 Not helpful
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFeedback("Incorrect information")}
+                  className="rounded border border-border/60 bg-secondary/30 hover:bg-amber-500/15 hover:text-amber-400 px-2 py-0.5 text-[11px] text-muted-foreground transition-colors"
+                >
+                  ⚠️ Incorrect info
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleFeedback("Need more explanation")}
+                  className="rounded border border-border/60 bg-secondary/30 hover:bg-primary/15 hover:text-primary px-2 py-0.5 text-[11px] text-muted-foreground transition-colors"
+                >
+                  💡 Need more info
+                </button>
+              </div>
+            </div>
+            {feedbackSuccess && (
+              <div className="text-emerald-400 text-xs bg-emerald-500/10 border border-emerald-500/20 rounded p-1.5 text-center">
+                {feedbackSuccess}
+              </div>
+            )}
+          </div>
 
           {/* Clickable Follow-up Questions */}
           {activeResponse.follow_up_questions.length > 0 && (

@@ -191,11 +191,56 @@ export interface ScenarioSimulationResponse {
 }
 
 export type FeedbackType =
+  | "Helpful"
   | "Useful"
+  | "Not helpful"
+  | "Incorrect information"
+  | "Missing information"
+  | "Not relevant to my business"
   | "Not relevant"
   | "Already implemented"
-  | "Not feasible"
-  | "Need more explanation";
+  | "Need more explanation"
+  | "Not feasible";
+
+export type AnswerabilityStatus =
+  | "ANSWERABLE"
+  | "PARTIALLY_ANSWERABLE"
+  | "NEEDS_CLARIFICATION"
+  | "INSUFFICIENT_DATA"
+  | "UNSUPPORTED_REQUEST";
+
+export type StatementClassification =
+  | "VERIFIED_FACT"
+  | "CALCULATED_RESULT"
+  | "FORECAST_ESTIMATE"
+  | "AI_INTERPRETATION"
+  | "GENERAL_BUSINESS_ADVICE"
+  | "HYPOTHESIS";
+
+export interface GroundedFinding {
+  id: string;
+  claim_type: StatementClassification;
+  statement: string;
+  source_module: string;
+  source_metric?: string | null;
+  time_period?: string | null;
+  value?: any;
+  unit?: string | null;
+  currency?: string | null;
+  calculation_methodology?: string | null;
+  data_freshness_iso?: string | null;
+  data_quality?: "High" | "Moderate" | "Limited" | "Insufficient";
+}
+
+export interface AnswerQualityEvaluation {
+  overall_quality_score: number;
+  normalized_score: number;
+  dimension_scores: Record<string, number>;
+  evidence_coverage_pct: number;
+  missing_information: string[];
+  warnings: string[];
+  validation_status: "PASSED" | "WARNING" | "FAILED";
+}
 
 export interface RecommendationFeedbackCreate {
   recommendation_id: string;
@@ -267,4 +312,9 @@ export interface RecommendationAskResponse {
   query_type?: string | null;
   is_ai_generated: boolean;
   generated_at: string;
+  answerability?: AnswerabilityStatus;
+  answerability_reason?: string | null;
+  grounded_findings?: GroundedFinding[];
+  quality_evaluation?: AnswerQualityEvaluation | null;
+  trust_label?: string;
 }

@@ -317,19 +317,19 @@ class SmartRecommendationEngine:
         )
 
         # If suppressed or already implemented, update lifecycle status
-        if req.feedback_type == "Already implemented":
+        if req.feedback_type in ("Already implemented", "Implemented"):
             self.lifecycle_repo.update_status(
                 business_id=business.id,
                 recommendation_id=req.recommendation_id,
                 status="Completed",
                 notes=req.outcome_notes or "Marked as already implemented by owner",
             )
-        elif req.feedback_type == "Not relevant":
+        elif req.feedback_type in ("Not relevant", "Not relevant to my business", "Incorrect information", "Not feasible"):
             self.lifecycle_repo.update_status(
                 business_id=business.id,
                 recommendation_id=req.recommendation_id,
                 status="Dismissed",
-                notes=req.outcome_notes or "Marked as not relevant by owner",
+                notes=req.outcome_notes or f"Marked as {req.feedback_type} by owner",
             )
 
         return RecommendationFeedbackResponse(

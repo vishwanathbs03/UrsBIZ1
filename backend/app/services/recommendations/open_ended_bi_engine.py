@@ -21,18 +21,29 @@ import logging
 import re
 import time
 from typing import Any, Optional
+import uuid
 
 import httpx
 from pydantic import ValidationError
 
 from app.config.settings import get_settings
 from app.schemas.advanced_recommendations import (
+    AnswerabilityStatus,
+    AnswerQualityEvaluation,
     CalculationStep,
+    GroundedFinding,
     RecommendationAskRequest,
     RecommendationAskResponse,
     SituationalRecommendation,
+    StatementClassification,
 )
 from app.schemas.recommendation_context import UnifiedRecommendationContext
+from app.services.recommendations.evaluation_engine import (
+    AnswerabilityClassifier,
+    AIAnswerQualityEvaluator,
+    GroundedFindingBuilder,
+    StructuredObservabilityLogger,
+)
 from app.services.ai.tool_router.types import (
     BusinessComparisonArgs,
     BusinessHealthArgs,
@@ -469,17 +480,46 @@ class OpenEndedBusinessIntelligenceEngine:
 
     def __init__(self) -> None:
         self._tools = WHITELISTED_TOOLS
+        self._answerability_classifier = AnswerabilityClassifier()
+        self._quality_evaluator = AIAnswerQualityEvaluator()
+        self._finding_builder = GroundedFindingBuilder()
+        self._observability_logger = StructuredObservabilityLogger()
 
     def answer(
         self,
         ctx: UnifiedRecommendationContext,
         req: RecommendationAskRequest,
     ) -> RecommendationAskResponse:
-        """Process any open-ended question with verified data grounding and reasoning."""
+        """Process any open-ended question with verified data grounding, reasoning, and automated QA evaluation."""
+        t0 = time.perf_counter()
+        req_uuid = f"req_{uuid.uuid4().hex[:12]}"
         now_iso = datetime.now(timezone.utc).isoformat()
         q = req.question.strip()
         q_lower = q.lower()
         history = req.conversation_history or []
+
+        # 0. Answerability Pre-Classification
+        ans_status, ans_reason = self._answerability_classifier.classify(
+            question=q,
+            ctx=ctx,
+            has_history=bool(history),
+        )
+
+        if ans_status == AnswerabilityStatus.UNSUPPORTED_REQUEST:
+            resp = self._handle_unsupported_request(q, ans_reason, now_iso)
+            eval_res = self._quality_evaluator.evaluate(q, resp, ctx)
+            resp.quality_evaluation = eval_res
+            latency_ms = (time.perf_counter() - t0) * 1000
+            self._observability_logger.log_query_execution(
+                request_uuid=req_uuid,
+                business_id=ctx.profile.business_id,
+                question=q,
+                answerability=ans_status,
+                tools_executed=[],
+                evaluation=eval_res,
+                latency_ms=latency_ms,
+            )
+            return resp
 
         # 1. Multi-turn reference resolution
         resolved_focus, antecedent_entity = self._resolve_multi_turn_context(q_lower, history)
@@ -490,14 +530,53 @@ class OpenEndedBusinessIntelligenceEngine:
         )
 
         # 3. Handle Special Non-Analytical Query Categories
-        if query_type == "ambiguous":
-            return self._handle_ambiguous_question(q, intent, now_iso)
+        if query_type == "ambiguous" or (ans_status == AnswerabilityStatus.NEEDS_CLARIFICATION and not history):
+            resp = self._handle_ambiguous_question(q, intent, now_iso)
+            eval_res = self._quality_evaluator.evaluate(q, resp, ctx)
+            resp.quality_evaluation = eval_res
+            latency_ms = (time.perf_counter() - t0) * 1000
+            self._observability_logger.log_query_execution(
+                request_uuid=req_uuid,
+                business_id=ctx.profile.business_id,
+                question=q,
+                answerability=AnswerabilityStatus.NEEDS_CLARIFICATION,
+                tools_executed=[],
+                evaluation=eval_res,
+                latency_ms=latency_ms,
+            )
+            return resp
 
         if query_type == "data_unavailable":
-            return self._handle_unavailable_data_question(q, intent, q_lower, now_iso)
+            resp = self._handle_unavailable_data_question(q, intent, q_lower, now_iso)
+            eval_res = self._quality_evaluator.evaluate(q, resp, ctx)
+            resp.quality_evaluation = eval_res
+            latency_ms = (time.perf_counter() - t0) * 1000
+            self._observability_logger.log_query_execution(
+                request_uuid=req_uuid,
+                business_id=ctx.profile.business_id,
+                question=q,
+                answerability=AnswerabilityStatus.INSUFFICIENT_DATA,
+                tools_executed=[],
+                evaluation=eval_res,
+                latency_ms=latency_ms,
+            )
+            return resp
 
         if query_type == "general_business_guidance":
-            return self._handle_general_business_guidance(ctx, q, intent, now_iso)
+            resp = self._handle_general_business_guidance(ctx, q, intent, now_iso)
+            eval_res = self._quality_evaluator.evaluate(q, resp, ctx)
+            resp.quality_evaluation = eval_res
+            latency_ms = (time.perf_counter() - t0) * 1000
+            self._observability_logger.log_query_execution(
+                request_uuid=req_uuid,
+                business_id=ctx.profile.business_id,
+                question=q,
+                answerability=AnswerabilityStatus.ANSWERABLE,
+                tools_executed=[],
+                evaluation=eval_res,
+                latency_ms=latency_ms,
+            )
+            return resp
 
         # 4. Tool Execution Phase (Bounded, Validated, Sandboxed)
         tool_results, tool_traces, data_gaps = self._execute_tools(
@@ -543,7 +622,24 @@ class OpenEndedBusinessIntelligenceEngine:
             tool_results=tool_results,
         )
 
+        # Build Grounded Findings
+        grounded_findings = self._finding_builder.build_from_context_and_tools(
+            ctx=ctx,
+            tool_results=tool_results,
+            calculations=calculations,
+        )
+
+        # Trust Label determination
+        if ans_status == AnswerabilityStatus.PARTIALLY_ANSWERABLE:
+            trust_label = "Partial Data Grounded"
+        elif len(evidence) >= 3:
+            trust_label = "Verified Data Grounded"
+        else:
+            trust_label = "High Confidence"
+
         # 9. Attempt Bounded Gemini Polish (with instant deterministic fallback)
+        chosen_answer = deterministic_answer
+        is_ai = False
         settings = get_settings()
         if settings.ai_api_key and settings.ai_provider != "placeholder":
             try:
@@ -557,27 +653,26 @@ class OpenEndedBusinessIntelligenceEngine:
                     deterministic_baseline=deterministic_answer,
                 )
                 if ai_answer:
-                    return RecommendationAskResponse(
-                        question=q,
-                        intent=intent,
-                        direct_answer=ai_answer,
-                        evidence_points=evidence,
-                        calculations=calculations,
-                        situational_recommendations=situational_recs,
-                        data_limitations_and_gaps=data_gaps,
-                        follow_up_questions=follow_ups,
-                        tool_executions=tool_traces,
-                        query_type=query_type,
-                        is_ai_generated=True,
-                        generated_at=now_iso,
-                    )
+                    # Validate Gemini output for numerical consistency and boundaries
+                    num_score, _, num_warns = self._quality_evaluator.numeric_validator.validate_text(ai_answer, ctx)
+                    violations = self._quality_evaluator.hallucination_detector.detect_violations(ai_answer)
+                    if num_score >= 7.0 and len(violations) == 0:
+                        chosen_answer = ai_answer
+                        is_ai = True
+                    else:
+                        logger.warning(
+                            "Gemini reasoning discarded due to quality/boundary checks (num_score=%.1f, violations=%s). "
+                            "Defaulting to deterministic baseline.",
+                            num_score,
+                            violations,
+                        )
             except Exception as exc:
                 logger.warning(f"Gemini open-ended reasoning call failed, falling back to deterministic answer: {exc}")
 
-        return RecommendationAskResponse(
+        resp = RecommendationAskResponse(
             question=q,
             intent=intent,
-            direct_answer=deterministic_answer,
+            direct_answer=chosen_answer,
             evidence_points=evidence,
             calculations=calculations,
             situational_recommendations=situational_recs,
@@ -585,9 +680,32 @@ class OpenEndedBusinessIntelligenceEngine:
             follow_up_questions=follow_ups,
             tool_executions=tool_traces,
             query_type=query_type,
-            is_ai_generated=False,
+            is_ai_generated=is_ai,
             generated_at=now_iso,
+            answerability=ans_status,
+            answerability_reason=ans_reason,
+            grounded_findings=grounded_findings,
+            trust_label=trust_label,
         )
+
+        # 10. Run Full 10-Dimension Quality Evaluation
+        eval_result = self._quality_evaluator.evaluate(q, resp, ctx)
+        resp.quality_evaluation = eval_result
+
+        # 11. Log Structured Telemetry
+        latency_ms = (time.perf_counter() - t0) * 1000
+        executed_tool_names = [t.get("tool", "") for t in tool_traces]
+        self._observability_logger.log_query_execution(
+            request_uuid=req_uuid,
+            business_id=ctx.profile.business_id,
+            question=q,
+            answerability=ans_status,
+            tools_executed=executed_tool_names,
+            evaluation=eval_result,
+            latency_ms=latency_ms,
+        )
+
+        return resp
 
     # ----------------------------------------------------------------------- #
     # Multi-turn Context Resolution
@@ -1170,7 +1288,11 @@ class OpenEndedBusinessIntelligenceEngine:
                 f"Here is what your verified business data indicates regarding *\"{question}\"*:"
             )
 
-        # 2. Key findings & calculation lineage
+        # 2. Key findings & verified facts
+        if evidence:
+            ev_bullets = [f"- {e}" for e in evidence[:3]]
+            paragraphs.append("### Key Verified Facts & Signals\n" + "\n".join(ev_bullets))
+
         findings: list[str] = []
         if calculations:
             for c in calculations:
@@ -1202,6 +1324,36 @@ class OpenEndedBusinessIntelligenceEngine:
     # Handlers for Special Non-Analytical Inquiries
     # ----------------------------------------------------------------------- #
 
+    def _handle_unsupported_request(
+        self, q: str, reason: str, now_iso: str
+    ) -> RecommendationAskResponse:
+        return RecommendationAskResponse(
+            question=q,
+            intent="unsupported_request",
+            direct_answer=(
+                f"I cannot fulfill this request as submitted. {reason}\n\n"
+                "UrsBiz is an AI business intelligence platform designed specifically to advise MSME owners on sales trends, "
+                "customer concentration, demand forecasting, business health diagnostics, and eligible government schemes "
+                "based on verified business data."
+            ),
+            evidence_points=[],
+            calculations=[],
+            situational_recommendations=[],
+            data_limitations_and_gaps=[reason],
+            follow_up_questions=[
+                "Would you like an analysis of your customer concentration risk?",
+                "Would you like to review demand forecasts for your top products?",
+                "Should we explore government schemes matching your industry?",
+            ],
+            tool_executions=[],
+            query_type="unsupported",
+            is_ai_generated=False,
+            generated_at=now_iso,
+            answerability=AnswerabilityStatus.UNSUPPORTED_REQUEST,
+            answerability_reason=reason,
+            trust_label="Unsupported Request",
+        )
+
     def _handle_ambiguous_question(self, q: str, intent: str, now_iso: str) -> RecommendationAskResponse:
         return RecommendationAskResponse(
             question=q,
@@ -1228,16 +1380,21 @@ class OpenEndedBusinessIntelligenceEngine:
             query_type="ambiguous",
             is_ai_generated=False,
             generated_at=now_iso,
+            answerability=AnswerabilityStatus.NEEDS_CLARIFICATION,
+            answerability_reason="The inquiry is too brief or ambiguous. Clarifying context is required.",
+            trust_label="Needs Clarification",
         )
 
     def _handle_unavailable_data_question(
         self, q: str, intent: str, q_lower: str, now_iso: str
     ) -> RecommendationAskResponse:
         missing_metric = "the requested operational metric"
-        if "stock" in q_lower or "reorder" in q_lower:
+        if "stock" in q_lower or "reorder" in q_lower or "warehouse" in q_lower:
             missing_metric = "warehouse stock balances, reorder points, and supplier delivery lead times"
         elif "depreciation" in q_lower or "tax" in q_lower:
             missing_metric = "asset depreciation schedules and filed statutory tax returns"
+        elif "cac" in q_lower or "ad spend" in q_lower or "channel" in q_lower:
+            missing_metric = "marketing channel ad spend and customer acquisition cost ledgers"
 
         return RecommendationAskResponse(
             question=q,
@@ -1263,6 +1420,9 @@ class OpenEndedBusinessIntelligenceEngine:
             query_type="data_unavailable",
             is_ai_generated=False,
             generated_at=now_iso,
+            answerability=AnswerabilityStatus.INSUFFICIENT_DATA,
+            answerability_reason=f"UrsBiz does not track {missing_metric}.",
+            trust_label="Data Upload Required",
         )
 
     def _handle_general_business_guidance(
@@ -1314,6 +1474,9 @@ class OpenEndedBusinessIntelligenceEngine:
             query_type="general_business_guidance",
             is_ai_generated=False,
             generated_at=now_iso,
+            answerability=AnswerabilityStatus.ANSWERABLE,
+            answerability_reason="General strategic guidance grounded in MSME operational standards.",
+            trust_label="General Advisory Only",
         )
 
     # ----------------------------------------------------------------------- #

@@ -68,7 +68,13 @@ class RecommendationFeedbackRepository:
           - False otherwise
         """
         if suppress is None:
-            suppress = feedback_type in ("Already implemented", "Not relevant")
+            suppress = feedback_type in (
+                "Already implemented",
+                "Not relevant",
+                "Not relevant to my business",
+                "Incorrect information",
+                "Not feasible",
+            )
 
         feedback = RecommendationFeedback(
             business_id=business_id,
