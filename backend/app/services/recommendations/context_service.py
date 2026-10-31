@@ -29,6 +29,7 @@ from app.models.sales import SalesTransaction
 from app.repositories.business_repository import BusinessRepository
 from app.repositories.sales_repository import SalesRepository
 from app.schemas.forecasting import ForecastIntervalEnum
+from app.schemas.data_provenance import ModuleDomain
 from app.schemas.recommendation_context import (
     BusinessProfileContext,
     CustomerAnalyticsContext,
@@ -42,6 +43,10 @@ from app.schemas.recommendation_context import (
     SchemeMatchingContext,
     UnifiedRecommendationContext,
 )
+from app.services.data_integrity.cross_module_consistency import CrossModuleConsistencyEngine
+from app.services.data_integrity.forecast_safety import SafeForecastConsumer
+from app.services.data_integrity.freshness_engine import DataFreshnessEngine
+from app.services.data_integrity.provenance_service import ProvenanceService
 from app.services.forecasting.forecast_engine import generate_demand_overview
 from app.services.health_score_service import HealthScoreService
 from app.services.schemes_sprint16_service import SchemeRecommendationEngine
@@ -296,7 +301,37 @@ class RecommendationContextService:
             swot_weaknesses_count=missing_count,
         )
 
-        return UnifiedRecommendationContext(
+        # ---------------------------------------------------------------------
+        # 9. Data Integrity & Provenance Layer (Phase 5)
+        # ---------------------------------------------------------------------
+        freshness_engine = DataFreshnessEngine()
+        consistency_engine = CrossModuleConsistencyEngine()
+        provenance_service = ProvenanceService(db=self.db, freshness_engine=freshness_engine)
+
+        # Freshness audit on sales transactions
+        if has_sales and sales_ctx.latest_transaction_date:
+            st, age_d, _ = freshness_engine.evaluate_freshness(
+                ModuleDomain.SALES, sales_ctx.latest_transaction_date
+            )
+            disclaimer = freshness_engine.generate_freshness_disclaimer(
+                ModuleDomain.SALES, st, age_d, sales_ctx.latest_transaction_date
+            )
+            if disclaimer:
+                data_limitations.append(disclaimer)
+
+        # Safe forecast data consumption check
+        _, fc_disclaimers, sanitized_forecasts = SafeForecastConsumer.audit_forecast_consumption(
+            forecast_ctx=forecast_ctx,
+            total_historical_periods=sales_ctx.total_transactions,
+            unconfirmed_gaps_present=False,
+        )
+        for disc in fc_disclaimers:
+            if "Notice" in disc or "Warning" in disc:
+                data_limitations.append(disc)
+        forecast_ctx.product_forecasts = sanitized_forecasts
+
+        # Preliminary context assembly for cross-module reconciliation
+        raw_ctx = UnifiedRecommendationContext(
             business_id=business.id,
             gathered_at=now_iso,
             profile=profile_ctx,
@@ -310,3 +345,14 @@ class RecommendationContextService:
             data_sources_present=data_sources_present,
             data_limitations=data_limitations,
         )
+
+        # Cross-module consistency reconciliation
+        discrepancies = consistency_engine.reconcile_context(raw_ctx)
+        for disc in discrepancies:
+            data_limitations.append(f"Cross-Module Conflict: {disc.description}")
+
+        # Centralized provenance registration
+        provenance_service.build_provenance_registry_from_context(raw_ctx, persist=False)
+
+        raw_ctx.data_limitations = data_limitations
+        return raw_ctx

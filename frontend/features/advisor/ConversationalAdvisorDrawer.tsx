@@ -413,11 +413,25 @@ export function ConversationalAdvisorDrawer() {
                     <div className="text-foreground/90 font-medium text-[11px] leading-snug">
                       {f.statement}
                     </div>
-                    {f.time_period && (
-                      <div className="text-[10px] text-muted-foreground">
-                        Period: {f.time_period}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground pt-0.5">
+                      {f.time_period && <span>Period: {f.time_period}</span>}
+                      {f.provenance_record_ref && (
+                        <span className="font-mono text-[9px] bg-background/60 rounded px-1 border border-border/40 truncate max-w-[180px]">
+                          ref: {f.provenance_record_ref}
+                        </span>
+                      )}
+                      {f.freshness_status && (
+                        <span
+                          className={`px-1 rounded text-[9px] font-semibold ${
+                            f.freshness_status === "FRESH"
+                              ? "text-emerald-400 bg-emerald-500/10"
+                              : "text-amber-400 bg-amber-500/10"
+                          }`}
+                        >
+                          {f.freshness_status}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

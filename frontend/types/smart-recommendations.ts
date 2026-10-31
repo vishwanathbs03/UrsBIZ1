@@ -230,6 +230,8 @@ export interface GroundedFinding {
   calculation_methodology?: string | null;
   data_freshness_iso?: string | null;
   data_quality?: "High" | "Moderate" | "Limited" | "Insufficient";
+  provenance_record_ref?: string | null;
+  freshness_status?: string | null;
 }
 
 export interface AnswerQualityEvaluation {

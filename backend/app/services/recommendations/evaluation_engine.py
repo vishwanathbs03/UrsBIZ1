@@ -472,6 +472,8 @@ class GroundedFindingBuilder:
                     calculation_methodology="Sum of all completed sales transaction amounts in system records",
                     data_freshness_iso=now_iso,
                     data_quality="High",
+                    provenance_record_ref=f"sales_transactions:business_{ctx.business_id}:non_duplicate_rows",
+                    freshness_status="FRESH",
                 )
             )
 
@@ -494,6 +496,8 @@ class GroundedFindingBuilder:
                     calculation_methodology="Top-1 customer revenue divided by aggregate gross sales revenue",
                     data_freshness_iso=now_iso,
                     data_quality="High",
+                    provenance_record_ref=f"customer_ledgers:top_client_{name.lower().replace(' ', '_')}",
+                    freshness_status="FRESH",
                 )
             )
 
@@ -520,6 +524,8 @@ class GroundedFindingBuilder:
                     calculation_methodology="Phase 4 Intermittent Demand Model (Croston / Exponential Smoothing)",
                     data_freshness_iso=now_iso,
                     data_quality="Moderate",
+                    provenance_record_ref=f"phase4_forecast:sku_{sku.lower().replace(' ', '_')}",
+                    freshness_status="FRESH",
                 )
             )
 
@@ -538,6 +544,8 @@ class GroundedFindingBuilder:
                     calculation_methodology="Phase 2 Multi-facet weighted health diagnostic engine",
                     data_freshness_iso=now_iso,
                     data_quality="High",
+                    provenance_record_ref="health_score:v2_diagnostic",
+                    freshness_status="FRESH",
                 )
             )
 

@@ -58,6 +58,8 @@ class GroundedFinding(BaseModel):
     calculation_methodology: Optional[str] = None
     data_freshness_iso: Optional[str] = None
     data_quality: str = Field("High", description="'High' | 'Moderate' | 'Limited' | 'Insufficient'")
+    provenance_record_ref: Optional[str] = None
+    freshness_status: Optional[str] = None
 
 
 class AnswerQualityEvaluation(BaseModel):
