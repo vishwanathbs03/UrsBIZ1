@@ -437,12 +437,15 @@ def backtest_and_select_model(
         y_selection = y[:-h_test]
         y_test = y[-h_test:]
 
+        # Preprocessing & intermittency flag fitted STRICTLY on y_selection (zero leakage)
+        is_intermittent_sel = bool(np.mean(y_selection <= 0.0) > 0.70) if len(y_selection) > 0 else is_intermittent
+
         # Stage 1: Run tournament STRICTLY on y_selection (zero knowledge of y_test)
         selected_model, best_baseline, tournament_metrics, tourn_info = run_model_selection_tournament(
             y_selection,
             horizon=h_test,
             season_length=season_length,
-            is_intermittent=is_intermittent,
+            is_intermittent=is_intermittent_sel,
         )
 
         # Stage 2: Independent Final Evaluation on y_test (trained on y_selection)
@@ -515,11 +518,12 @@ def backtest_and_select_model(
     # (Do not fabricate an independent evaluation; report tournament diagnostics)
     # -------------------------------------------------------------------------
     else:
+        is_intermittent_full = bool(np.mean(y <= 0.0) > 0.70) if len(y) > 0 else is_intermittent
         selected_model, best_baseline, tournament_metrics, tourn_info = run_model_selection_tournament(
             y,
             horizon=horizon,
             season_length=season_length,
-            is_intermittent=is_intermittent,
+            is_intermittent=is_intermittent_full,
         )
 
         holdout_info = dict(tourn_info)

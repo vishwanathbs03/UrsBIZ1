@@ -773,3 +773,28 @@ def test_independent_metrics_and_tournament_metrics_not_confused_in_detail_respo
     assert len(detail.backtest_metrics) >= 3
     # Explanation explicitly mentions independent holdout test
     assert "independently verified on separate 4-period holdout test" in detail.explanation
+
+
+def test_preprocessing_and_intermittency_fitted_strictly_on_selection_split_with_no_leakage():
+    """Verify that preprocessing, intermittency classification, and feature transformations
+    are fitted strictly on y_selection, preventing future holdout trends from leaking into selection."""
+    # Synthetic series of length 12:
+    # First 8 periods (y_selection): 6 zeros and 2 positive sales -> sparsity = 6/8 = 75% (> 70% intermittent!)
+    # Final 4 periods (y_test): 4 positive sales -> overall series sparsity = 6/12 = 50% (NOT intermittent globally!)
+    y_intermittent_start = np.array(
+        [0.0, 10.0, 0.0, 0.0, 0.0, 0.0, 15.0, 0.0, 20.0, 25.0, 30.0, 35.0],
+        dtype=np.float64,
+    )
+
+    # Even though global series has 50% sparsity, y_selection has 75% sparsity.
+    # The tournament on y_selection MUST include the intermittent expected demand model!
+    selected_model, tournament_metrics, holdout_info = backtest_and_select_model(
+        y_intermittent_start, horizon=4
+    )
+
+    assert holdout_info["evaluation_stage"] == "independent_test_evaluated"
+    tourney_model_names = [m.model_name for m in tournament_metrics]
+    assert "Intermittent Rate (Expected Demand)" in tourney_model_names, (
+        "Intermittent model should have been included based on y_selection sparsity (>70%). "
+        "Failure indicates y_test future sales leaked into selection preprocessing!"
+    )
