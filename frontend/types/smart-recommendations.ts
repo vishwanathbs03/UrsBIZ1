@@ -74,6 +74,9 @@ export interface SmartRecommendationItem {
   measurement_kpis?: string[];
   implementation_difficulty?: "Quick Win" | "Tactical" | "Strategic";
   prerequisites_and_tradeoffs?: string[];
+  is_autonomous_opportunity?: boolean;
+  opportunity_quality_status?: string | null;
+  opportunity_hypothesis_id?: string | null;
 }
 
 export interface SmartRecommendationsResponse {
@@ -141,6 +144,49 @@ export interface RootCauseAnalysisItem {
   urgency: "Immediate" | "Near-term" | "Watch";
 }
 
+export type OpportunityQualityStatus =
+  | "VERIFIED_OPPORTUNITY"
+  | "PROMISING_OPPORTUNITY"
+  | "NEEDS_INVESTIGATION"
+  | "INSUFFICIENT_EVIDENCE"
+  | "NOT_ACTIONABLE";
+
+export interface OpportunitySupportingSignal {
+  signal_name: string;
+  observed_value: any;
+  baseline_value?: any;
+  source_module: string;
+  interpretation: string;
+}
+
+export interface OpportunityHypothesis {
+  id: string;
+  title: string;
+  category: string;
+  business_problem_or_opportunity: string;
+  quality_status: OpportunityQualityStatus;
+  supporting_signals: OpportunitySupportingSignal[];
+  evidence_references: string[];
+  relevant_time_period: string;
+  possible_explanation: string;
+  alternative_explanations: string[];
+  confidence: number;
+  missing_information: string[];
+  recommended_investigation: string;
+  potential_business_benefit: string;
+  cost_of_inaction?: string | null;
+  limitations: string[];
+  observed_facts: string[];
+  inferred_explanations: string[];
+  correlation_causation_disclaimer: string;
+  relevant_entity?: string | null;
+  underlying_issue?: string | null;
+  version: number;
+  version_notes?: string | null;
+  conflicting_signals: string[];
+  validation_status: string;
+}
+
 export interface OpportunityItem {
   id: string;
   title: string;
@@ -151,6 +197,16 @@ export interface OpportunityItem {
   estimated_impact_description: string;
   first_step: string;
   timeframe: string;
+  quality_status?: OpportunityQualityStatus;
+  hypothesis_id?: string | null;
+  cost_of_inaction?: string | null;
+  observed_facts?: string[];
+  inferred_explanations?: string[];
+  alternative_explanations?: string[];
+  recommended_investigation?: string | null;
+  confidence?: number;
+  version?: number;
+  version_notes?: string | null;
 }
 
 export interface NextBestAction {
@@ -300,6 +356,7 @@ export interface AdvancedRecommendationsOverviewResponse {
   multi_signal_insights: CrossSignalInsight[];
   root_cause_analyses: RootCauseAnalysisItem[];
   opportunities: OpportunityItem[];
+  opportunity_hypotheses?: OpportunityHypothesis[];
   evidence_summary: Record<string, any>;
 }
 

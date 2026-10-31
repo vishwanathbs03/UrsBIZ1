@@ -108,6 +108,9 @@ class SmartRecommendationItem(BaseModel):
     measurement_kpis: list[str] = Field(default_factory=list, description="Target metrics and milestones to measure improvement")
     implementation_difficulty: str = Field(default="Tactical", description="'Quick Win' (1-7d) | 'Tactical' (8-30d) | 'Strategic' (30-90d)")
     prerequisites_and_tradeoffs: list[str] = Field(default_factory=list, description="Operational prerequisites and strategic trade-offs")
+    is_autonomous_opportunity: bool = Field(default=False, description="True if dynamically discovered beyond predefined rules")
+    opportunity_quality_status: Optional[str] = Field(default=None, description="VERIFIED_OPPORTUNITY | PROMISING_OPPORTUNITY | NEEDS_INVESTIGATION")
+    opportunity_hypothesis_id: Optional[str] = Field(default=None, description="ID of underlying OpportunityHypothesis")
 
 
 class SmartRecommendationsResponse(BaseModel):

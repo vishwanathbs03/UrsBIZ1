@@ -110,6 +110,73 @@ class RootCauseAnalysisItem(BaseModel):
     urgency: str = Field(..., description="'Immediate' | 'Near-term' | 'Watch'")
 
 
+class OpportunityQualityStatus(str, Enum):
+    """Quality and validation classification of discovered business opportunities."""
+
+    VERIFIED_OPPORTUNITY = "VERIFIED_OPPORTUNITY"
+    PROMISING_OPPORTUNITY = "PROMISING_OPPORTUNITY"
+    NEEDS_INVESTIGATION = "NEEDS_INVESTIGATION"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+    NOT_ACTIONABLE = "NOT_ACTIONABLE"
+
+
+class OpportunitySupportingSignal(BaseModel):
+    """A specific data signal that supports an opportunity hypothesis."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    signal_name: str
+    observed_value: Any
+    baseline_value: Optional[Any] = None
+    source_module: str
+    interpretation: str
+
+
+class OpportunityHypothesis(BaseModel):
+    """Structured hypothesis for an autonomous business opportunity discovered from data."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(..., description="Stable composite ID: rec_OPP_{category}_{biz}_{entity}_{issue}_v{version}")
+    title: str
+    category: str
+    business_problem_or_opportunity: str
+    quality_status: OpportunityQualityStatus = OpportunityQualityStatus.VERIFIED_OPPORTUNITY
+    supporting_signals: list[OpportunitySupportingSignal] = Field(default_factory=list)
+    evidence_references: list[str] = Field(default_factory=list)
+    relevant_time_period: str = Field(..., description="e.g. 'Last 90 days', 'Trailing 6 months'")
+    possible_explanation: str = Field(..., description="Primary hypothesized causal driver")
+    alternative_explanations: list[str] = Field(
+        default_factory=list, description="Alternative or rival explanations"
+    )
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score between 0.0 and 1.0")
+    missing_information: list[str] = Field(
+        default_factory=list, description="Gaps in data requiring business confirmation"
+    )
+    recommended_investigation: str = Field(
+        ..., description="Concrete audit or inquiry step for the business owner"
+    )
+    potential_business_benefit: str = Field(..., description="Expected qualitative or quantitative upside")
+    cost_of_inaction: Optional[str] = Field(None, description="Projected downside or risk if neglected")
+    limitations: list[str] = Field(default_factory=list)
+    observed_facts: list[str] = Field(
+        default_factory=list, description="Strictly verified data points and metrics"
+    )
+    inferred_explanations: list[str] = Field(
+        default_factory=list, description="Hypothesized causal relationships and interpretations"
+    )
+    correlation_causation_disclaimer: str = Field(
+        "Observed correlations indicate strong operational patterns but do not prove direct causation without contextual verification.",
+        description="Epistemic humility disclaimer",
+    )
+    relevant_entity: Optional[str] = None
+    underlying_issue: Optional[str] = None
+    version: int = 1
+    version_notes: Optional[str] = None
+    conflicting_signals: list[str] = Field(default_factory=list)
+    validation_status: str = Field("VALIDATED", description="'VALIDATED' | 'SUPPRESSED' | 'FLAGGED'")
+
+
 class OpportunityItem(BaseModel):
     """Proactive growth opportunity surfaced from business data."""
 
@@ -124,6 +191,16 @@ class OpportunityItem(BaseModel):
     estimated_impact_description: str = Field(..., description="Clearly labeled projection")
     first_step: str = Field(..., description="Concrete zero-barrier first step")
     timeframe: str = Field(..., description="Expected timeline (e.g. '15-30 days')")
+    quality_status: OpportunityQualityStatus = OpportunityQualityStatus.VERIFIED_OPPORTUNITY
+    hypothesis_id: Optional[str] = None
+    cost_of_inaction: Optional[str] = None
+    observed_facts: list[str] = Field(default_factory=list)
+    inferred_explanations: list[str] = Field(default_factory=list)
+    alternative_explanations: list[str] = Field(default_factory=list)
+    recommended_investigation: Optional[str] = None
+    confidence: float = 0.80
+    version: int = 1
+    version_notes: Optional[str] = None
 
 
 class NextBestAction(BaseModel):
@@ -275,6 +352,7 @@ class AdvancedRecommendationsOverviewResponse(BaseModel):
     multi_signal_insights: list[CrossSignalInsight] = Field(default_factory=list)
     root_cause_analyses: list[RootCauseAnalysisItem] = Field(default_factory=list)
     opportunities: list[OpportunityItem] = Field(default_factory=list)
+    opportunity_hypotheses: list[OpportunityHypothesis] = Field(default_factory=list)
     evidence_summary: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -106,6 +106,20 @@ class SmartRecommendationEngine:
 
         # Tier 4: Fetch persisted lifecycle states and record first views
         persisted_states = self.lifecycle_repo.get_states_for_business(business.id)
+
+        # Tier 2b: Autonomous Opportunity Discovery (Beyond Predefined Rules)
+        active_candidate_ids = set(c["id"] for c in raw_candidates)
+        completed_ids = set(
+            rec_id for rec_id, s in persisted_states.items()
+            if s.status in (RecommendationStatus.COMPLETED.value, RecommendationStatus.DISMISSED.value)
+        )
+        opp_candidates = self.opportunity_engine.generate_opportunity_recommendation_candidates(
+            ctx=ctx,
+            active_rec_ids=active_candidate_ids,
+            completed_rec_ids=completed_ids,
+        )
+        raw_candidates.extend(opp_candidates)
+
         candidate_ids = [c["id"] for c in raw_candidates]
         self.lifecycle_repo.record_first_views(business.id, candidate_ids)
 
@@ -176,6 +190,9 @@ class SmartRecommendationEngine:
                 measurement_kpis=cand.get("measurement_kpis", []),
                 implementation_difficulty=cand.get("implementation_difficulty", "Tactical"),
                 prerequisites_and_tradeoffs=cand.get("prerequisites_and_tradeoffs", []),
+                is_autonomous_opportunity=cand.get("is_autonomous_opportunity", False),
+                opportunity_quality_status=cand.get("opportunity_quality_status"),
+                opportunity_hypothesis_id=cand.get("opportunity_hypothesis_id"),
             )
             scored_items.append(item)
 
@@ -276,7 +293,18 @@ class SmartRecommendationEngine:
         root_causes = self.root_cause_engine.diagnose(ctx)
 
         # 4. Opportunity Discovery Engine
-        opportunities = self.opportunity_engine.discover(ctx)
+        active_ids = set(r.id for r in rec_response.recommendations)
+        persisted_states = self.lifecycle_repo.get_states_for_business(business.id)
+        completed_ids = set(
+            rec_id for rec_id, s in persisted_states.items()
+            if s.status in (RecommendationStatus.COMPLETED.value, RecommendationStatus.DISMISSED.value)
+        )
+        hypotheses = self.opportunity_engine.discover_hypotheses(
+            ctx=ctx,
+            active_rec_ids=active_ids,
+            completed_rec_ids=completed_ids,
+        )
+        opportunities = self.opportunity_engine.hypotheses_to_opportunity_items(hypotheses)
 
         evidence_summary: dict[str, Any] = {
             "sources_verified": ctx.data_sources_present,
@@ -296,6 +324,7 @@ class SmartRecommendationEngine:
             multi_signal_insights=multi_signal,
             root_cause_analyses=root_causes,
             opportunities=opportunities,
+            opportunity_hypotheses=hypotheses,
             evidence_summary=evidence_summary,
         )
 

@@ -236,7 +236,7 @@ export function MultiSignalInsightsPanel({
         </div>
       )}
 
-      {/* Tab 3: Opportunity Discovery */}
+      {/* Tab 3: Autonomous Opportunity Discovery */}
       {activeTab === "opportunities" && (
         <div className="grid gap-3 sm:grid-cols-2">
           {opportunities.length === 0 ? (
@@ -244,41 +244,136 @@ export function MultiSignalInsightsPanel({
               All baseline growth opportunities currently captured.
             </p>
           ) : (
-            opportunities.map(opp => (
-              <div
-                key={opp.id}
-                className="rounded-lg border border-border/60 bg-secondary/15 p-3.5 space-y-2 flex flex-col justify-between hover:border-emerald-500/40 transition-colors"
-              >
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-1 text-[11px]">
-                    <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 font-bold text-emerald-400">
-                      {opp.category}
-                    </span>
-                    <span className="text-muted-foreground">
-                      Feasibility: {opp.feasibility}
-                    </span>
+            opportunities.map(opp => {
+              const isExpanded = expandedId === opp.id;
+              const status = opp.quality_status || "VERIFIED_OPPORTUNITY";
+
+              return (
+                <div
+                  key={opp.id}
+                  className="rounded-lg border border-border/60 bg-secondary/15 p-3.5 space-y-2.5 flex flex-col justify-between hover:border-emerald-500/40 transition-colors"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-1 text-[11px] flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 font-bold text-emerald-400">
+                          {opp.category}
+                        </span>
+                        {status === "VERIFIED_OPPORTUNITY" && (
+                          <span className="rounded bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-300 font-medium">
+                            Verified
+                          </span>
+                        )}
+                        {status === "PROMISING_OPPORTUNITY" && (
+                          <span className="rounded bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 text-[10px] text-sky-300 font-medium">
+                            Promising
+                          </span>
+                        )}
+                        {status === "NEEDS_INVESTIGATION" && (
+                          <span className="rounded bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-300 font-medium">
+                            Investigate
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-muted-foreground text-[10px]">
+                        Feasibility: {opp.feasibility} · {Math.round((opp.confidence || 0.8) * 100)}% Conf
+                      </span>
+                    </div>
+
+                    <h4 className="text-sm font-semibold text-foreground">
+                      {opp.title}
+                    </h4>
+
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {opp.rationale}
+                    </p>
+
+                    {opp.cost_of_inaction && (
+                      <div className="rounded bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 text-[11px] text-amber-300 flex items-start gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-400" />
+                        <div>
+                          <span className="font-semibold text-amber-200">Cost of Inaction: </span>
+                          {opp.cost_of_inaction}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Expandable Facts vs Inferences & Alternative Explanations */}
+                    {((opp.observed_facts && opp.observed_facts.length > 0) ||
+                      (opp.alternative_explanations && opp.alternative_explanations.length > 0)) && (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(opp.id)}
+                          className="flex items-center gap-1 text-[11px] font-medium text-emerald-400/90 hover:text-emerald-300 transition-colors pt-1"
+                        >
+                          {isExpanded ? (
+                            <>
+                              <ChevronUp className="h-3.5 w-3.5" /> Hide Evidence Breakdown
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-3.5 w-3.5" /> Show Facts vs Inferences ({opp.observed_facts?.length || 0} facts)
+                            </>
+                          )}
+                        </button>
+
+                        {isExpanded && (
+                          <div className="mt-2 space-y-2 rounded bg-background/60 p-2.5 text-[11px] border border-border/40">
+                            {opp.observed_facts && opp.observed_facts.length > 0 && (
+                              <div>
+                                <span className="font-semibold text-foreground">Observed Facts:</span>
+                                <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground mt-0.5">
+                                  {opp.observed_facts.map((fact, idx) => (
+                                    <li key={idx}>{fact}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {opp.inferred_explanations && opp.inferred_explanations.length > 0 && (
+                              <div>
+                                <span className="font-semibold text-foreground">Inferred Explanations:</span>
+                                <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground mt-0.5">
+                                  {opp.inferred_explanations.map((inf, idx) => (
+                                    <li key={idx}>{inf}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {opp.alternative_explanations && opp.alternative_explanations.length > 0 && (
+                              <div>
+                                <span className="font-semibold text-foreground">Rival / Alternative Explanations:</span>
+                                <ul className="list-disc pl-4 space-y-0.5 text-muted-foreground mt-0.5">
+                                  {opp.alternative_explanations.map((alt, idx) => (
+                                    <li key={idx}>{alt}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            <p className="text-[10px] text-muted-foreground italic pt-1 border-t border-border/30">
+                              * Correlation indicates strong operational patterns but does not prove direct causation without contextual verification.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  <h4 className="text-sm font-semibold text-foreground">
-                    {opp.title}
-                  </h4>
-
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {opp.rationale}
-                  </p>
+                  <div className="space-y-2 pt-2 border-t border-border/40">
+                    <div className="text-[11px] text-emerald-400/90 font-medium">
+                      {opp.estimated_impact_description}
+                    </div>
+                    <div className="rounded bg-background/80 p-2 text-[11px] text-muted-foreground">
+                      <span className="font-semibold text-foreground">First Step: </span>
+                      {opp.first_step} ({opp.timeframe})
+                    </div>
+                  </div>
                 </div>
-
-                <div className="space-y-2 pt-2 border-t border-border/40">
-                  <div className="text-[11px] text-emerald-400/90 font-medium">
-                    {opp.estimated_impact_description}
-                  </div>
-                  <div className="rounded bg-background/80 p-2 text-[11px] text-muted-foreground">
-                    <span className="font-semibold text-foreground">First Step: </span>
-                    {opp.first_step} ({opp.timeframe})
-                  </div>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
