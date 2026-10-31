@@ -40,7 +40,7 @@ class PreparedPeriod:
     period_end: str    # YYYY-MM-DD
     quantity: float
     has_data: bool
-    coverage_status: str  # "active", "confirmed_zero", or "unconfirmed_gap"
+    coverage_status: str  # "active", "zero_recorded_sales", or "unconfirmed_gap"
 
 
 @dataclass
@@ -53,7 +53,7 @@ class PreparedProductSeries:
     quantities: np.ndarray  # 1D array of float64 quantities
     total_periods: int
     active_periods: int
-    confirmed_zeros_count: int
+    zero_recorded_sales_count: int
     unconfirmed_gaps_count: int
     total_quantity: float
     sparsity_ratio: float
@@ -188,7 +188,7 @@ def prepare_product_demand_series(
             if has_data:
                 cov_status = "active"
             elif key in active_periods_lookup:
-                cov_status = "confirmed_zero"
+                cov_status = "zero_recorded_sales"
             else:
                 cov_status = "unconfirmed_gap"
 
@@ -223,7 +223,7 @@ def prepare_product_demand_series(
             if has_data:
                 cov_status = "active"
             elif key in active_periods_lookup:
-                cov_status = "confirmed_zero"
+                cov_status = "zero_recorded_sales"
             else:
                 cov_status = "unconfirmed_gap"
 
@@ -277,7 +277,7 @@ def prepare_product_demand_series(
             if has_data:
                 cov_status = "active"
             elif w_start_str in active_periods_lookup:
-                cov_status = "confirmed_zero"
+                cov_status = "zero_recorded_sales"
             else:
                 cov_status = "unconfirmed_gap"
 
@@ -297,7 +297,7 @@ def prepare_product_demand_series(
 
     total_periods = len(periods_list)
     active_periods = sum(1 for p in periods_list if p.has_data and p.quantity > 0)
-    confirmed_zeros = sum(1 for p in periods_list if p.coverage_status == "confirmed_zero")
+    zero_recorded_sales = sum(1 for p in periods_list if p.coverage_status == "zero_recorded_sales")
     unconfirmed_gaps = sum(1 for p in periods_list if p.coverage_status == "unconfirmed_gap")
     
     total_zero_or_gap = total_periods - active_periods
@@ -315,9 +315,10 @@ def prepare_product_demand_series(
             f"Coverage notice: {unconfirmed_gaps} period(s) had no recorded transactions across any business product. "
             "These intervals are tracked as potential recording gaps rather than confirmed zero sales."
         )
-    if confirmed_zeros > 0:
+    if zero_recorded_sales > 0:
         notes.append(
-            f"Verified inactivity: {confirmed_zeros} period(s) had confirmed zero sales while other business products were actively sold."
+            f"Zero recorded sales: {zero_recorded_sales} period(s) had zero sales recorded in the dataset while other business products had transactions. "
+            "Note: These intervals represent zero recorded invoice sales rather than a verified absence of underlying customer demand."
         )
 
     # 4. Assess Data Feasibility
@@ -344,7 +345,7 @@ def prepare_product_demand_series(
         quantities=quantities,
         total_periods=total_periods,
         active_periods=active_periods,
-        confirmed_zeros_count=confirmed_zeros,
+        zero_recorded_sales_count=zero_recorded_sales,
         unconfirmed_gaps_count=unconfirmed_gaps,
         total_quantity=round(total_qty, 2),
         sparsity_ratio=round(sparsity, 3),

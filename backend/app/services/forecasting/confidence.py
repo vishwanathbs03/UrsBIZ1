@@ -1,8 +1,8 @@
 """Uncertainty Intervals & Forecast Reliability Scoring (Phase 4 Hardening).
 
-Defensible Prediction Range Estimation & Holdout Calibration Validation.
+Defensible Prediction Range Estimation & Holdout Diagnostic Evaluation.
 Avoids unverified claims of exact 80% coverage on small MSME samples;
-reports actual empirical coverage when evaluated against holdout observations.
+reports actual empirical coverage with exact sample counts (e.g. '3/3 points (100.0%)').
 """
 
 from __future__ import annotations
@@ -17,25 +17,25 @@ def evaluate_holdout_interval_coverage(
     y_test: np.ndarray,
     lowers: np.ndarray,
     uppers: np.ndarray,
-) -> float | None:
+) -> tuple[float | None, int, int]:
     """Evaluate actual empirical coverage of prediction intervals against holdout actuals.
     
     Returns:
-        float in [0.0, 1.0] representing fraction of actual holdout points inside [lower, upper],
-        or None if no holdout points.
+        (coverage_fraction, covered_count, total_count)
     """
     if len(y_test) == 0 or len(lowers) == 0 or len(uppers) == 0:
-        return None
+        return None, 0, 0
     n = min(len(y_test), len(lowers), len(uppers))
     if n == 0:
-        return None
+        return None, 0, 0
     
     actuals = y_test[:n]
     low = lowers[:n]
     up = uppers[:n]
     
     covered = (actuals >= low) & (actuals <= up)
-    return float(np.mean(covered))
+    cov_count = int(np.sum(covered))
+    return float(np.mean(covered)), cov_count, n
 
 
 def calculate_prediction_intervals(
@@ -44,24 +44,28 @@ def calculate_prediction_intervals(
     backtest_mae: float | None = None,
     holdout_empirical_coverage: float | None = None,
     holdout_eval_count: int = 0,
-) -> tuple[np.ndarray, np.ndarray, str, float | None, str]:
+    holdout_covered_count: int = 0,
+) -> tuple[np.ndarray, np.ndarray, str, float | None, str | None, str]:
     """Calculate empirical prediction range scaling with forecast horizon step.
     
     Returns:
-      (lowers, uppers, range_type, empirical_coverage_pct, calibration_note)
+      (lowers, uppers, range_type, empirical_coverage_pct, empirical_coverage_summary, calibration_note)
     
     Guarantees:
       1. Lower bound is non-negative: lower >= 0.0.
-      2. If holdout empirical coverage is verified with >= 3 observations, reports actual coverage.
-      3. Otherwise, labels the bounds as 'Estimated Prediction Range (Uncalibrated)'
-         and transparently documents sample-size limitations.
+      2. Always labels bounds as 'Estimated Prediction Range' (never claims 3 observations are 'validated').
+      3. If holdout empirical observations exist, reports exact diagnostic sample count (e.g. '100.0% (3/3 points)').
+      4. Transparently documents that small sample counts are empirical checks, not large-sample calibrations.
     """
     h = len(forecast_preds)
+    range_type = "Estimated Prediction Range"
+
     if h == 0:
         return (
             np.array([], dtype=np.float64),
             np.array([], dtype=np.float64),
-            "Estimated Prediction Range",
+            range_type,
+            None,
             None,
             "No forecast periods to evaluate.",
         )
@@ -91,23 +95,24 @@ def calculate_prediction_intervals(
     low_arr = np.array(lowers, dtype=np.float64)
     up_arr = np.array(uppers, dtype=np.float64)
 
-    # Assess calibration validity
-    if holdout_empirical_coverage is not None and holdout_eval_count >= 3:
+    # Assess holdout empirical coverage with transparent sample count
+    if holdout_empirical_coverage is not None and holdout_eval_count > 0:
         cov_pct = round(holdout_empirical_coverage * 100.0, 1)
-        range_type = "Empirically Validated Prediction Range"
+        cov_summary = f"{cov_pct}% ({holdout_covered_count}/{holdout_eval_count} holdout points)"
         note = (
-            f"Prediction range evaluated against out-of-sample holdout observations: "
-            f"{cov_pct}% actual coverage observed across {holdout_eval_count} test points."
+            f"Prediction range represents an empirical estimate based on historical variance. "
+            f"Observed holdout coverage: {cov_summary}. "
+            f"Note: Small sample count (n={holdout_eval_count}) serves as an empirical diagnostic rather than formal statistical calibration."
         )
     else:
         cov_pct = None
-        range_type = "Estimated Prediction Range (Uncalibrated)"
+        cov_summary = None
         note = (
             "Prediction range represents an empirical estimate based on historical variance. "
-            f"Because historical sample size is limited ({n} periods), exact 80% calibration cannot be claimed."
+            f"Because historical sample size is limited ({n} periods), formal 80% coverage calibration is not claimed."
         )
 
-    return low_arr, up_arr, range_type, cov_pct, note
+    return low_arr, up_arr, range_type, cov_pct, cov_summary, note
 
 
 def evaluate_forecast_reliability(

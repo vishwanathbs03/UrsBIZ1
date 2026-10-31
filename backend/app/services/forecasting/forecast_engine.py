@@ -190,7 +190,7 @@ def generate_product_forecast(
                 "data_source": "sales_transactions",
                 "observations_count": series.total_periods,
                 "active_observations": series.active_periods,
-                "confirmed_zeros_count": series.confirmed_zeros_count,
+                "zero_recorded_sales_count": series.zero_recorded_sales_count,
                 "unconfirmed_gaps_count": series.unconfirmed_gaps_count,
                 "holdout_evaluated": False,
                 "evaluation_method": "none",
@@ -216,13 +216,15 @@ def generate_product_forecast(
     best_wape = best_item.wape if best_item else None
     emp_cov = holdout_info.get("empirical_coverage")
     holdout_eval_count = holdout_info.get("holdout_eval_count", 0)
+    holdout_covered_count = holdout_info.get("holdout_covered_count", 0)
 
-    lowers, uppers, range_type, cov_pct, calib_note = calculate_prediction_intervals(
+    lowers, uppers, range_type, cov_pct, cov_summary, calib_note = calculate_prediction_intervals(
         series.quantities,
         future_preds,
         backtest_mae=best_mae,
         holdout_empirical_coverage=emp_cov,
         holdout_eval_count=holdout_eval_count,
+        holdout_covered_count=holdout_covered_count,
     )
 
     # 4. Generate future period labels
@@ -293,7 +295,7 @@ def generate_product_forecast(
         "data_source": "sales_transactions",
         "observations_count": series.total_periods,
         "active_observations": series.active_periods,
-        "confirmed_zeros_count": series.confirmed_zeros_count,
+        "zero_recorded_sales_count": series.zero_recorded_sales_count,
         "unconfirmed_gaps_count": series.unconfirmed_gaps_count,
         "sparsity_ratio": series.sparsity_ratio,
         "selected_model": selected_model,
@@ -320,7 +322,9 @@ def generate_product_forecast(
         forecast_points=forecast_points,
         backtest_metrics=backtest_metrics,
         range_type=range_type,
+        empirical_coverage_summary=cov_summary,
         empirical_coverage_pct=cov_pct,
+        empirical_coverage_samples=holdout_eval_count if holdout_eval_count > 0 else None,
         explanation=explanation,
         limitations=limitations,
         provenance=provenance,
@@ -453,7 +457,9 @@ def generate_demand_overview(
             best_mae=best_m.mae if best_m else None,
             best_wape=best_m.wape if best_m else None,
             range_type=detail.range_type,
+            empirical_coverage_summary=detail.empirical_coverage_summary,
             empirical_coverage_pct=detail.empirical_coverage_pct,
+            empirical_coverage_samples=detail.empirical_coverage_samples,
             limitation_notes=detail.limitations,
         )
         summaries.append(summary_item)

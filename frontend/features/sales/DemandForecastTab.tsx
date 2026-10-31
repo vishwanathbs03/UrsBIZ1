@@ -476,7 +476,10 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                         <span className="h-2 w-3 rounded-sm bg-neon-emerald border border-dashed border-neon-emerald" /> Projected
                       </span>
                       <span className="flex items-center gap-1.5 text-neon-emerald/60">
-                        <span className="h-2 w-3 rounded-sm bg-neon-emerald/20 border border-neon-emerald/40" /> Estimated Range
+                        <span className="h-2 w-3 rounded-sm bg-neon-emerald/20 border border-neon-emerald/40" />
+                        {productDetail.empirical_coverage_summary
+                          ? `Estimated Range (${productDetail.empirical_coverage_summary})`
+                          : (productDetail.range_type || "Estimated Range")}
                       </span>
                     </div>
                   </div>
@@ -499,7 +502,7 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                       </h4>
                       <p className="text-[11px] text-dark-text-muted">
                         {productDetail.provenance.evaluation_method === "rolling_origin"
-                          ? `Evaluated via rolling-origin backtesting across ${productDetail.provenance.rolling_splits_count} walk-forward splits with zero future data leakage.`
+                          ? `Evaluated via rolling-origin backtesting across ${productDetail.provenance.rolling_splits_count} walk-forward splits (${productDetail.empirical_coverage_samples ?? productDetail.provenance.holdout_periods} horizon points) with zero future data leakage.`
                           : "Evaluated on out-of-sample chronological holdout periods. Baselines win unless an advanced model delivers > 2% MAE improvement."}
                       </p>
                     </div>

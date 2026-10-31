@@ -2,10 +2,26 @@
 
 Enforces strict chronological train/test splitting with zero future data leakage.
 Implements:
-  1. Rolling-origin backtesting (walk-forward cross-validation) for series with >= 8 periods.
+  1. Rolling-origin backtesting (walk-forward cross-validation) for series with >= 8 periods,
+     evaluating the full multi-period forecast horizon (H) across each origin.
   2. Fixed chronological holdout evaluation for shorter series (4-7 periods) with documented limitations.
   3. Evidence-based model selection: advanced models win only if they beat the best baseline by > 2% MAE.
-  4. Empirical prediction interval coverage tracking on holdout observations.
+  4. Empirical prediction interval coverage tracking on holdout observations with sample counts.
+
+Mitigating Optimistic Selection Bias (Reusing Small Folds):
+  When candidate models are evaluated across a limited number of holdout observations, selecting
+  the model with lowest holdout error risks optimistic selection bias (the "winner's curse").
+  Our architecture explicitly prevents this through four structural defenses:
+    a) Baseline Superiority Barrier (>2% MAE hurdle): Advanced models (Holt Linear, AR-Ridge)
+       are selected only if they decisively beat zero-parameter baselines by > 2% MAE.
+       In ties or marginal differences, simpler baselines are strictly chosen.
+    b) Minimal Parameter Capacity: Moving average baselines have zero learned parameters;
+       Holt Linear uses a damped trend (phi=0.9); AR-Ridge applies strong L2 shrinkage (lambda=1.0)
+       to suppress variance in small-sample regimes.
+    c) Multi-Period Trajectory Evaluation: Models are tested on multi-step rollouts (matching
+       the user-facing horizon H), penalizing compounds of single-step errors.
+    d) Diagnostic Labeling: Holdout MAE is exposed as an internal tournament selection metric
+       rather than an uncalibrated future generalization guarantee.
 """
 
 from __future__ import annotations
@@ -139,7 +155,7 @@ def backtest_and_select_model(
     """Perform out-of-sample backtesting, evaluate all eligible models, and select best method.
     
     Uses:
-      - Rolling-Origin Backtesting if len(y) >= 8.
+      - Rolling-Origin Backtesting if len(y) >= 8 (evaluating multi-period horizon H).
       - Fixed Holdout Backtesting if 4 <= len(y) < 8.
     
     Returns:
@@ -153,6 +169,8 @@ def backtest_and_select_model(
             {
                 "train_periods": n,
                 "holdout_periods": 0,
+                "holdout_eval_count": 0,
+                "holdout_covered_count": 0,
                 "split_possible": False,
                 "evaluation_method": "none",
                 "reason": "Insufficient history (< 4 periods) for holdout backtesting.",
@@ -165,7 +183,6 @@ def backtest_and_select_model(
     if n >= 8:
         # Determine number of rolling origin splits: min 2, max 4
         num_splits = min(4, n - 5)
-        # Candidates eligible for the initial origin training window
         initial_train_size = n - num_splits
         candidates = _get_candidate_models(
             initial_train_size, season_length=season_length, is_intermittent=is_intermittent
@@ -183,38 +200,44 @@ def backtest_and_select_model(
             }
 
         # Step through each rolling origin chronologically (expanding window)
+        # Evaluating multi-period forecast trajectory (up to horizon H) at each origin
+        expected_eval_points = 0
         for split_idx in range(num_splits):
             origin_t = initial_train_size + split_idx
             y_train_curr = y[:origin_t]
-            y_actual_step = y[origin_t]
+            
+            # Horizon evaluated from this origin: min(horizon, remaining observations)
+            eval_h = min(horizon, n - origin_t)
+            if eval_h < 1:
+                break
+            expected_eval_points += eval_h
+            y_actual_trajectory = y[origin_t : origin_t + eval_h]
 
             for name, is_baseline, func in candidates:
                 try:
-                    # Predict 1 step ahead with ZERO data leakage
-                    pred_step = float(func(y_train_curr, 1)[0])
-                    # Non-negative clamp
-                    pred_step = max(0.0, pred_step)
+                    # Predict eval_h steps ahead with ZERO future data leakage
+                    preds_h = np.maximum(0.0, np.array(func(y_train_curr, eval_h), dtype=float))
                     
-                    err = y_actual_step - pred_step
-                    abs_err = abs(err)
+                    errs = y_actual_trajectory - preds_h
+                    abs_errs = np.abs(errs)
                     
-                    # Compute prediction range for coverage check
-                    lows, ups, _, _, _ = calculate_prediction_intervals(
-                        y_train_curr, np.array([pred_step])
+                    # Compute prediction range across multi-period trajectory
+                    lows, ups, _, _, _, _ = calculate_prediction_intervals(
+                        y_train_curr, preds_h
                     )
-                    covered = (y_actual_step >= lows[0]) and (y_actual_step <= ups[0])
+                    covered = (y_actual_trajectory >= lows) & (y_actual_trajectory <= ups)
 
-                    model_results[name]["abs_errors"].append(abs_err)
-                    model_results[name]["sq_errors"].append(err**2)
-                    model_results[name]["actuals"].append(y_actual_step)
-                    model_results[name]["preds"].append(pred_step)
-                    model_results[name]["interval_covered"].append(covered)
+                    model_results[name]["abs_errors"].extend(abs_errs.tolist())
+                    model_results[name]["sq_errors"].extend((errs**2).tolist())
+                    model_results[name]["actuals"].extend(y_actual_trajectory.tolist())
+                    model_results[name]["preds"].extend(preds_h.tolist())
+                    model_results[name]["interval_covered"].extend(covered.tolist())
                 except Exception:
                     continue
 
-        evaluated_metrics: list[tuple[str, bool, dict[str, float | None], float | None]] = []
+        evaluated_metrics: list[tuple[str, bool, dict[str, float | None], float | None, int, int]] = []
         for name, data in model_results.items():
-            if len(data["abs_errors"]) == num_splits:
+            if len(data["abs_errors"]) == expected_eval_points:
                 mae = float(np.mean(data["abs_errors"]))
                 rmse = float(np.sqrt(np.mean(data["sq_errors"])))
                 sum_act = float(np.sum(data["actuals"]))
@@ -230,7 +253,9 @@ def backtest_and_select_model(
                 naive_in_sample = np.mean(np.abs(np.diff(y[:initial_train_size])))
                 mase = round(float(mae / naive_in_sample), 4) if naive_in_sample > 1e-6 else None
                 
-                emp_coverage = float(np.mean(data["interval_covered"])) if data["interval_covered"] else None
+                cov_count = sum(1 for c in data["interval_covered"] if c)
+                total_count = len(data["interval_covered"])
+                emp_coverage = float(cov_count / total_count) if total_count > 0 else None
 
                 metrics_dict = {
                     "mae": round(mae, 4),
@@ -239,13 +264,14 @@ def backtest_and_select_model(
                     "mape": mape,
                     "mase": mase,
                 }
-                evaluated_metrics.append((name, data["is_baseline"], metrics_dict, emp_coverage))
+                evaluated_metrics.append((name, data["is_baseline"], metrics_dict, emp_coverage, cov_count, total_count))
 
         holdout_info = {
             "evaluation_method": "rolling_origin",
             "rolling_splits_count": num_splits,
             "train_periods": initial_train_size,
             "holdout_periods": num_splits,
+            "holdout_eval_count": expected_eval_points,
             "split_possible": True,
         }
 
@@ -256,7 +282,8 @@ def backtest_and_select_model(
         holdout_size = max(1, min(2, int(math.ceil(n * 0.25))))
         train_size = n - holdout_size
         y_train = y[:train_size]
-        y_test = y[train_size:]
+        eval_h = min(horizon, holdout_size)
+        y_test = y[train_size : train_size + eval_h]
 
         candidates = _get_candidate_models(
             train_size, season_length=season_length, is_intermittent=is_intermittent
@@ -265,22 +292,22 @@ def backtest_and_select_model(
         evaluated_metrics = []
         for name, is_baseline, func in candidates:
             try:
-                preds = func(y_train, holdout_size)
-                preds = np.maximum(0.0, preds)
+                preds = np.maximum(0.0, np.array(func(y_train, eval_h), dtype=float))
                 metrics = compute_metrics(y_test, preds, y_train)
 
                 # Check empirical coverage on holdout points
-                lows, ups, _, _, _ = calculate_prediction_intervals(y_train, preds)
-                emp_cov = evaluate_holdout_interval_coverage(y_test, lows, ups)
+                lows, ups, _, _, _, _ = calculate_prediction_intervals(y_train, preds)
+                emp_cov, cov_count, total_count = evaluate_holdout_interval_coverage(y_test, lows, ups)
 
-                evaluated_metrics.append((name, is_baseline, metrics, emp_cov))
+                evaluated_metrics.append((name, is_baseline, metrics, emp_cov, cov_count, total_count))
             except Exception:
                 continue
 
         holdout_info = {
             "evaluation_method": "fixed_holdout",
             "train_periods": train_size,
-            "holdout_periods": holdout_size,
+            "holdout_periods": eval_h,
+            "holdout_eval_count": len(y_test),
             "split_possible": True,
             "reason": (
                 f"Historical series has {n} periods; insufficient depth for rolling-origin splits "
@@ -290,6 +317,9 @@ def backtest_and_select_model(
 
     if not evaluated_metrics:
         fallback_model = "Intermittent Rate (Expected Demand)" if is_intermittent else "Moving Average (3-Period)"
+        holdout_info["holdout_eval_count"] = 0
+        holdout_info["holdout_covered_count"] = 0
+        holdout_info["empirical_coverage"] = None
         return fallback_model, [], holdout_info
 
     # -------------------------------------------------------------------------
@@ -302,6 +332,8 @@ def backtest_and_select_model(
     selected_name = best_baseline[0]
     best_mae = best_baseline[2]["mae"]
     selected_cov = best_baseline[3]
+    selected_cov_count = best_baseline[4]
+    selected_total_count = best_baseline[5]
 
     if advanced_evals:
         best_advanced = min(advanced_evals, key=lambda x: x[2]["mae"])
@@ -310,9 +342,12 @@ def backtest_and_select_model(
         if adv_mae < (best_mae * 0.98):
             selected_name = best_advanced[0]
             selected_cov = best_advanced[3]
+            selected_cov_count = best_advanced[4]
+            selected_total_count = best_advanced[5]
 
     holdout_info["empirical_coverage"] = selected_cov
-    holdout_info["holdout_eval_count"] = holdout_info["holdout_periods"]
+    holdout_info["holdout_covered_count"] = selected_cov_count
+    holdout_info["holdout_eval_count"] = selected_total_count
 
     metric_items: list[BacktestMetricItem] = [
         BacktestMetricItem(
@@ -322,10 +357,10 @@ def backtest_and_select_model(
             wape=metrics["wape"],
             mape=metrics["mape"],
             mase=metrics["mase"],
-            holdout_periods=holdout_info["holdout_periods"],
+            holdout_periods=total_cnt,
             is_selected=(name == selected_name),
         )
-        for name, _, metrics, _ in evaluated_metrics
+        for name, _, metrics, _, _, total_cnt in evaluated_metrics
     ]
 
     return selected_name, metric_items, holdout_info

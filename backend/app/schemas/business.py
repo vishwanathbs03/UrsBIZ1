@@ -28,7 +28,7 @@ returns 409 if a business already exists.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -101,7 +101,7 @@ class BasicSection(BaseModel):
     @field_validator("established_year")
     @classmethod
     def _no_future_year(cls, value: int) -> int:
-        if value > datetime.utcnow().year:
+        if value > datetime.now(timezone.utc).year:
             raise ValueError("Established year cannot be in the future.")
         return value
 

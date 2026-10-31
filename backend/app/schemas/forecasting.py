@@ -66,7 +66,7 @@ class HistoricalPeriodPoint(BaseModel):
     has_data: bool = Field(..., description="True if transactions occurred, False if period had zero sales")
     coverage_status: str = Field(
         "active",
-        description="active (sales recorded), confirmed_zero (other business products sold), or unconfirmed_gap (no business records)",
+        description="active (sales recorded), zero_recorded_sales (other business products sold), or unconfirmed_gap (no business records)",
     )
 
 
@@ -86,7 +86,9 @@ class ProductForecastSummaryItem(BaseModel):
     best_mae: Optional[float] = None
     best_wape: Optional[float] = None
     range_type: Optional[str] = Field("Estimated Prediction Range", description="Label for prediction range")
-    empirical_coverage_pct: Optional[float] = Field(None, description="Actual empirical coverage percentage on holdout evaluations if established")
+    empirical_coverage_summary: Optional[str] = Field(None, description="Diagnostic holdout sample coverage summary, e.g. '100.0% (3/3 holdout points)'")
+    empirical_coverage_pct: Optional[float] = Field(None, description="Empirical coverage percentage on holdout evaluations")
+    empirical_coverage_samples: Optional[int] = Field(None, description="Number of holdout observation points evaluated")
     limitation_notes: list[str] = Field(default_factory=list)
 
 
@@ -109,11 +111,19 @@ class ProductForecastDetailResponse(BaseModel):
 
     range_type: str = Field(
         "Estimated Prediction Range",
-        description="Label for uncertainty bounds: 'Estimated Prediction Range' or 'Empirically Validated Range'",
+        description="Always 'Estimated Prediction Range' - an empirical estimate, not a formal large-sample calibration",
+    )
+    empirical_coverage_summary: Optional[str] = Field(
+        None,
+        description="Diagnostic holdout sample coverage summary, e.g. '100.0% (3/3 holdout points)'",
     )
     empirical_coverage_pct: Optional[float] = Field(
         None,
-        description="Empirical percentage of holdout observations captured within prediction bounds",
+        description="Empirical coverage percentage on holdout evaluations",
+    )
+    empirical_coverage_samples: Optional[int] = Field(
+        None,
+        description="Number of holdout observation points evaluated",
     )
 
     explanation: str

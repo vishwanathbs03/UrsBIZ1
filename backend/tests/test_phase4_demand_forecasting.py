@@ -282,7 +282,7 @@ def test_prediction_intervals_non_negative_and_scaling():
     y_hist = np.array([5.0, 6.0, 4.0, 5.0, 3.0, 4.0], dtype=np.float64)
     preds = np.array([2.0, 2.0, 2.0, 2.0], dtype=np.float64)
 
-    lowers, uppers, range_type, cov_pct, note = calculate_prediction_intervals(y_hist, preds)
+    lowers, uppers, range_type, cov_pct, cov_summary, note = calculate_prediction_intervals(y_hist, preds)
     assert len(lowers) == 4
     assert len(uppers) == 4
 
@@ -498,8 +498,8 @@ def test_hardening_missing_periods_vs_confirmed_zero_demand():
     assert series_a.periods[0].coverage_status == "active"
     assert series_a.periods[0].quantity == 10.0
 
-    # Week 2: confirmed zero (Product B was sold, Product A was 0)
-    assert series_a.periods[1].coverage_status == "confirmed_zero"
+    # Week 2: zero recorded sales (Product B was sold, Product A was 0)
+    assert series_a.periods[1].coverage_status == "zero_recorded_sales"
     assert series_a.periods[1].quantity == 0.0
 
     # Week 3: unconfirmed gap (no sales recorded across the entire business)
@@ -510,7 +510,7 @@ def test_hardening_missing_periods_vs_confirmed_zero_demand():
     assert series_a.periods[3].coverage_status == "active"
     assert series_a.periods[3].quantity == 15.0
 
-    assert series_a.confirmed_zeros_count == 1
+    assert series_a.zero_recorded_sales_count == 1
     assert series_a.unconfirmed_gaps_count == 1
     # Check limitation notes document this explicitly
     assert any("Coverage notice: 1 period(s) had no recorded transactions" in note for note in series_a.limitation_notes)
@@ -538,18 +538,20 @@ def test_hardening_prediction_interval_calibration_and_range_type():
     y_small = np.array([20.0, 22.0, 21.0, 23.0, 22.0], dtype=np.float64)
     preds = np.array([22.0, 22.0, 22.0, 22.0], dtype=np.float64)
 
-    lows, ups, range_type, cov_pct, note = calculate_prediction_intervals(y_small, preds)
-    assert range_type == "Estimated Prediction Range (Uncalibrated)"
+    lows, ups, range_type, cov_pct, cov_summary, note = calculate_prediction_intervals(y_small, preds)
+    assert range_type == "Estimated Prediction Range"
     assert cov_pct is None
-    assert "exact 80% calibration cannot be claimed" in note
+    assert cov_summary is None
+    assert "formal 80% coverage calibration is not claimed" in note
 
     # Series with verified holdout empirical coverage
-    lows_eval, ups_eval, range_eval, cov_eval, note_eval = calculate_prediction_intervals(
-        y_small, preds, holdout_empirical_coverage=1.0, holdout_eval_count=3
+    lows_eval, ups_eval, range_eval, cov_eval, summary_eval, note_eval = calculate_prediction_intervals(
+        y_small, preds, holdout_empirical_coverage=1.0, holdout_eval_count=3, holdout_covered_count=3
     )
-    assert range_eval == "Empirically Validated Prediction Range"
+    assert range_eval == "Estimated Prediction Range"
     assert cov_eval == 100.0
-    assert "100.0% actual coverage observed across 3 test points" in note_eval
+    assert summary_eval == "100.0% (3/3 holdout points)"
+    assert "Small sample count (n=3) serves as an empirical diagnostic" in note_eval
 
 
 def test_hardening_product_identity_routing_and_safe_normalization():
@@ -628,7 +630,25 @@ def test_hardening_rolling_origin_backtesting_and_synthetic_fixtures():
     for m in metrics:
         assert m.mae >= 0.0
         assert m.rmse >= m.mae or np.isclose(m.rmse, m.mae)
-        assert m.holdout_periods == holdout_info["rolling_splits_count"]
+        assert m.holdout_periods == holdout_info["holdout_eval_count"]
 
     # Verify zero future leakage: evaluated origins train strictly on preceding indices
     assert holdout_info["train_periods"] < len(synthetic_benchmark_series)
+
+
+def test_rolling_origin_evaluates_multi_period_horizon():
+    """Area 5: Verify rolling-origin evaluation evaluates the full multi-period horizon trajectory."""
+    # 8-period series with horizon=3
+    y_test = np.array([10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0], dtype=np.float64)
+    selected_model, metrics, holdout_info = backtest_and_select_model(y_test, horizon=3)
+
+    assert holdout_info["evaluation_method"] == "rolling_origin"
+    # n=8, num_splits = min(4, 3) = 3
+    # initial_train = 5
+    # split 0: origin 5, eval_h = min(3, 3) = 3
+    # split 1: origin 6, eval_h = min(3, 2) = 2
+    # split 2: origin 7, eval_h = min(3, 1) = 1
+    # expected total horizon points = 3 + 2 + 1 = 6
+    assert holdout_info["holdout_eval_count"] == 6
+    for m in metrics:
+        assert m.holdout_periods == 6

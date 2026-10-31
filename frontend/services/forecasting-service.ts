@@ -41,7 +41,7 @@ export interface HistoricalPeriodPoint {
   period_end: string;
   actual_quantity: number;
   has_data: boolean;
-  coverage_status?: "active" | "confirmed_zero" | "unconfirmed_gap";
+  coverage_status?: "active" | "zero_recorded_sales" | "unconfirmed_gap";
 }
 
 export interface ProductForecastSummaryItem {
@@ -59,7 +59,9 @@ export interface ProductForecastSummaryItem {
   best_mae?: number | null;
   best_wape?: number | null;
   range_type?: string;
+  empirical_coverage_summary?: string | null;
   empirical_coverage_pct?: number | null;
+  empirical_coverage_samples?: number | null;
   limitation_notes: string[];
 }
 
@@ -78,7 +80,9 @@ export interface ProductForecastDetailResponse {
   forecast_points: ForecastPeriodPoint[];
   backtest_metrics: BacktestMetricItem[];
   range_type?: string;
+  empirical_coverage_summary?: string | null;
   empirical_coverage_pct?: number | null;
+  empirical_coverage_samples?: number | null;
   explanation: string;
   limitations: string[];
   provenance: Record<string, any>;
