@@ -33,6 +33,7 @@ from app.api.v1.endpoints import (
     risks,
     roadmap,
     rules,
+    sales,
     scenario,
     schemes_sprint16,
     scoring,
@@ -76,3 +77,4 @@ api_router.include_router(finance.router)
 api_router.include_router(copilot.router)
 api_router.include_router(chat.router)
 api_router.include_router(advisor.router)
+api_router.include_router(sales.router)

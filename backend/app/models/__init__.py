@@ -14,6 +14,7 @@ from app.models.digital_presence import DigitalPresence
 from app.models.export_history import ExportHistory
 from app.models.notification_item import NotificationItem
 from app.models.product import Product
+from app.models.sales import SalesTransaction, SalesUpload
 from app.models.user import User
 
 __all__ = [
@@ -29,4 +30,6 @@ __all__ = [
     "ChatMessage",
     "ActionItem",
     "NotificationItem",
+    "SalesUpload",
+    "SalesTransaction",
 ]
