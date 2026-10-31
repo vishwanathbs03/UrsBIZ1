@@ -27,7 +27,7 @@ class User(Base):
     # Nullable: a freshly registered user has no business yet. ``SET NULL``
     # on delete means removing a business does not cascade-kill the user.
     active_business_id: Mapped[int | None] = mapped_column(
-        ForeignKey("businesses.id", ondelete="SET NULL"),
+        ForeignKey("businesses.id", ondelete="SET NULL", use_alter=True, name="fk_users_active_business_id"),
         nullable=True,
     )
 

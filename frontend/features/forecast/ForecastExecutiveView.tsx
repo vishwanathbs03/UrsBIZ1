@@ -211,6 +211,21 @@ export function ForecastExecutiveView() {
           </div>
         </DashboardCard>
 
+        {/* SKU-level Demand Forecasting Cross-Link */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-neon-cyan/30 bg-neon-cyan/5 px-4 py-3 text-xs">
+          <div className="flex items-center gap-2.5 text-foreground">
+            <span className="flex h-2 w-2 rounded-full bg-neon-cyan animate-pulse flex-shrink-0" />
+            <span>
+              Looking for <strong>SKU-level product demand forecasting</strong> based on your historical sales uploads?
+            </span>
+          </div>
+          <Button asChild size="sm" variant="outline" className="h-7 text-xs border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/10">
+            <Link href="/sales">
+              Demand Forecasting <ArrowRight className="ml-1 size-3" />
+            </Link>
+          </Button>
+        </div>
+
         {/* Main chart */}
         <ExecutiveInsightCard
           badge="Main chart"

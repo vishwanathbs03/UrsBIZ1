@@ -16,6 +16,7 @@ from app.api.v1.endpoints import (
     dashboard,
     dna,
     finance,
+    forecasting,
     funding,
     compliance,
     growth,
@@ -78,3 +79,4 @@ api_router.include_router(copilot.router)
 api_router.include_router(chat.router)
 api_router.include_router(advisor.router)
 api_router.include_router(sales.router)
+api_router.include_router(forecasting.router)
