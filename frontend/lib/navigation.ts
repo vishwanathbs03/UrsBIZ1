@@ -13,6 +13,7 @@ import {
   Landmark,
   Activity,
   Home,
+  ShoppingBag,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -55,6 +56,7 @@ export const navGroups: NavGroup[] = [
     id: "intelligence",
     label: "Intelligence",
     links: [
+      { href: "/sales", label: "Sales Intelligence", icon: ShoppingBag, badge: "NEW", neonBadge: true },
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/predictive-analytics", label: "Forecasts", icon: TrendingUp },
       { href: "/insights", label: "Insights", icon: Lightbulb },
@@ -102,6 +104,7 @@ export const mainNavLinks: NavLink[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/business", label: "Business Profile", icon: Building2 },
   { href: "/intelligence", label: "Health Score", icon: Activity },
+  { href: "/sales", label: "Sales Intelligence", icon: ShoppingBag, badge: "NEW", neonBadge: true },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/predictive-analytics", label: "Forecasts", icon: TrendingUp },
   { href: "/insights", label: "Insights", icon: Lightbulb },
