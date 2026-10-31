@@ -1,29 +1,45 @@
-/**
- * Scrollable conversation thread. Auto-scrolls to the
- * newest message whenever a new one is appended. Renders
- * a typing indicator while the assistant is composing
- * (the spec says "no streaming", so the indicator is the
- * only feedback between submit and reply).
- */
-
 "use client";
 
+/**
+ * ConversationList — Redesigned for Bilingual Copilot UX.
+ *
+ * Primary conversation stream:
+ *  - Premium Hero Landing State with interactive prompt chips in EN / KN
+ *  - Responsive message bubbles (User right-aligned, Assistant wide-card)
+ *  - Smooth autoscroll
+ *  - Subtle thinking state
+ */
+
 import { useEffect, useRef } from "react";
-import { ArrowRight, LineChart, ListChecks, Map, Plus, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  Building,
+  Globe2,
+  LineChart,
+  ShieldAlert,
+  Sparkles,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { MessageBubble } from "./MessageBubble";
+import { UrsBizIcon } from "@/components/common/Logo";
+import { useLanguage } from "@/context/language-context";
 import { cn } from "@/lib/utils";
-import type { Conversation } from "./types";
+import type { AssistantContext, Conversation } from "./types";
 
 interface ConversationListProps {
   conversation: Conversation;
   isThinking: boolean;
-  /** True when the assistant is the only one to have spoken
-   *  (used to centre the empty-state greeting). */
+  /** True when the assistant has messages to show */
   hasMessages: boolean;
   /** Topics the consultant has already answered in this session. */
   memoryTopics?: string[];
-  /** Called when the user clicks a smart follow-up chip. */
+  /** Called when the user clicks a prompt chip or smart follow-up. */
   onFollowUp?: (label: string) => void;
+  /** Optional AssistantContext snapshot */
+  context?: AssistantContext | null;
+  /** Optional className passthrough */
+  className?: string;
 }
 
 export function ConversationList({
@@ -32,73 +48,109 @@ export function ConversationList({
   hasMessages,
   memoryTopics,
   onFollowUp,
+  context,
+  className,
 }: ConversationListProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const { t } = useLanguage();
 
-  // Auto-scroll to bottom on every new message — but only
-  // when the user is already near the bottom, so reading
-  // history is not yanked away.
+  const heroPromptChips = [
+    {
+      icon: TrendingUp,
+      label: t("chips.growthStrategy"),
+      prompt: t("chips.growthStrategyPrompt"),
+    },
+    {
+      icon: ShieldAlert,
+      label: t("chips.riskAnalysis"),
+      prompt: t("chips.riskAnalysisPrompt"),
+    },
+    {
+      icon: LineChart,
+      label: t("chips.revenuePlanning"),
+      prompt: t("chips.revenuePlanningPrompt"),
+    },
+    {
+      icon: Building,
+      label: t("chips.govtSchemes"),
+      prompt: t("chips.govtSchemesPrompt"),
+    },
+    {
+      icon: Users,
+      label: t("chips.hiringTeam"),
+      prompt: t("chips.hiringTeamPrompt"),
+    },
+    {
+      icon: Globe2,
+      label: t("chips.exportExpansion"),
+      prompt: t("chips.exportExpansionPrompt"),
+    },
+  ];
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distance < 200) {
+    if (distance < 300) {
       el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     }
   }, [conversation.messages.length, isThinking]);
 
   if (!hasMessages) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-5 px-6 py-10 text-center text-muted-foreground">
-        <div className="relative flex size-16 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-primary">
-          <span
-            aria-hidden="true"
-            className="absolute inset-0 -z-10 rounded-full bg-primary/20 blur-2xl"
-          />
-          <Sparkles className="size-7" aria-hidden="true" />
+      <div
+        className={cn(
+          "flex h-full flex-col items-center justify-center px-4 py-8 text-center",
+          className,
+        )}
+      >
+        <div className="mx-auto flex max-w-xl flex-col items-center gap-4">
+          {/* Glowing Hero Icon */}
+          <div className="relative flex items-center justify-center">
+            <UrsBizIcon size={48} variant="app-icon" />
+          </div>
+
+          {/* Heading */}
+          <div className="space-y-1">
+            <h2 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+              {t("assistant.copilotBadge")}
+            </h2>
+            <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+              {t("assistant.title")}
+            </p>
+            <p className="pt-1 text-sm text-muted-foreground">
+              {t("assistant.subtitle")}
+            </p>
+          </div>
+
+          {/* Prompt Chips Grid */}
+          <div className="mt-4 grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {heroPromptChips.map((chip) => {
+              const Icon = chip.icon;
+              return (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => onFollowUp?.(chip.prompt)}
+                  className="group flex items-center justify-between gap-2 rounded-xl border border-border/80 bg-background/60 p-3 text-left transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                      <Icon className="size-3.5" aria-hidden="true" />
+                    </div>
+                    <span className="truncate text-xs font-medium text-foreground">
+                      {chip.label}
+                    </span>
+                  </div>
+                  <ArrowRight
+                    className="size-3.5 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+                    aria-hidden="true"
+                  />
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <h3 className="text-lg font-bold text-foreground">
-            Your McKinsey-grade business consultant.
-          </h3>
-          <p className="max-w-md text-sm text-muted-foreground">
-            Ask anything about your business. The assistant reads the same data
-            the dashboard, insights, action board, and analytics pages read —
-            so every answer is grounded in the current analysis.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {[
-            {
-              icon: <LineChart className="size-3.5" aria-hidden="true" />,
-              label: "Improve my business",
-            },
-            {
-              icon: <ListChecks className="size-3.5" aria-hidden="true" />,
-              label: "Explain recommendations",
-            },
-            {
-              icon: <Map className="size-3.5" aria-hidden="true" />,
-              label: "Walk through the roadmap",
-            },
-            {
-              icon: <Plus className="size-3.5" aria-hidden="true" />,
-              label: "How do I grow revenue?",
-            },
-          ].map((s) => (
-            <span
-              key={s.label}
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-background/40 px-3 py-1 text-[11px] font-medium text-foreground"
-            >
-              {s.icon}
-              {s.label}
-              <ArrowRight className="size-3 text-muted-foreground" aria-hidden="true" />
-            </span>
-          ))}
-        </div>
-        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-          Pick a suggestion below or type your own.
-        </p>
       </div>
     );
   }
@@ -106,46 +158,32 @@ export function ConversationList({
   return (
     <div
       ref={scrollRef}
-      className="flex h-full flex-col gap-4 overflow-y-auto px-4 py-6 sm:px-6"
-      role="log"
-      aria-live="polite"
-      aria-relevant="additions"
-      aria-label="Assistant conversation"
+      className={cn("flex-1 overflow-y-auto px-4 py-4 space-y-4", className)}
+      tabIndex={0}
+      aria-label="Chat messages stream"
     >
-      {conversation.messages.map((m) => (
-        <MessageBubble
-          key={m.id}
-          message={m}
-          memoryTopics={memoryTopics}
-          onFollowUp={onFollowUp}
-        />
-      ))}
-      {isThinking && <ThinkingIndicator />}
-    </div>
-  );
-}
+      <div className="mx-auto max-w-4xl space-y-4">
+        {conversation.messages.map((message) => (
+          <MessageBubble
+            key={message.id}
+            message={message}
+            memoryTopics={memoryTopics}
+            onFollowUp={onFollowUp}
+            context={context}
+          />
+        ))}
 
-function ThinkingIndicator() {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={cn(
-        "inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground",
-      )}
-    >
-      <span className="flex items-center gap-1" aria-hidden="true">
-        <span className="size-1.5 animate-bounce rounded-full bg-primary" />
-        <span
-          className="size-1.5 animate-bounce rounded-full bg-primary"
-          style={{ animationDelay: "120ms" }}
-        />
-        <span
-          className="size-1.5 animate-bounce rounded-full bg-primary"
-          style={{ animationDelay: "240ms" }}
-        />
-      </span>
-      Composing answer…
+        {isThinking && (
+          <div
+            className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-xs text-muted-foreground w-fit shadow-2xs"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="size-2 rounded-full bg-primary animate-ping" />
+            <span>{t("assistant.composingPlaceholder")}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -12,11 +12,16 @@ interface PageContainerProps {
  * route's body so spacing stays consistent.
  */
 export function PageContainer({ children, className, width = "default" }: PageContainerProps) {
-  const widthClass =
-    width === "wide" ? "max-w-7xl" : width === "full" ? "max-w-none" : "max-w-6xl";
+  const widthClass = width === "wide" ? "max-w-7xl" : width === "full" ? "max-w-none" : "max-w-6xl";
 
   return (
-    <div className={cn("container py-8 md:py-10 animate-page-fade", widthClass, className)}>
+    <div
+      className={cn(
+        "animate-page-fade container mx-auto px-4 py-6 transition-all sm:px-6 md:py-8 lg:px-8",
+        widthClass,
+        className,
+      )}
+    >
       {children}
     </div>
   );

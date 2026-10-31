@@ -1,6 +1,7 @@
 import React from "react";
 import type { ReadinessReport } from "@/types/intelligence";
 import { ScoreBadge } from "./ScoreBadge";
+import { TermTooltip } from "@/components/common/TermTooltip";
 
 interface ReadinessCardProps {
   readiness?: ReadinessReport;
@@ -13,7 +14,12 @@ export const ReadinessCard: React.FC<ReadinessCardProps> = ({ readiness }) => {
     <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
       <div className="flex items-center justify-between border-b border-border/50 pb-4">
         <div>
-          <h3 className="text-xl font-bold text-card-foreground">Business Readiness Index</h3>
+          <h3 className="text-xl font-bold text-card-foreground">
+            <TermTooltip
+              text="Business Readiness Index"
+              definition="How prepared the business is across six dimensions (digital, operational, market, export, compliance, investment). Scored 0-100 from the same fields that feed the Business Health Score."
+            />
+          </h3>
           <p className="text-sm text-muted-foreground">Evaluated operational readiness across 6 dimensions.</p>
         </div>
         <ScoreBadge score={readiness.overall_score} grade={readiness.grade} size="lg" />

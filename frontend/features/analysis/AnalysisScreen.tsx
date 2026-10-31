@@ -79,7 +79,7 @@ export function AnalysisScreen() {
     <PageContainer width="default">
       <DashboardCard
         badge="AI Analysis"
-        title="Running Atlas intelligence"
+        title="Running UrsBiz intelligence"
         caption="Six stages. One comprehensive read on your business."
         trailing={
           status === "complete" ? (

@@ -30,9 +30,11 @@ def test_health_score_engine():
     assert "business_profile" in report_none.missing_fields
 
     # 2. Test incomplete business model
+    import uuid
+    test_email = f"healthuser_{uuid.uuid4().hex[:8]}@example.com"
     db = SessionLocal()
     try:
-        user = User(email="healthuser@example.com", password_hash="hash", full_name="Health User")
+        user = User(email=test_email, password_hash="hash", full_name="Health User")
         db.add(user)
         db.commit()
         db.refresh(user)

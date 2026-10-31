@@ -65,6 +65,7 @@ class KnowledgeRetrievalService:
         *,
         query: str,
         owner_context: dict | None = None,
+        top_k: int | None = None,
     ) -> KnowledgeContext:
         """Run the full retrieval pipeline for one query.
 
@@ -78,7 +79,9 @@ class KnowledgeRetrievalService:
             owner_context=owner_context or {},
         )
         total_candidates = len(self._retriever._articles)  # type: ignore[attr-defined]
-        ranked = self._ranker.rank(scored)
+        k = top_k if top_k is not None else self._top_k
+        ranker = self._ranker if top_k is None else Ranker(top_k=k)
+        ranked = ranker.rank(scored)
         return self._context_builder.build(
             query=query,
             ranked=ranked,

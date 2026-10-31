@@ -29,4 +29,8 @@ export const queryKeys = {
   advisorAggregate: () => ["business", "advisor-aggregate"] as const,
   // Business Digital Twin profile (Sprint 8 — business CRUD hook).
   business: () => ["business", "profile"] as const,
+  // Sprint 23 — every business the user owns (the profile panel
+  // primary data source). Invalidated on add / delete / switch
+  // because the list shape and the active id both change.
+  businesses: () => ["business", "list"] as const,
 };

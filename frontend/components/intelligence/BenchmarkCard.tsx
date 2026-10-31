@@ -1,6 +1,7 @@
 import React from "react";
 import type { BenchmarkReport } from "@/types/intelligence";
 import { ScoreBadge } from "./ScoreBadge";
+import { TermTooltip } from "@/components/common/TermTooltip";
 
 interface BenchmarkCardProps {
   benchmark?: BenchmarkReport;
@@ -16,7 +17,12 @@ export const BenchmarkCard: React.FC<BenchmarkCardProps> = ({ benchmark }) => {
           <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Industry Classification: {benchmark.industry}
           </span>
-          <h3 className="text-xl font-bold text-card-foreground">Industry Baseline Benchmark</h3>
+          <h3 className="text-xl font-bold text-card-foreground">
+            <TermTooltip
+              text="Industry Baseline Benchmark"
+              definition="An industry baseline number used for comparison. UrsBiz uses deterministic internal baselines only when official public data is unavailable."
+            />
+          </h3>
         </div>
         <ScoreBadge score={benchmark.overall_benchmark_score} grade={benchmark.benchmark_grade} size="lg" />
       </div>

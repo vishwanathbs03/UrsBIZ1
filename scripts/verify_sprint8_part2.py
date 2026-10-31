@@ -14,7 +14,7 @@ Checks:
          (no host port)
     5.  Grafana service is internal-only (no host port)
     6.  Prometheus scrape interval is 15s in prometheus.yml
-    7.  Prometheus target = backend:8000/metrics
+    7.  Prometheus target = backend:8001/metrics
     8.  Grafana datasource provisioning file present + valid
     9.  Grafana dashboard provisioning file present + valid
     10. Grafana dashboard JSON loads, is a "dashboards" object
@@ -147,7 +147,7 @@ if prom_cfg_path.is_file():
     chk("prometheus has 'atlas-backend' job", backend_job is not None)
     if backend_job:
         targets = backend_job.get("static_configs", [{}])[0].get("targets", [])
-        chk("prometheus scrapes backend:8000", "backend:8000" in targets)
+        chk("prometheus scrapes backend:8001", "backend:8001" in targets)
         chk("prometheus scrapes /metrics", backend_job.get("metrics_path") == "/metrics")
         chk("prometheus job interval is 15s", backend_job.get("scrape_interval") == "15s")
 

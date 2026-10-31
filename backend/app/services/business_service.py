@@ -4,10 +4,11 @@ Business Digital Twin.
 The service is the only place that knows what "complete" means. The
 repository owns SQL, the service owns decisions:
 
-  * One business per user (enforced; raises ``BusinessAlreadyExists``)
+  * Many businesses per user (Sprint 23; the 1:1 cap is lifted)
   * Profile completeness rubric (deterministic, documented)
   * Replace-on-update semantics for nested collections
   * Mark-as-complete on the final PUT if completeness >= 100
+  * Active-business promotion on every successful create
 
 Endpoints stay thin: they convert HTTP into a service call, map
 service exceptions to status codes, and serialize the result.
@@ -18,32 +19,78 @@ from __future__ import annotations
 from typing import Any
 
 from app.models.business import Business
+from app.models.user import User
+from app.repositories.user_repository import UserRepository
 from app.repositories.business_repository import (
-    BusinessAlreadyExists,
     BusinessNotFound,
     BusinessRepository,
 )
 from app.schemas.business import (
     BusinessCreate,
+    BusinessListItem,
     BusinessMeta,
+    BusinessMinimalCreate,
     BusinessOut,
     BusinessUpdate,
     BusinessWithCompleteness,
     CompletenessMissingField,
     ProfileCompleteness,
 )
+from app.services.auth_service import AuthService
+
+
+class BusinessLastError(Exception):
+    """Raised when ``delete`` would leave the user with zero
+    businesses. The endpoint maps this to HTTP 409."""
 
 
 class BusinessService:
     """Stateless façade over :class:`BusinessRepository`."""
 
-    def __init__(self, repo: BusinessRepository) -> None:
+    def __init__(
+        self,
+        repo: BusinessRepository,
+        auth_service: AuthService | None = None,
+    ) -> None:
+        """Sprint 23 - the service now optionally takes an
+        ``AuthService`` so ``create`` / ``create_minimal`` can
+        promote the new business to active. Endpoints that never
+        create (the ``PUT`` / ``DELETE`` flows) keep the old
+        single-argument call site by passing ``auth_service=None``."""
         self._repo = repo
+        self._auth_service = auth_service
 
     # ---- Read ----------------------------------------------------------
 
     def get_for_owner(self, owner_id: int) -> BusinessWithCompleteness:
-        business = self._repo.get_by_owner(owner_id)
+        """Back-compat: read the user's primary business.
+
+        Preserved for the legacy callers (twin aggregator, finance
+        aggregator, copilot context). Returns the user's *active*
+        business if ``active_business_id`` is set, else falls back
+        to the most-recently-created row, else ``BusinessNotFound``.
+        Sprint 23's new endpoint calls the User-aware overload
+        ``get_active_for_user`` below.
+        """
+        user_repo = UserRepository(self._repo._db)
+        user = user_repo.get_by_id(owner_id)
+        if user is None:
+            raise BusinessNotFound(
+                f"No business profile for owner_id={owner_id}."
+            )
+        return self.get_active_for_user(user)
+
+    def get_active_for_user(self, user: User) -> BusinessWithCompleteness:
+        """Sprint 23 - the active-business read path used by the
+        ``GET /business`` endpoint.
+
+        Resolution order:
+
+        1. ``user.active_business_id`` if set and still owned.
+        2. Otherwise, the user's most recently created business.
+        3. Otherwise, ``BusinessNotFound`` (the user owns zero).
+        """
+        business = self._resolve_active(user)
         if business is None:
             raise BusinessNotFound("No business profile for this user yet.")
         return self._build(business)
@@ -51,14 +98,38 @@ class BusinessService:
     def exists(self, owner_id: int) -> bool:
         return self._repo.exists_for_owner(owner_id)
 
+    def list_for_owner(self, user: User) -> list[BusinessListItem]:
+        """Sprint 23 - every business the user owns, lightweight
+        projection, oldest first (chronological "you added these
+        in this order" reads better in the panel)."""
+        rows = self._repo.list_for_owner(user.id)
+        return [BusinessListItem.model_validate(r) for r in rows]
+
+    def _resolve_active(self, user: User) -> Business | None:
+        """Internal - return the user's active business row, or the
+        most-recently-created fallback, or ``None``."""
+        if user.active_business_id is not None:
+            direct = self._repo.get_by_id_for_owner(
+                business_id=user.active_business_id, owner_id=user.id
+            )
+            if direct is not None:
+                return direct
+        rows = self._repo.list_for_owner(user.id)
+        return rows[-1] if rows else None
+
     # ---- Create --------------------------------------------------------
 
-    def create(self, owner_id: int, payload: BusinessCreate) -> BusinessWithCompleteness:
-        if self._repo.exists_for_owner(owner_id):
-            raise BusinessAlreadyExists(
-                "A business profile already exists for this account. Use PUT to update it."
-            )
+    def create(
+        self, user: User, payload: BusinessCreate
+    ) -> BusinessWithCompleteness:
+        """Create a new business for the user; promote it to active.
 
+        Sprint 23 - the 1:1 cap is lifted. A user may own many
+        businesses. After a successful insert, the new row becomes
+        the active one so the rest of the app picks it up
+        immediately.
+        """
+        owner_id = user.id
         basic = payload.basic
         capacity = payload.capacity
 
@@ -107,7 +178,22 @@ class BusinessService:
             )
 
         self._repo._db.commit()  # commit before refreshing nested rows
-        fresh = self._repo.get_by_owner(owner_id)
+
+        # Sprint 23 - promote the newly created business to active so
+        # the rest of the app picks it up immediately. The user's
+        # current ``active_business_id`` may be pointing at a
+        # different row (or be NULL); overwrite it.
+        if self._auth_service is not None:
+            self._auth_service.set_active_business(user, business.id)
+        else:
+            # No auth service wired - just set the column directly so
+            # the create path still works in tests that don't go
+            # through the FastAPI dependency graph.
+            user.active_business_id = business.id
+            self._repo._db.commit()
+            self._repo._db.refresh(user)
+
+        fresh = self._repo.get_by_id_for_owner(business.id, owner_id)
         assert fresh is not None  # we just created it
 
         # Same mark-complete logic as update(): the user lands on
@@ -116,11 +202,37 @@ class BusinessService:
         completeness = self._compute_completeness(fresh)
         self._repo.mark_complete(fresh, completed=completeness.completed)
         self._repo._db.commit()
-        return self._build(self._repo.get_by_owner(owner_id) or fresh)
+        return self._build(self._repo.get_by_id_for_owner(business.id, owner_id) or fresh)
+
+    def create_minimal(
+        self, user: User, payload: BusinessMinimalCreate
+    ) -> BusinessWithCompleteness:
+        """Sprint 23 - inline 'Add a business' form path.
+
+        Build a ``BusinessCreate`` from the six required fields and
+        delegate to ``create()``. The wizard on ``/business`` will
+        fill in the remaining 7 sections after the row exists."""
+        from app.schemas.business import BasicSection  # local to avoid cycles
+
+        basic = BasicSection(
+            legal_name=payload.legal_name,
+            industry=payload.industry,
+            established_year=payload.established_year,
+            employee_count=payload.employee_count,
+            annual_revenue=payload.annual_revenue,
+            revenue_currency=payload.revenue_currency,
+        )
+        return self.create(user, BusinessCreate(basic=basic))
 
     # ---- Update --------------------------------------------------------
 
     def update(self, owner_id: int, payload: BusinessUpdate) -> BusinessWithCompleteness:
+        # Sprint 23 - PUT /business updates the user's *active*
+        # business. ``get_by_owner`` was the old 1:1 path and still
+        # returns the user's single business when one exists, which
+        # happens to be the right answer when there is only one row.
+        # For multi-business users, callers should still hit the
+        # active row (the canonical read path).
         business = self._repo.get_by_owner(owner_id)
         if business is None:
             raise BusinessNotFound(
@@ -180,6 +292,16 @@ class BusinessService:
                 business, payload.digital_presence.model_dump()
             )
 
+        # H7.1 — flush pending mutations BEFORE the populate_existing
+        # re-read below. The session runs with ``autoflush=False`` (see
+        # ``app.utils.database.SessionLocal``) and ``get_by_owner`` uses
+        # ``populate_existing=True``. Without an explicit flush the re-read
+        # reloads the STALE committed row over the in-memory changes the
+        # update_* / replace_* methods just staged, so a PUT returned 200
+        # while silently discarding every field. Flushing makes the staged
+        # changes the read-back's source of truth within the transaction.
+        self._repo.flush()
+
         # If everything is filled in, flip is_completed. The service
         # owns this rule; the repository stays dumb.
         fresh = self._repo.get_by_owner(owner_id)
@@ -191,14 +313,50 @@ class BusinessService:
 
     # ---- Delete --------------------------------------------------------
 
-    def delete(self, owner_id: int) -> int:
-        business = self._repo.get_by_owner(owner_id)
+    def delete(self, user: User, business_id: int) -> Any:
+        """Sprint 23 - delete a specific business owned by the user.
+
+        Raises:
+
+        * ``BusinessNotFound`` if the user does not own ``business_id``.
+        * ``BusinessLastError`` if this is the user's only remaining
+          business - we forbid deleting the last one so a user never
+          ends up with zero context the rest of the app can render.
+
+        Returns the standard ``DeleteResponse`` shape (``{"detail":
+        ..., "id": <business_id>}``).
+        """
+        business = self._repo.get_by_id_for_owner(
+            business_id=business_id, owner_id=user.id
+        )
         if business is None:
-            raise BusinessNotFound("No business profile to delete.")
-        business_id = business.id
+            raise BusinessNotFound(
+                f"No business with id={business_id} owned by this user."
+            )
+
+        remaining = self._repo.count_for_owner(user.id)
+        if remaining <= 1:
+            raise BusinessLastError(
+                "Cannot delete your only remaining business."
+            )
+
         self._repo.delete(business)
+        # If the deleted row was the user's active one, point the
+        # active id at another row (most recently created). If the
+        # row was non-active, leave the active id untouched.
+        if user.active_business_id == business_id:
+            self._repo._db.flush()
+            rows = self._repo.list_for_owner(user.id)
+            # ``rows`` already excludes the deleted one because of
+            # ``populate_existing`` semantics; pick the freshest.
+            user.active_business_id = rows[-1].id if rows else None
         self._repo._db.commit()
-        return business_id
+        from app.schemas.business import DeleteResponse
+
+        return DeleteResponse(
+            detail="Business profile deleted.",
+            id=business_id,
+        )
 
     # ---- Internal ------------------------------------------------------
 

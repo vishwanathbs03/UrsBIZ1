@@ -40,7 +40,7 @@ export function CtaSection() {
             </div>
 
             <p className="text-xs text-muted-foreground pt-2">
-              Instant Setup • No Credit Card Required • Sub-50ms Decision Speed
+              Instant Setup • No Credit Card Required • Deterministic Rule Engine
             </p>
           </div>
         </div>

@@ -152,23 +152,42 @@ results.append(ok(
 ))
 
 # ---- P0.11 — type safety ----
-# grep for as any in H5 surfaces
-import subprocess
-out = subprocess.run(
-    ["grep", "-rn", "as any\\b", str(F / "features/dashboard/command-center"),
-     str(F / "features/analytics"), str(F / "features/intelligence")],
-    capture_output=True, text=True,
-).stdout.strip()
+# Portable equivalent of `grep -rn` (works on Windows without POSIX grep).
+# Force a UTF-8 console so Hindi/₹/dash output never crashes cp1252.
+import io
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, io.UnsupportedOperation):
+    pass
+
+def grep_text(pattern: str, dirs: list[Path], exts=(".ts", ".tsx")) -> str:
+    rx = re.compile(pattern)
+    hits: list[str] = []
+    for base in dirs:
+        for p in sorted(base.rglob("*")):
+            if p.is_file() and p.suffix in exts:
+                try:
+                    lines = p.read_text(encoding="utf-8", errors="ignore").splitlines()
+                except OSError:
+                    continue
+                for n, line in enumerate(lines, 1):
+                    if rx.search(line):
+                        hits.append(f"{p}:{n}:{line}")
+    return "\n".join(hits).strip()
+
+out = grep_text(
+    r"as any\b",
+    [F / "features/dashboard/command-center",
+     F / "features/analytics",
+     F / "features/intelligence"],
+)
 results.append(ok(
     "P0.11 — no `as any` casts in H5 surfaces",
     out == "",
     out[:200] if out else "",
 ))
 # @ts-ignore / @ts-nocheck
-out = subprocess.run(
-    ["grep", "-rn", "@ts-ignore\\|@ts-nocheck", str(F / "features")],
-    capture_output=True, text=True,
-).stdout.strip()
+out = grep_text(r"@ts-ignore|@ts-nocheck", [F / "features"])
 results.append(ok(
     "P0.11 — no @ts-ignore / @ts-nocheck in features/",
     "@ts-ignore" not in out and "@ts-nocheck" not in out,

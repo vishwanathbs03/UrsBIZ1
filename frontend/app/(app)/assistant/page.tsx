@@ -3,7 +3,9 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AssistantView } from "@/features/assistant";
 
 export const metadata: Metadata = {
-  title: "AI Assistant",
+  title: "AI Business Assistant | UrsBiz",
+  description:
+    "Ask about your business score, priorities, schemes, or risks. Grounded in your own Digital Twin, rules, and recommendations.",
 };
 
 /**

@@ -1,39 +1,26 @@
-version: "3.8"
+# =============================================================================
+# UrsBiz — root compose (development convenience).
+#
+# This file is a THIN INCLUDE that delegates the real service definition to
+# deployment/docker-compose.production.yml — the SINGLE canonical compose file
+# for UrsBiz (per Sprint H7.8A).
+#
+# To start the stack locally with this include:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f deployment/docker-compose.production.yml \
+#     --env-file deployment/env/.env.production.example \
+#     up -d
+#
+# For a quick dev loop without the production hardening overlay, the same
+# canonical file works on its own:
+#
+#   docker compose -f deployment/docker-compose.production.yml up -d
+#
+# This root file intentionally contains NO service definitions of its own so
+# there is exactly one source of truth.
+# =============================================================================
 
-services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8001:8001"
-    environment:
-      - APP_ENV=production
-      - APP_PORT=8001
-      - DATABASE_URL=${DATABASE_URL:-sqlite:///./atlas_ai.db}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
-      # JWT_SECRET_KEY MUST be set in your shell environment or a .env file.
-      # There is NO insecure default — the backend will reject startup if unset.
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
-      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      - COOKIE_SECURE=${COOKIE_SECURE:-true}
-      - COOKIE_SAMESITE=${COOKIE_SAMESITE:-lax}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - AI_PROVIDER=${AI_PROVIDER:-placeholder}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8001}
-    depends_on:
-      - backend
+include:
+  - deployment/docker-compose.production.yml

@@ -34,10 +34,19 @@ from app.services.twin.base import TwinBundle
 def build_identity(business: dict) -> dict[str, Any]:
     """Pull the legal + trade identity off the
     BusinessService payload."""
-    basic = business.get("basic") or {}
+    business_data = (
+        business.get("business")
+        if isinstance(business.get("business"), dict)
+        else business
+    )
+    basic = (
+        business_data.get("basic")
+        if isinstance(business_data.get("basic"), dict)
+        else business_data
+    )
     return {
-        "business_id": int(business.get("id", 0) or 0),
-        "owner_id": int(business.get("owner_id", 0) or 0),
+        "business_id": int(business_data.get("id", 0) or business.get("id", 0) or 0),
+        "owner_id": int(business_data.get("owner_id", 0) or business.get("owner_id", 0) or 0),
         "legal_name": str(basic.get("legal_name", "") or ""),
         "trade_name": basic.get("trade_name"),
         "industry": str(basic.get("industry", "") or ""),
@@ -50,7 +59,11 @@ def build_identity(business: dict) -> dict[str, Any]:
         "country": basic.get("country"),
         "state_region": basic.get("state_region"),
         "city": basic.get("city"),
-        "is_completed": bool(business.get("is_completed", False) or False),
+        "is_completed": bool(
+            business.get("completeness", {}).get("completed")
+            if isinstance(business.get("completeness"), dict)
+            else (business_data.get("is_completed", False) or business.get("is_completed", False))
+        ),
     }
 
 
@@ -60,13 +73,22 @@ def build_profile(business: dict) -> dict[str, Any]:
     a ``profile`` block; the twin profile is a
     flatter view that the UI can render as a
     single card."""
-    capacity = business.get("capacity") or {}
-    products = business.get("products") or []
-    certs = business.get("certifications") or []
-    digital = business.get("digital_presence") or {}
-    exports = business.get("export_history") or []
-    goals = business.get("goals") or []
-    challenges = business.get("challenges") or []
+    business_data = (
+        business.get("business")
+        if isinstance(business.get("business"), dict)
+        else business
+    )
+    capacity = (
+        business_data.get("capacity")
+        if isinstance(business_data.get("capacity"), dict)
+        else business_data
+    )
+    products = business_data.get("products") or []
+    certs = business_data.get("certifications") or []
+    digital = business_data.get("digital_presence") or {}
+    exports = business_data.get("export_history") or []
+    goals = business_data.get("goals") or []
+    challenges = business_data.get("challenges") or []
 
     social_channels = sum(
         1

@@ -16,15 +16,16 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+          "bg-primary text-primary-foreground shadow-sm shadow-primary/25 hover:bg-primary/90 hover:shadow-md hover:shadow-primary/35 transition-all duration-200",
+        neon: "bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 text-white font-semibold shadow-md shadow-blue-500/30 hover:shadow-lg hover:shadow-cyan-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 border border-blue-400/30",
+        glow: "bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/40 hover:shadow-xl hover:shadow-primary/60 hover:bg-primary/95 transition-all duration-200",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border/80 transition-colors",
         outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+          "border border-border/90 bg-card/60 hover:bg-accent/80 hover:text-accent-foreground hover:border-primary/50 transition-all",
+        ghost: "hover:bg-accent/80 hover:text-accent-foreground transition-colors",
         link: "text-primary underline-offset-4 hover:underline",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm",
       },
       size: {
         default: "h-10 px-4 py-2",
@@ -50,11 +51,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
     return (
-      <Comp
-        ref={ref}
-        className={cn(buttonVariants({ variant, size, className }))}
-        {...props}
-      />
+      <Comp ref={ref} className={cn(buttonVariants({ variant, size, className }))} {...props} />
     );
   },
 );

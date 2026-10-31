@@ -19,7 +19,7 @@ from app.services.ai.base import AIContext, LLMPrompt
 # System message — every model call is the same. A real
 # provider may tune this further (style, persona, length cap).
 _SYSTEM = (
-    "You are Atlas AI, an analyst for an Indian SMB. "
+    "You are UrsBiz, a business analyst for an Indian SMB. "
     "You receive a structured snapshot of a business: archetype, "
     "scores, active rule firings, and matched knowledge articles. "
     "Your job is to explain the situation in plain language, "

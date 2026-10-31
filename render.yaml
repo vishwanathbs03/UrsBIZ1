@@ -1,0 +1,100 @@
+# =============================================================================
+# UrsBiz — Render Infrastructure Blueprint (render.yaml)
+#
+# Deploys:
+#   1. PostgreSQL Database (ursbiz-db)
+#   2. FastAPI Backend Web Service (ursbiz-backend)
+#   3. Next.js Frontend Web Service (ursbiz-frontend)
+#
+# Target branch: release/hackathon-clean
+# =============================================================================
+
+databases:
+  - name: ursbiz-db
+    databaseName: ursbiz
+    user: ursbiz
+    plan: free
+
+services:
+  # ---------------------------------------------------------------------------
+  # Backend: FastAPI + SQLAlchemy + AI Provider Layer
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: ursbiz-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health/live
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.10"
+      - key: APP_NAME
+        value: UrsBiz
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ursbiz-db
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: lax
+      - key: CORS_ORIGINS
+        value: https://ursbiz-frontend.onrender.com
+      - key: SECURITY_HEADERS_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: AI_PROVIDER
+        value: placeholder
+      - key: AI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai/
+      - key: AI_MODEL
+        value: gemini-2.0-flash
+      - key: AI_REQUIRE_SCHEMA
+        value: "true"
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_REQUEST_TIMEOUT_SECONDS
+        value: "20.0"
+      - key: AI_HARD_CALL_TIMEOUT_SECONDS
+        value: "25.0"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+
+  # ---------------------------------------------------------------------------
+  # Frontend: Next.js Standalone
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: ursbiz-frontend
+    runtime: node
+    rootDir: frontend
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NODE_ENV
+        value: production
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=4096"
+      - key: NEXT_PUBLIC_APP_NAME
+        value: UrsBiz
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://ursbiz-frontend.onrender.com
+      - key: NEXT_PUBLIC_API_URL
+        value: https://ursbiz-backend.onrender.com

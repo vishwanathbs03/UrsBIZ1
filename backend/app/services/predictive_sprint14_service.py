@@ -37,7 +37,8 @@ class RevenuePredictionService:
         self._readiness_service = ReadinessService(repo)
 
     def forecast_revenue(self, business: Business) -> RevenuePredictionReport:
-        rev = business.annual_revenue or 0.0
+        raw_rev = float(business.annual_revenue or 0.0)
+        rev = max(0.0, raw_rev)
         health = HealthScoreService.compute(business)
         dna = self._dna_service.analyze_dna(business)
         readiness = self._readiness_service.analyze_readiness(business)
@@ -57,12 +58,18 @@ class RevenuePredictionService:
         if dna.growth_potential in ["Very High", "High"]:
             base_annual_growth += 0.05
 
-        f_3m = round(rev * (1.0 + (base_annual_growth * 0.25)), 2)
-        f_6m = round(rev * (1.0 + (base_annual_growth * 0.50)), 2)
-        f_12m = round(rev * (1.0 + base_annual_growth), 2)
-
-        conf = min(95, max(50, round((health.score + readiness.overall_score) / 2.0)))
-        trend = "Upward Growth" if base_annual_growth > 0.12 else ("Stable" if base_annual_growth >= 0.05 else "Downward Risk")
+        if raw_rev <= 0:
+            conf = 0
+            trend = "Insufficient Data"
+            f_3m = 0.0
+            f_6m = 0.0
+            f_12m = 0.0
+        else:
+            f_3m = round(rev * (1.0 + (base_annual_growth * 0.25)), 2)
+            f_6m = round(rev * (1.0 + (base_annual_growth * 0.50)), 2)
+            f_12m = round(rev * (1.0 + base_annual_growth), 2)
+            conf = min(95, max(50, round((health.score + readiness.overall_score) / 2.0)))
+            trend = "Upward Growth" if base_annual_growth > 0.12 else ("Stable" if base_annual_growth >= 0.05 else "Downward Risk")
 
         return RevenuePredictionReport(
             current_annual_revenue=rev,

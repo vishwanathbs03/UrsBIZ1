@@ -1,29 +1,25 @@
-import { Star, Quote } from "lucide-react";
+import { ShieldCheck, FileText, BarChart3, ListChecks } from "lucide-react";
 
-const testimonials = [
+const signals = [
   {
-    quote:
-      "UrsBiz matched our textile unit to a 35% PMEGP subsidy worth ₹15 Lakhs within 2 minutes of onboarding. The Health Score engine pinpointed working capital bottlenecks we had ignored for months.",
-    author: "Rajesh Patel",
-    role: "Founder & MD, Apex Textiles",
-    location: "Ahmedabad, Gujarat",
-    rating: 5,
+    icon: BarChart3,
+    title: "Deterministic Profile Readiness Score",
+    body: "Computed every time from your business profile — the same inputs always produce the same 0–100 score. It measures how completely the digital twin is populated (six weighted sections), not business risk.",
   },
   {
-    quote:
-      "As a Chartered Accountant managing 40+ MSME clients, UrsBiz has become our primary reporting tool. The 1-click executive PDF exports save my team 20 hours every month during bank loan applications.",
-    author: "Meera Sharma",
-    role: "Senior Partner, Sharma & Associates CAs",
-    location: "Mumbai, Maharashtra",
-    rating: 5,
+    icon: ListChecks,
+    title: "Profile-Matched Schemes",
+    body: "Each scheme card shows match %, the rule we applied, the official source, the last-verified date, and a disclaimer. Final sanctioning rests with the sanctioning authority.",
   },
   {
-    quote:
-      "The AI Advisor's daily priority briefings are remarkable. Having a zero-hallucination CFO assistant guiding our inventory investment choices has increased our quarterly revenue by 22%.",
-    author: "Vikram Sengupta",
-    role: "CEO, Precision Precision Engineering",
-    location: "Bengaluru, Karnataka",
-    rating: 5,
+    icon: ShieldCheck,
+    title: "Grounded Advisor Replies",
+    body: "Every answer is generated from the deterministic evidence bundle, not the open web. Values are labeled (rule-engine, scenario estimate, retrieved, generated).",
+  },
+  {
+    icon: FileText,
+    title: "Audit-Ready Reports",
+    body: "One-click PDF and CSV exports include the health snapshot, scheme matches, and scenario horizons so a CA or banker can reproduce every figure from your profile.",
   },
 ];
 
@@ -33,43 +29,34 @@ export function TestimonialsSection() {
       <div className="container mx-auto px-4">
         <div className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-bold uppercase tracking-widest text-primary">
-            Trusted by MSME Founders & CAs
+            What You Can Verify
           </p>
           <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
-            Real Stories. Measurable Impact.
+            Built on Evidence, Not Promises
           </h2>
           <p className="mt-4 text-base text-muted-foreground">
-            Discover how growing small businesses use UrsBiz to unlock government capital and make data-driven decisions.
+            Every number in UrsBiz is traceable to a rule, a profile input, or a cited source. We do not publish fabricated customer quotes — judge the platform on what the rule engines actually produce.
           </p>
         </div>
 
-        <div className="mt-14 grid gap-6 md:grid-cols-3">
-          {testimonials.map((t) => (
-            <div
-              key={t.author}
-              className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6 shadow-soft hover-lift transition-all"
-            >
-              <div>
-                <div className="flex items-center gap-1 text-amber-400">
-                  {Array.from({ length: t.rating }).map((_, i) => (
-                    <Star key={i} className="size-4 fill-current" />
-                  ))}
+        <div className="mt-14 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {signals.map((s) => {
+            const Icon = s.icon;
+            return (
+              <div
+                key={s.title}
+                className="flex flex-col rounded-2xl border border-border bg-card p-6 shadow-soft hover-lift transition-all"
+              >
+                <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Icon className="size-6" />
                 </div>
-
-                <Quote className="mt-4 size-8 text-primary/20" />
-
-                <p className="mt-2 text-sm text-foreground leading-relaxed italic">
-                  &ldquo;{t.quote}&rdquo;
+                <h3 className="text-base font-bold text-foreground text-center">{s.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed text-center">
+                  {s.body}
                 </p>
               </div>
-
-              <div className="mt-6 border-t border-border pt-4">
-                <p className="text-sm font-bold text-foreground">{t.author}</p>
-                <p className="text-xs text-primary font-medium">{t.role}</p>
-                <p className="text-[11px] text-muted-foreground">{t.location}</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

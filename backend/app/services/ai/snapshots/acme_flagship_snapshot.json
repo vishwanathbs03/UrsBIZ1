@@ -1,0 +1,110 @@
+{
+  "mode": "grounded",
+  "executive_summary": "Comprehensive evidence-grounded strategy to grow Acme Textiles from ₹1.8 Cr baseline revenue to ₹3 Cr target revenue without increasing raw yarn supplier concentration.",
+  "current_situation": "Acme Textiles (Tirupur, Tamil Nadu) operates with 12 employees and ₹1.8 Cr annual revenue. The business has a 68/100 readiness score, but displays high supplier concentration risk with >60% of raw cotton yarn sourced from a single supplier.",
+  "key_findings": [
+    {
+      "title": "High Raw Material Supplier Concentration",
+      "finding_type": "risk",
+      "description": "Over 60% of cotton yarn raw material is sourced from a single regional vendor, creating supply chain vulnerability.",
+      "evidence_refs": ["rule_supplier_risk"]
+    },
+    {
+      "title": "Significant Revenue Target Gap",
+      "finding_type": "gap",
+      "description": "Reaching ₹3 Cr target revenue requires ₹1.2 Cr incremental growth (66% revenue expansion).",
+      "evidence_refs": ["biz_profile_revenue"]
+    },
+    {
+      "title": "Strong Export & Financial Readiness Foundation",
+      "finding_type": "strength",
+      "description": "Financial Readiness (70/100) and Export Readiness (65/100) indicate capacity to expand B2B sales in UAE and Singapore.",
+      "evidence_refs": ["score_financial_readiness", "score_export_readiness"]
+    }
+  ],
+  "recommendations": [
+    {
+      "recommendation_id": "rec_supplier_diversification",
+      "title": "Diversify Raw Yarn Suppliers in Tamil Nadu & Gujarat",
+      "category": "supply_chain",
+      "priority": "High",
+      "estimated_score_gain": 10,
+      "estimated_roi": 15000.0,
+      "estimated_timeline": "2-3 months",
+      "rationales": [
+        "Onboard 2 additional verified yarn mills to reduce primary vendor concentration below 40%."
+      ],
+      "evidence_refs": ["rule_supplier_risk", "rec_supplier_diversification"]
+    },
+    {
+      "recommendation_id": "rec_digital_adoption",
+      "title": "Launch B2B E-Commerce Catalog for Direct Buyers",
+      "category": "digital",
+      "priority": "High",
+      "estimated_score_gain": 8,
+      "estimated_roi": 20000.0,
+      "estimated_timeline": "1 month",
+      "rationales": [
+        "Direct B2B portal expands buyer base without increasing raw supplier dependence."
+      ],
+      "evidence_refs": ["rec_digital_adoption"]
+    }
+  ],
+  "thirty_day_plan": [
+    {
+      "week_number": 1,
+      "objective": "Supplier Risk Audit & Vendor Mapping",
+      "action_items": [
+        "Audit existing yarn contracts and request quotes from 3 alternative spinners in Surat & Coimbatore."
+      ],
+      "deliverables": [
+        "Alternative Yarn Vendor Comparison Matrix"
+      ]
+    },
+    {
+      "week_number": 2,
+      "objective": "B2B Digital Storefront Setup",
+      "action_items": [
+        "Upload fabric & yarn product specs (OEKO-TEX certified) to digital B2B catalog."
+      ],
+      "deliverables": [
+        "Live Acme Textiles Digital Catalog"
+      ]
+    },
+    {
+      "week_number": 3,
+      "objective": "Export Channel Outreach",
+      "action_items": [
+        "Initiate direct B2B buyer sampling for UAE textile importers."
+      ],
+      "deliverables": [
+        "5 Active UAE Importer Leads"
+      ]
+    },
+    {
+      "week_number": 4,
+      "objective": "Trial Order & Supply Contract Execution",
+      "action_items": [
+        "Place initial trial order with secondary yarn supplier to establish backup credit terms."
+      ],
+      "deliverables": [
+        "Secondary Supplier Master Agreement"
+      ]
+    }
+  ],
+  "assumptions": [
+    "Stable raw cotton yarn pricing across South India textile hubs.",
+    "Export demand in UAE and Singapore remains consistent."
+  ],
+  "limitations": [
+    "Requires working capital allocation for initial trial yarn batches."
+  ],
+  "evidence_references": [
+    "biz_profile_revenue",
+    "rule_supplier_risk",
+    "rec_supplier_diversification",
+    "rec_digital_adoption",
+    "score_financial_readiness",
+    "score_export_readiness"
+  ]
+}

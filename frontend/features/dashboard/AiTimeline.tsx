@@ -176,7 +176,7 @@ export function AiTimeline(props: AiTimelineProps) {
     <DashboardCard
       badge="AI Timeline"
       title="Analysis Timeline"
-      caption="Every step Atlas ran to produce the current advisor advice, in chronological order."
+      caption="Every step UrsBiz ran to produce the current advisor advice, in chronological order."
       icon={<Clock className="size-4 text-primary" aria-hidden="true" />}
       trailing={
         <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">

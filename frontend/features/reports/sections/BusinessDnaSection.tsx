@@ -137,9 +137,9 @@ export function BusinessDnaSection({ data }: BusinessDnaSectionProps) {
                 </p>
               ) : (
                 <ul className="flex flex-col gap-1.5">
-                  {items.slice(0, 6).map((it) => (
+                  {items.slice(0, 6).map((it, idx) => (
                     <li
-                      key={it.id}
+                      key={`${q.key}-${it.id ?? idx}-${idx}`}
                       className="flex items-start justify-between gap-2 rounded-md border border-border bg-secondary/30 px-2 py-1.5 text-xs"
                     >
                       <span className="font-medium text-foreground leading-snug">

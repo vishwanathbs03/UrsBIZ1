@@ -36,3 +36,16 @@ class UserRepository:
         self._db.commit()
         self._db.refresh(user)
         return user
+
+    def set_active_business(self, user: User, business_id: int | None) -> User:
+        """Stamp ``user.active_business_id`` and flush.
+
+        The service layer is responsible for validating the business
+        belongs to the user before this is called; the repository
+        does not re-check ownership on the write path. ``None`` is
+        accepted so the active id can be cleared (used when a
+        business is deleted).
+        """
+        user.active_business_id = business_id
+        self._db.flush()
+        return user

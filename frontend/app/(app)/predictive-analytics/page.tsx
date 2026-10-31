@@ -1,27 +1,24 @@
 import type { Metadata } from "next";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { PredictiveAnalyticsView } from "@/features/predictive-analytics";
+import { ForecastExecutiveView } from "@/features/forecast/ForecastExecutiveView";
 
 export const metadata: Metadata = {
-  title: "Predictive Analytics",
+  title: "Business Forecast | UrsBiz",
+  description: "Explainable scenario projections based on your current business profile.",
 };
 
 /**
- * Predictive Analytics — Sprint 6 Part 5.
+ * /predictive-analytics — Sprint H6.2 executive simplification.
  *
- * Frontend only. The 12-month deterministic projections
- * are read straight from the existing Digital Twin
- * `timeline` payload (no new endpoints, no new backend
- * logic, no LLM, no ML). The page reuses the same
- * TanStack Query pattern and the same
- * loading / no-business / error / ready state machine as
- * the analytics, insights, action-board, and
- * notifications pages.
+ * The page renders the executive orchestrator (hero + main chart +
+ * 3 risks + 3 opportunities + assumptions + CTA). The pre-H6.2
+ * PredictiveAnalyticsView is preserved inside a collapsible
+ * accordion at the bottom of the page.
  */
 export default function PredictiveAnalyticsPage() {
   return (
     <ProtectedRoute>
-      <PredictiveAnalyticsView />
+      <ForecastExecutiveView />
     </ProtectedRoute>
   );
 }

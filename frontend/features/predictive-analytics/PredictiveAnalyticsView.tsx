@@ -30,6 +30,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { AnimatedCounter } from "@/components/common/AnimatedCounter";
+import { ScenarioLabel } from "@/components/common/TrustEnvelope";
 import {
   ExecutiveInsightCard,
   AnimatedTimeline,
@@ -332,6 +333,35 @@ export function PredictiveAnalyticsView() {
           lastAnalyzedAt={lastAnalyzedAt}
           isFetching={isFetching}
           onRefresh={refresh}
+        />
+
+        {/* H7.4 — Docx Prompt 4 Part 4 scenario credibility banner.
+            Every future-looking number on this page is a scenario
+            estimate, never a prediction. The banner surfaces the
+            horizon, confidence, and "no guarantee" line so the
+            user can never misread the four KPI tiles. */}
+        <ScenarioLabel
+          horizon="3, 6, and 12 months"
+          confidence={twin.overall_twin_health}
+          inputs={[
+            {
+              label: "Current score",
+              value: String(twin.scores?.overall_score ?? twin.overall_twin_health),
+            },
+            {
+              label: "Active certifications",
+              value: String(twin.profile?.certifications_count ?? 0),
+            },
+            {
+              label: "Digital channels",
+              value: String(twin.profile?.social_channel_count ?? 0),
+            },
+          ]}
+          assumptions={[
+            "No major macroeconomic shock.",
+            "Adoption rate of top recommendations stays at the current pacing.",
+            "No change to industry or geography classification.",
+          ]}
         />
 
         <SimulatorSection twin={twin} />

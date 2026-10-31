@@ -5,12 +5,28 @@
       "id": "kn.export_iec_registration",
       "topic": "export_readiness",
       "category": "compliance",
-      "tags": ["iec", "export", "licensing", "customs"],
+      "tags": [
+        "iec",
+        "export",
+        "licensing",
+        "customs"
+      ],
       "title": "IEC registration is the legal prerequisite for exporting from India",
       "summary": "The Import Export Code (IEC) is a 10-digit code issued by the DGFT and is mandatory for any commercial export shipment. Without it, customs will not clear the shipment and the exporter cannot receive foreign currency in a bank account.",
-      "keywords": ["iec", "import export code", "dgft", "customs", "export license"],
-      "related_score_keys": ["score.export"],
-      "related_intelligence_keys": ["export_readiness.iec_number", "export_readiness.export_history"],
+      "keywords": [
+        "iec",
+        "import export code",
+        "dgft",
+        "customs",
+        "export license"
+      ],
+      "related_score_keys": [
+        "score.export"
+      ],
+      "related_intelligence_keys": [
+        "export_readiness.iec_number",
+        "export_readiness.export_history"
+      ],
       "body": "Apply for an IEC through the DGFT online portal. The application requires a PAN, a cancelled cheque, and proof of business address. The IEC is issued the same day in most cases and is valid for the lifetime of the business (no renewal). Once issued, the IEC must be quoted on the shipping bill and the bank realisation certificate (BRC) for every export transaction.",
       "source": "DGFT public guidance"
     },
@@ -18,12 +34,29 @@
       "id": "kn.bis_quality_certification",
       "topic": "compliance",
       "category": "certification",
-      "tags": ["bis", "iso", "quality", "certification"],
+      "tags": [
+        "bis",
+        "iso",
+        "quality",
+        "certification"
+      ],
       "title": "Quality certifications unlock regulated-market buyers",
       "summary": "Buyers in the EU, US, and Japan typically require ISO 9001 (quality management) and, depending on the product, ISO 14001 (environmental), CE (Europe), or BIS (India). The certifications do not have to be obtained in the buyer's country — international certifications are accepted.",
-      "keywords": ["iso 9001", "iso 14001", "ce mark", "bis", "quality certification"],
-      "related_score_keys": ["score.compliance", "score.risk"],
-      "related_intelligence_keys": ["compliance_readiness.active_certification", "compliance_readiness.any_certification"],
+      "keywords": [
+        "iso 9001",
+        "iso 14001",
+        "ce mark",
+        "bis",
+        "quality certification"
+      ],
+      "related_score_keys": [
+        "score.compliance",
+        "score.risk"
+      ],
+      "related_intelligence_keys": [
+        "compliance_readiness.active_certification",
+        "compliance_readiness.any_certification"
+      ],
       "body": "Begin with ISO 9001 — it is the most universally requested and is a prerequisite for several other certifications. Engage an accredited certification body (BSI, TUV, SGS, DNV) and budget 3-6 months from gap analysis to certificate issue. The certification must be maintained with annual surveillance audits; an expired certification is treated by buyers as no certification at all.",
       "source": "Internal knowledge base"
     },
@@ -31,157 +64,336 @@
       "id": "kn.digital_presence_floor",
       "topic": "digital_transformation",
       "category": "online_presence",
-      "tags": ["website", "linkedin", "online presence", "discoverability"],
+      "tags": [
+        "website",
+        "linkedin",
+        "online presence",
+        "discoverability"
+      ],
       "title": "A business website is the floor of digital presence",
       "summary": "International buyers research a supplier online before making first contact. A missing website or a non-functional one is interpreted as a sign the business is not export-ready. LinkedIn presence and at least one other social channel (Facebook, Instagram, YouTube) round out the discoverability floor.",
-      "keywords": ["website", "linkedin", "social channels", "online presence"],
-      "related_score_keys": ["score.digital", "score.innovation"],
-      "related_intelligence_keys": ["digital_readiness.website", "digital_readiness.social_channels"],
+      "keywords": [
+        "website",
+        "linkedin",
+        "social channels",
+        "online presence"
+      ],
+      "related_score_keys": [
+        "score.digital",
+        "score.innovation"
+      ],
+      "related_intelligence_keys": [
+        "digital_readiness.website",
+        "digital_readiness.social_channels"
+      ],
       "body": "A minimal site — legal name, what you make, contact form, and an export-ready email address — is enough to clear the floor. Avoid free website-builder subdomains (wixsite.com, wordpress.com) for export purposes; buyers view them as low-commitment. A custom domain (yourcompany.com) is the de-facto minimum for an export-ready supplier profile.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.ecommerce_export_channel",
       "topic": "digital_transformation",
       "category": "online_presence",
-      "tags": ["ecommerce", "online sales", "export channel", "amazon global"],
+      "tags": [
+        "ecommerce",
+        "online sales",
+        "export channel",
+        "amazon global"
+      ],
       "title": "E-commerce turns the website into an export channel",
       "summary": "A website without e-commerce is a brochure. Adding e-commerce — either through your own platform (Shopify, WooCommerce) or through a marketplace (Amazon Global, Alibaba, IndiaMART) — converts digital presence into a revenue channel and lifts both digital and innovation scores.",
-      "keywords": ["ecommerce", "shopify", "amazon global", "alibaba", "marketplace"],
-      "related_score_keys": ["score.digital", "score.innovation"],
-      "related_intelligence_keys": ["digital_readiness.ecommerce", "digital_readiness.website"],
+      "keywords": [
+        "ecommerce",
+        "shopify",
+        "amazon global",
+        "alibaba",
+        "marketplace"
+      ],
+      "related_score_keys": [
+        "score.digital",
+        "score.innovation"
+      ],
+      "related_intelligence_keys": [
+        "digital_readiness.ecommerce",
+        "digital_readiness.website"
+      ],
       "body": "For first-time exporters, a marketplace listing (Amazon Global Selling, IndiaMART, TradeIndia) is the lowest-friction way to validate overseas demand. Once at least 25-50 international orders are flowing, invest in your own storefront to capture margin. Payment in foreign currency requires an AD-1 category bank account and a payment gateway that supports multi-currency settlement (Stripe, Razorpay International, Payoneer).",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.export_diversification_risk",
       "topic": "export_readiness",
       "category": "risk",
-      "tags": ["diversification", "concentration", "single market", "export risk"],
+      "tags": [
+        "diversification",
+        "concentration",
+        "single market",
+        "export risk"
+      ],
       "title": "Single-market export exposure is a concentration risk",
       "summary": "When 80% or more of export value goes to a single destination country, the business is exposed to that country's economic cycle, currency moves, and policy shifts. A sudden tariff change or recession in that market can wipe out a year of revenue with no time to pivot.",
-      "keywords": ["diversification", "concentration risk", "single market", "export destinations"],
-      "related_score_keys": ["score.export", "score.risk"],
-      "related_intelligence_keys": ["export_readiness.export_diversity", "export_readiness.export_history"],
+      "keywords": [
+        "diversification",
+        "concentration risk",
+        "single market",
+        "export destinations"
+      ],
+      "related_score_keys": [
+        "score.export",
+        "score.risk"
+      ],
+      "related_intelligence_keys": [
+        "export_readiness.export_diversity",
+        "export_readiness.export_history"
+      ],
       "body": "Aim for at least 3 destination countries with no single country above 50% of export value. Adding a second and third market typically takes 12-18 months — it requires identifying local distributors, registering for local product certifications, and shipping samples. Begin with culturally and geographically close markets (Nepal, Bangladesh, Sri Lanka, UAE) before moving to the EU/US, where compliance and lead times are steeper.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.production_capacity_disclosure",
       "topic": "growth_readiness",
       "category": "operations",
-      "tags": ["production capacity", "fulfillment", "operations"],
+      "tags": [
+        "production capacity",
+        "fulfillment",
+        "operations"
+      ],
       "title": "Production capacity must be declared in the profile",
       "summary": "Without a stated production capacity (units per day, month, or year), the platform cannot assess whether the business can fulfil an export order. Buyers and the engine both treat an unstated capacity as a red flag.",
-      "keywords": ["production capacity", "fulfillment", "monthly production", "units per day"],
-      "related_score_keys": ["score.growth"],
-      "related_intelligence_keys": ["growth_readiness.production_capacity_text", "growth_readiness.monthly_production_units"],
+      "keywords": [
+        "production capacity",
+        "fulfillment",
+        "monthly production",
+        "units per day"
+      ],
+      "related_score_keys": [
+        "score.growth"
+      ],
+      "related_intelligence_keys": [
+        "growth_readiness.production_capacity_text",
+        "growth_readiness.monthly_production_units"
+      ],
       "body": "State capacity in the most concrete unit available: units per day, units per month, tonnes per month, or orders per week. If the capacity varies by season, give the peak and off-peak numbers. A capacity utilisation percentage (currently producing X% of stated capacity) is also useful — buyers prefer a 60-80% utilisation, which signals they can grow into the supplier without a capacity expansion.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.business_goals_benefit",
       "topic": "growth_readiness",
       "category": "strategy",
-      "tags": ["goals", "strategy", "growth", "direction"],
+      "tags": [
+        "goals",
+        "strategy",
+        "growth",
+        "direction"
+      ],
       "title": "Stated business goals improve the quality of every recommendation",
       "summary": "When the business declares at least one goal with a timeframe (e.g. 'Reach 5 export markets in 12 months'), the engine can match rules, recommendations, and reports to that goal. Without a stated goal, the engine treats the business as goal-agnostic and the suggestions stay generic.",
-      "keywords": ["business goals", "strategy", "timeframe", "growth direction"],
-      "related_score_keys": ["score.growth"],
-      "related_intelligence_keys": ["growth_readiness.goals_declared"],
+      "keywords": [
+        "business goals",
+        "strategy",
+        "timeframe",
+        "growth direction"
+      ],
+      "related_score_keys": [
+        "score.growth"
+      ],
+      "related_intelligence_keys": [
+        "growth_readiness.goals_declared"
+      ],
       "body": "Add at least one goal with a title and a target date. Goal priority (low / medium / high) helps the engine triage when multiple goals compete. Goals can be amended — the engine reads the current state of the goals list on every compute, so updating the list immediately reshapes the recommendations.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.dna_archetype_signal",
       "topic": "dna",
       "category": "archetype",
-      "tags": ["archetype", "dna", "business identity"],
+      "tags": [
+        "archetype",
+        "dna",
+        "business identity"
+      ],
       "title": "DNA archetype is a one-sentence label of the business identity",
       "summary": "The DNA engine assigns one of 7 archetypes to a business (e.g. Export Champion, Compliance Leader, Foundation Builder). The archetype summarises which combination of intelligence + score + secondary-trait signals dominates — it is descriptive, not prescriptive.",
-      "keywords": ["dna", "archetype", "business identity", "classifier"],
+      "keywords": [
+        "dna",
+        "archetype",
+        "business identity",
+        "classifier"
+      ],
       "related_score_keys": [],
-      "related_intelligence_keys": ["dna.archetype.key"],
+      "related_intelligence_keys": [
+        "dna.archetype.key"
+      ],
       "body": "If the assigned archetype reads 'Foundation Builder', it means the engine does not yet have enough signal data to classify the business more precisely. Filling more profile fields (goals, production capacity, certifications, export history) will move the business to a more specific archetype on the next compute.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.compliance_risk_low",
       "topic": "compliance",
       "category": "risk",
-      "tags": ["compliance", "risk", "regulated markets"],
+      "tags": [
+        "compliance",
+        "risk",
+        "regulated markets"
+      ],
       "title": "Low compliance score is a buyer-rejection risk",
       "summary": "Buyers in regulated markets (EU, US, Japan, Australia) screen out suppliers with no active certification, no IEC-equivalent licence, or no record of compliance. A compliance score below 40 effectively closes those markets until the gap is closed.",
-      "keywords": ["compliance", "buyer rejection", "regulated markets", "risk"],
-      "related_score_keys": ["score.compliance", "score.risk"],
-      "related_intelligence_keys": ["compliance_readiness.active_certification", "compliance_readiness.any_certification"],
+      "keywords": [
+        "compliance",
+        "buyer rejection",
+        "regulated markets",
+        "risk"
+      ],
+      "related_score_keys": [
+        "score.compliance",
+        "score.risk"
+      ],
+      "related_intelligence_keys": [
+        "compliance_readiness.active_certification",
+        "compliance_readiness.any_certification"
+      ],
       "body": "Close the compliance gap in this order: (1) obtain ISO 9001 — it is the universal baseline; (2) register for the product-specific certification required by your target market (CE for Europe, FDA for US food/pharma, BIS for India); (3) maintain annual surveillance audits so the certification does not lapse. An expired certification is the same as no certification for buyer due-diligence purposes.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.digital_marketing_floor",
       "topic": "digital_transformation",
       "category": "marketing",
-      "tags": ["digital marketing", "seo", "lead generation"],
+      "tags": [
+        "digital marketing",
+        "seo",
+        "lead generation"
+      ],
       "title": "Digital marketing is the discoverability layer on top of the website",
       "summary": "A website with no traffic is a brochure that nobody reads. Digital marketing — paid search, SEO, LinkedIn outbound, or email nurture — is the engine that drives international buyers to the site. Without it, even a great site generates no leads.",
-      "keywords": ["digital marketing", "seo", "lead generation", "linkedin"],
-      "related_score_keys": ["score.digital", "score.innovation"],
-      "related_intelligence_keys": ["digital_readiness.digital_marketing"],
+      "keywords": [
+        "digital marketing",
+        "seo",
+        "lead generation",
+        "linkedin"
+      ],
+      "related_score_keys": [
+        "score.digital",
+        "score.innovation"
+      ],
+      "related_intelligence_keys": [
+        "digital_readiness.digital_marketing"
+      ],
       "body": "For first-time exporters, the highest-ROI digital marketing channel is almost always LinkedIn — direct outbound to international buyers in the target industry, supported by a complete company page and a few case studies. Paid search and SEO follow once the website has clear landing pages for each export product.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.cloud_systems_efficiency",
       "topic": "digital_transformation",
       "category": "operations",
-      "tags": ["cloud", "saas", "operations", "efficiency"],
+      "tags": [
+        "cloud",
+        "saas",
+        "operations",
+        "efficiency"
+      ],
       "title": "Cloud systems signal an export-ready operations stack",
       "summary": "Cloud-based accounting, CRM, and inventory tools (Tally on cloud, Zoho, Salesforce, HubSpot) make the business operable from anywhere — a precondition for international buyers who expect online order tracking, digital invoicing, and 24-hour email response.",
-      "keywords": ["cloud", "saas", "crm", "accounting", "operations"],
-      "related_score_keys": ["score.digital", "score.innovation"],
-      "related_intelligence_keys": ["digital_readiness.cloud_systems"],
+      "keywords": [
+        "cloud",
+        "saas",
+        "crm",
+        "accounting",
+        "operations"
+      ],
+      "related_score_keys": [
+        "score.digital",
+        "score.innovation"
+      ],
+      "related_intelligence_keys": [
+        "digital_readiness.cloud_systems"
+      ],
       "body": "Buyers and partners check operational maturity by asking 'where do I log in to track my order?'. The answer should be a URL, not a phone number. Moving from desktop accounting to a cloud-based stack is the lowest-effort way to lift both digital and innovation scores; the monthly cost of cloud SaaS tools is typically lower than the labour cost of maintaining the same data on a desktop tool.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.sustainability_baseline",
       "topic": "sustainability",
       "category": "esg",
-      "tags": ["sustainability", "esg", "esg reporting"],
+      "tags": [
+        "sustainability",
+        "esg",
+        "esg reporting"
+      ],
       "title": "Sustainability starts with energy and waste disclosure, not certification",
       "summary": "Most SMEs are not yet ready for full ESG reporting. The first step is documenting the basics: energy source, water use, waste handling, and any worker-safety or community programmes. The act of disclosure is what the score measures — the certification comes later.",
-      "keywords": ["sustainability", "esg", "energy", "waste", "disclosure"],
-      "related_score_keys": ["score.sustainability", "score.risk"],
+      "keywords": [
+        "sustainability",
+        "esg",
+        "energy",
+        "waste",
+        "disclosure"
+      ],
+      "related_score_keys": [
+        "score.sustainability",
+        "score.risk"
+      ],
       "related_intelligence_keys": [],
       "body": "Documenting sustainability practices in plain text on the profile (rather than chasing a certification) raises the sustainability score meaningfully. Once the disclosure is in place, the next milestone — formal certification (GRI, B Corp, ISO 14001) — becomes a natural step, and the engine will surface it as a long-term recommendation.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.innovation_signals_definition",
       "topic": "innovation",
       "category": "definition",
-      "tags": ["innovation", "r&d", "patents", "new products"],
+      "tags": [
+        "innovation",
+        "r&d",
+        "patents",
+        "new products"
+      ],
       "title": "Innovation is measured by the combination of digital + e-commerce + cloud + marketing",
       "summary": "The innovation score is derived — it is not a single field on the profile. It is computed from the four digital-readiness signals (website, e-commerce, digital marketing, cloud systems). A business that has all four is, by definition, more innovative than one that has none.",
-      "keywords": ["innovation", "r&d", "derived score", "digital signals"],
-      "related_score_keys": ["score.innovation", "score.digital"],
-      "related_intelligence_keys": ["digital_readiness.website", "digital_readiness.ecommerce", "digital_readiness.digital_marketing", "digital_readiness.cloud_systems"],
+      "keywords": [
+        "innovation",
+        "r&d",
+        "derived score",
+        "digital signals"
+      ],
+      "related_score_keys": [
+        "score.innovation",
+        "score.digital"
+      ],
+      "related_intelligence_keys": [
+        "digital_readiness.website",
+        "digital_readiness.ecommerce",
+        "digital_readiness.digital_marketing",
+        "digital_readiness.cloud_systems"
+      ],
       "body": "The fastest way to lift innovation is to close the four digital gaps in order: get a website, enable e-commerce, turn on digital marketing, and adopt cloud systems. Each gap closed raises the innovation score; closing all four moves the business to the High band on both digital and innovation.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     },
     {
       "id": "kn.risk_score_definition",
       "topic": "risk",
       "category": "definition",
-      "tags": ["risk", "derived score", "concentration", "compliance"],
+      "tags": [
+        "risk",
+        "derived score",
+        "concentration",
+        "compliance"
+      ],
       "title": "Risk score is a derived measure of how exposed the business is",
       "summary": "The risk score is not a single field — it is a derived score computed from export concentration (single-market exposure), compliance posture (certifications), and DNA high-severity findings. A business in a single export market with no certifications scores low on risk; diversifying exports and closing the compliance gap lifts it.",
-      "keywords": ["risk", "concentration", "derived score", "compliance"],
-      "related_score_keys": ["score.risk"],
-      "related_intelligence_keys": ["export_readiness.export_diversity", "compliance_readiness.active_certification"],
+      "keywords": [
+        "risk",
+        "concentration",
+        "derived score",
+        "compliance"
+      ],
+      "related_score_keys": [
+        "score.risk"
+      ],
+      "related_intelligence_keys": [
+        "export_readiness.export_diversity",
+        "compliance_readiness.active_certification"
+      ],
       "body": "There is no 'risk' field on the profile to fill in. Risk is the inverse of the resilience signals: each missing certification and each additional export destination moves the risk score by a deterministic amount. Adding certifications and shipping to a second country are the two highest-leverage ways to improve risk.",
-      "source": "Atlas AI internal"
+      "source": "UrsBiz knowledge base"
     }
   ]
 }

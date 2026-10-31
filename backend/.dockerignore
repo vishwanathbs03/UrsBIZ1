@@ -22,8 +22,6 @@ env/
 *.db
 *.sqlite
 *.sqlite3
-atlas_ai.db
-atlas_ai.db-*
 out/
 verify_out/
 server.log

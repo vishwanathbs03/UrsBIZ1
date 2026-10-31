@@ -1,33 +1,38 @@
 import type { Metadata } from "next";
 import { env } from "@/lib/env";
 import { AuthProviderClient } from "@/components/auth/AuthProviderClient";
+import { QueryProvider } from "@/components/common/QueryProvider";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: `${env.appName} — AI-Powered Business Intelligence Platform`,
-    template: `%s | ${env.appName}`,
+    default: "URSBiz — Enterprise SaaS Business Intelligence Platform",
+    template: "%s | URSBiz",
   },
-  description: `${env.appName} — AI-Powered Business Intelligence Platform for Enterprise MSMEs.`,
+  description:
+    "URSBiz — Intelligent Business Platform for MSMEs & Growing Enterprises. Analyze, Predict, Grow, and Succeed.",
   metadataBase: new URL(env.appUrl),
   manifest: "/manifest.json",
   openGraph: {
-    title: "UrsBiz — AI-Powered Business Intelligence Platform",
-    description: "Enterprise Digital Twin, Business Health Scoring, AI Advisor & Analytics Platform.",
+    title: "URSBiz — Enterprise SaaS Business Intelligence Platform",
+    description:
+      "Enterprise Digital Twin, Profile Readiness Score, AI Copilot, Predictive Analytics & Government Schemes Matching for MSMEs.",
     url: env.appUrl,
-    siteName: "UrsBiz",
+    siteName: "URSBiz",
     type: "website",
   },
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/icon.svg",
   },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+import { LanguageProvider } from "@/context/language-context";
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -39,9 +44,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html:
               "(function(){try{var t=localStorage.getItem('ursbiz.theme');" +
-              "if(t==='dark'||t==='light'){" +
-              "document.documentElement.classList[t==='dark'?'add':'remove']('dark');" +
-              "}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches){" +
+              "if(t==='light'){" +
+              "document.documentElement.classList.remove('dark');" +
+              "}else{" +
               "document.documentElement.classList.add('dark');" +
               "}}catch(e){}})();",
           }}
@@ -54,7 +59,11 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        <AuthProviderClient>{children}</AuthProviderClient>
+        <AuthProviderClient>
+          <QueryProvider>
+            <LanguageProvider>{children}</LanguageProvider>
+          </QueryProvider>
+        </AuthProviderClient>
       </body>
     </html>
   );

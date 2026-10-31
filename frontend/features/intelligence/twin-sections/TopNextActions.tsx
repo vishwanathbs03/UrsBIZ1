@@ -72,9 +72,12 @@ function whyNow(rec: RecommendationItem, lowest?: { label: string; score: number
 
 function expectedBenefit(rec: RecommendationItem): string {
   if (rec.estimated_roi > 0) {
-    return `Potential ${rec.estimated_roi}% modelled ROI on the ${rec.estimated_timeline} window (scenario, not promise).`;
+    const timeline = rec.estimated_timeline || "near-term";
+    return `Potential ${rec.estimated_roi}% modelled ROI on the ${timeline} window (scenario, not promise).`;
   }
-  return `Potential improvement in ${rec.phase.toLowerCase()} readiness on the ${rec.estimated_timeline} window (scenario, not promise).`;
+  const phase = (rec.phase || "").toLowerCase();
+  const timeline = rec.estimated_timeline || "near-term";
+  return `Potential improvement in ${phase || "operational"} readiness on the ${timeline} window (scenario, not promise).`;
 }
 
 export const TopNextActions: React.FC<TopNextActionsProps> = ({

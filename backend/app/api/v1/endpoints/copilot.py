@@ -74,7 +74,7 @@ def _service(db: Session = Depends(get_db)) -> CopilotService:
     response_model=CopilotResponseSchema,
     status_code=status.HTTP_200_OK,
     summary=(
-        "Chat with the Atlas AI Copilot. The Copilot is a "
+        "Chat with the UrsBiz Copilot. The Copilot is a "
         "deterministic orchestrator over the existing engines "
         "(intelligence, scores, DNA, rules, recommendations, "
         "roadmap, knowledge) — it does NOT call a real LLM, "

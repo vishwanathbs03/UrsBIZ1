@@ -213,7 +213,7 @@ The Next.js dev server serves `/assistant` successfully. Page returns HTML with 
 The browser-based interactive smoke test (open assistant, type a growth question, see the consultant render, click follow-up chips, etc.) could not be completed in this environment because:
 
 1. `/assistant` is gated behind authentication (`/login` redirect). Without a backend + a real session token, the page never reaches the `ConversationList` rendering branch.
-2. The backend at `http://localhost:8001` is not running in this verification session.
+2. The backend at `http://localhost:8090` is not running in this verification session.
 
 The Node-level smoke harness above covers the same logic (orchestrator + classifier + smart-follow-ups + fallback) deterministically. The Node harness is the source of truth for the H4 contract; the browser test would only confirm the rendering layer renders the data it has — and the rendering layer is exercised through the production build (`/assistant` route ships as 39.7 kB of compiled JS).
 

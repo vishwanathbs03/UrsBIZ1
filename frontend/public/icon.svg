@@ -1,0 +1,33 @@
+<svg width="64" height="64" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ursbiz-bg-64" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#0F172A" />
+      <stop offset="100%" stopColor="#0A192F" />
+    </linearGradient>
+    <linearGradient id="ursbiz-u-64" x1="8" y1="8" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#38BDF8" />
+      <stop offset="100%" stopColor="#2563EB" />
+    </linearGradient>
+    <linearGradient id="ursbiz-b1-64" x1="17" y1="26" x2="17" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#06B6D4" />
+      <stop offset="100%" stopColor="#0891B2" />
+    </linearGradient>
+    <linearGradient id="ursbiz-b2-64" x1="23" y1="20" x2="23" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#38BDF8" />
+      <stop offset="100%" stopColor="#2563EB" />
+    </linearGradient>
+    <linearGradient id="ursbiz-b3-64" x1="29" y1="14" x2="29" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#60A5FA" />
+      <stop offset="100%" stopColor="#1D4ED8" />
+    </linearGradient>
+  </defs>
+
+  <rect width="48" height="48" rx="12" fill="url(#ursbiz-bg-64)" />
+  <rect x="0.75" y="0.75" width="46.5" height="46.5" rx="11.25" stroke="#38BDF8" stroke-opacity="0.3" stroke-width="1.5" />
+
+  <path d="M10 10V27C10 34.1797 15.8203 40 23 40H25C32.1797 40 38 34.1797 38 27V18" stroke="url(#ursbiz-u-64)" stroke-width="4.25" stroke-linecap="round" stroke-linejoin="round" />
+  <rect x="15.5" y="25" width="4" height="9" rx="2" fill="url(#ursbiz-b1-64)" />
+  <rect x="22" y="19" width="4" height="15" rx="2" fill="url(#ursbiz-b2-64)" />
+  <rect x="28.5" y="13" width="4" height="21" rx="2" fill="url(#ursbiz-b3-64)" />
+  <path d="M38 3 C38 6.866 39.634 8.5 43.5 8.5 C39.634 8.5 38 10.134 38 14 C38 10.134 36.366 8.5 32.5 8.5 C36.366 8.5 38 6.866 38 3 Z" fill="#38BDF8" />
+</svg>

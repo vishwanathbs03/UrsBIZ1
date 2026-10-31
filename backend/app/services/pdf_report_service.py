@@ -20,9 +20,6 @@ import sys
 import types
 from datetime import datetime, timezone
 
-# Ensure reportlab import compatibility
-if r"C:\Users\Win\AppData\Roaming\Python\Python314\site-packages" not in sys.path:
-    sys.path.append(r"C:\Users\Win\AppData\Roaming\Python\Python314\site-packages")
 
 try:
     import PIL.Image  # noqa: F401
@@ -231,7 +228,7 @@ class PdfReportService:
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#94A3B8"), spaceAfter=6))
         story.append(
             Paragraph(
-                "Generated automatically by Atlas AI Business Intelligence Engine — Confident & Confidential.",
+                "Generated automatically by UrsBiz — Executive Business Intelligence Platform. Confidential — for the named business only.",
                 ParagraphStyle("Footer", parent=styles["Normal"], fontSize=8, textColor=colors.HexColor("#94A3B8"), alignment=1),
             )
         )

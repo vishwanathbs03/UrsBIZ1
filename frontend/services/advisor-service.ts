@@ -11,7 +11,7 @@ export const advisorService = {
     const report = raw?.report || raw;
 
     const summary = raw?.business_summary || {
-      legal_name: report?.executive_summary ? "Business Profile" : "Atlas Enterprise",
+      legal_name: report?.executive_summary ? "Business Profile" : "UrsBiz Business",
       industry: "General MSME",
       archetype: report?.business_maturity_level || "Growth Enterprise",
       overall_score: report?.overall_advisor_score ?? 75,

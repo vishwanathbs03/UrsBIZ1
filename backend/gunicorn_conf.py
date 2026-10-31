@@ -46,7 +46,7 @@ worker_class = _env_str("GUNICORN_WORKER_CLASS", "uvicorn.workers.UvicornWorker"
 
 # --- Network -------------------------------------------------------------- #
 
-bind = _env_str("GUNICORN_BIND", f"{_env_str('APP_HOST', '0.0.0.0')}:{_env_str('APP_PORT', '8000')}")
+bind = _env_str("GUNICORN_BIND", f"{_env_str('APP_HOST', '0.0.0.0')}:{_env_str('APP_PORT', '8001')}")
 keepalive = _env_int("GUNICORN_KEEPALIVE", 5)
 timeout = _env_int("GUNICORN_TIMEOUT", 60)
 graceful_timeout = _env_int("GUNICORN_GRACEFUL_TIMEOUT", 30)

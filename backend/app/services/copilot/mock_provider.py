@@ -75,11 +75,11 @@ class MockCopilotProvider(CopilotProvider):
 _INTENT_OPENERS: dict[str, str] = {
     "GENERAL_BUSINESS": (
         "Looking at your business overall, here is what the "
-        "Atlas AI engines are showing right now."
+        "UrsBiz engines are showing right now."
     ),
     "BUSINESS_SCORE": (
         "Your business score reflects the state of the five "
-        "readiness lenses Atlas AI measures."
+        "readiness lenses UrsBiz measures."
     ),
     "EXPORT": (
         "Export readiness is a function of certifications, "
@@ -104,12 +104,12 @@ _INTENT_OPENERS: dict[str, str] = {
         "plan."
     ),
     "RECOMMENDATIONS": (
-        "Atlas AI produces a ranked list of recommendations, "
+        "UrsBiz produces a ranked list of recommendations, "
         "each tied to a specific rule firing and knowledge "
         "article."
     ),
     "RULES": (
-        "The Rule Engine surfaces the gaps Atlas AI found in "
+        "The Rule Engine surfaces the gaps UrsBiz found in "
         "your business profile."
     ),
     "SCENARIO": (
@@ -118,7 +118,7 @@ _INTENT_OPENERS: dict[str, str] = {
     ),
     "OCR": (
         "Document ingestion is handled by the OCR engine. "
-        "Atlas AI accepts a single file upload and returns a "
+        "UrsBiz accepts a single file upload and returns a "
         "review payload."
     ),
     "FINANCE": (
@@ -126,7 +126,7 @@ _INTENT_OPENERS: dict[str, str] = {
         "ROI of your top recommendations."
     ),
     "GREETING": (
-        "Hello. I am the Atlas AI Copilot. Ask me about your "
+        "Hello. I am the UrsBiz Copilot. Ask me about your "
         "business score, recommendations, roadmap, DNA, or any "
         "of the other engines."
     ),

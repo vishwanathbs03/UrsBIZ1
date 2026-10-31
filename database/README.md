@@ -1,6 +1,6 @@
 # Database
 
-PostgreSQL is the **production** data store for Atlas AI. SQLite is the
+PostgreSQL is the **production** data store for UrsBiz. SQLite is the
 dev convenience driver when Postgres isn't available.
 
 ## Status
@@ -13,7 +13,7 @@ dev convenience driver when Postgres isn't available.
 Default connection string (matches `backend/.env.example`):
 
 ```
-postgresql+psycopg2://postgres:postgres@localhost:5432/atlas_ai
+postgresql+psycopg2://postgres:postgres@localhost:5432/ursbiz
 ```
 
 Override with the `DATABASE_URL` environment variable in
@@ -25,13 +25,13 @@ Override with the `DATABASE_URL` environment variable in
 2. Create a database:
 
    ```sql
-   CREATE DATABASE atlas_ai;
+   CREATE DATABASE ursbiz;
    ```
 
 3. (Optional) Verify with `psql`:
 
    ```bash
-   psql -h localhost -U postgres -d atlas_ai -c "SELECT 1;"
+   psql -h localhost -U postgres -d ursbiz -c "SELECT 1;"
    ```
 
 4. Run migrations:
@@ -44,7 +44,7 @@ Override with the `DATABASE_URL` environment variable in
 ## Development: SQLite
 
 For local development without a Postgres install, the dev `.env`
-points at a local SQLite file (`./atlas_ai.db`). The migrations are
+points at a local SQLite file (`./ursbiz.db`). The migrations are
 dialect-agnostic so the same `alembic upgrade head` works on both.
 
 ## Migrations
@@ -57,7 +57,3 @@ cd backend
 .venv/Scripts/python.exe -m alembic revision --autogenerate -m "describe change"
 .venv/Scripts/python.exe -m alembic upgrade head
 ```
-
-Migration files live under `backend/alembic/versions/`. The first
-migration (``20260101_0001_create_users_table.py``) creates the
-``users`` table.

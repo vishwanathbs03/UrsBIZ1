@@ -19,11 +19,44 @@ export class ApiError extends Error {
     this.status = status;
     this.body = body;
   }
+
+  /** Network-level failure — DNS, refused connection, unreachable host.
+   *  Signalled with ``status === 0``. */
+  get isNetworkError(): boolean {
+    return this.status === 0;
+  }
+
+  /** The request exceeded the client-side timeout budget. */
+  get isTimeout(): boolean {
+    const b = this.body as { type?: unknown } | null;
+    return this.status === 0 && b?.type === "AbortError";
+  }
+
+  /** 401 — session missing/invalid/expired. */
+  get isUnauthenticated(): boolean {
+    return this.status === 401;
+  }
+
+  /** 422 — request body failed server-side validation. */
+  get isValidationError(): boolean {
+    return this.status === 422;
+  }
+
+  /** 409 — conflict (duplicate resource, already-exists). */
+  get isConflict(): boolean {
+    return this.status === 409;
+  }
+
+  /** 5xx — the backend itself failed. */
+  get isServerError(): boolean {
+    return this.status >= 500;
+  }
 }
 
 export type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
+  timeoutMs?: number;
 };
 
 function buildUrl(path: string, query?: RequestOptions["query"]): string {
@@ -59,11 +92,14 @@ export async function apiRequest<T = unknown>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { body, query, headers, ...rest } = options;
+  const { body, query, headers, timeoutMs: customTimeoutMs, ...rest } = options;
   const url = buildUrl(path, query);
 
-  // TEMP: full request/response trace for the wizard
-  if (path.startsWith("/api/v1/business")) {
+  // Temporary request/response trace for the business wizard. DEV ONLY —
+  // compiled out of production bundles. Never add secrets here.
+  const traceBusReq =
+    process.env.NODE_ENV !== "production" && path.startsWith("/api/v1/business");
+  if (traceBusReq) {
     // eslint-disable-next-line no-console
     console.log("[BUSREQ-REQ]", rest.method ?? "?", url, {
       body,
@@ -75,28 +111,75 @@ export async function apiRequest<T = unknown>(
     });
   }
 
-  const response = await fetch(url, {
-    ...rest,
-    // The backend issues the JWT as an HTTP-only cookie. Browsers
-    // refuse to attach it on cross-origin requests unless the
-    // request opts in via `credentials: "include"`. Without this,
-    // POST /business, GET /auth/me and every other protected
-    // endpoint return 401 after login even though the cookie is
-    // present in the browser jar.
-    credentials: rest.credentials ?? "include",
-    headers: {
-      Accept: "application/json",
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...headers,
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  // Network-level timeout. Defaults to 15s for standard requests, or
+  // caller-specified budget (e.g. 150s for LLM generation).
+  const timeoutMs = customTimeoutMs ?? 15000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  // If the caller passed their own signal, link it through.
+  if (rest.signal) {
+    const userSignal = rest.signal as AbortSignal;
+    if (userSignal.aborted) {
+      ctrl.abort(userSignal.reason);
+    } else {
+      userSignal.addEventListener(
+        "abort",
+        () => ctrl.abort(userSignal.reason),
+        { once: true },
+      );
+    }
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...rest,
+      signal: ctrl.signal,
+      // The backend issues the JWT as an HTTP-only cookie. Browsers
+      // refuse to attach it on cross-origin requests unless the
+      // request opts in via `credentials: "include"`. Without this,
+      // POST /business, GET /auth/me and every other protected
+      // endpoint return 401 after login even though the cookie is
+      // present in the browser jar.
+      credentials: rest.credentials ?? "include",
+      headers: {
+        Accept: "application/json",
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...headers,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (cause) {
+    clearTimeout(timer);
+    // Network failure (DNS, refused, IPv6 unreachable, etc.).
+    // Convert the raw TypeError into an ApiError so callers can
+    // recognise the failure mode uniformly instead of guessing on
+    // `err instanceof TypeError`.
+    if (cause instanceof Error && cause.name === "AbortError") {
+      throw new ApiError(
+        "Request timed out. Please check your connection and try again.",
+        0,
+        { detail: "Network error: request timed out", type: "AbortError" },
+      );
+    }
+    const message = cause instanceof Error ? cause.message : "Network error";
+    throw new ApiError(
+      `Could not reach the server. ${message}. ` +
+        "If the backend is running on a different host or port, set NEXT_PUBLIC_API_URL.",
+      0,
+      { detail: "Network error", type: "NetworkError", cause: message },
+    );
+  }
+  clearTimeout(timer);
 
   const parsed = await parseBody(response);
 
-  if (path.startsWith("/api/v1/business")) {
+  if (traceBusReq) {
+    // H7.1 Part 5 — log only the status code, not the response body. The
+    // body is the user's full business profile (employee count, revenue,
+    // products, certifications, etc.) — never log that, even in dev.
     // eslint-disable-next-line no-console
-    console.log("[BUSREQ-RES]", rest.method ?? "?", url, response.status, parsed);
+    console.log("[BUSREQ-RES]", rest.method ?? "?", url, response.status);
   }
 
   if (!response.ok) {

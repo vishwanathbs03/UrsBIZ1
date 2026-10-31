@@ -18,20 +18,20 @@ import { Moon, Sun } from "lucide-react";
 const STORAGE_KEY = "ursbiz.theme";
 
 function readStoredTheme(): "light" | "dark" {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === "undefined") return "dark";
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === "dark" || stored === "light") return stored;
   } catch (_) {
     /* fall through */
   }
-  // No stored preference: respect the OS-level setting when available.
+  // Default to dark for the official Dark Neon SaaS experience
   if (typeof window.matchMedia === "function") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+    if (window.matchMedia("(prefers-color-scheme: light)").matches) {
+      return "light";
+    }
   }
-  return "light";
+  return "dark";
 }
 
 export function applyTheme(theme: "light" | "dark"): void {

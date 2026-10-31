@@ -347,3 +347,44 @@ export interface DeleteResponse {
   detail: string;
   id: number;
 }
+
+// --------------------------------------------------------------------------- //
+// Sprint 23 — profile panel shapes
+// --------------------------------------------------------------------------- //
+
+/**
+ * Lightweight card returned by ``GET /business/list``. Mirrors
+ * the backend ``BusinessListItem`` Pydantic schema. The panel
+ * uses this to render the per-row Switch / Delete affordances.
+ */
+export interface BusinessListItem {
+  id: number;
+  legal_name: string;
+  trade_name: string | null;
+  industry: string;
+  city: string | null;
+  is_completed: boolean;
+  created_at: string;
+}
+
+/** Envelope returned by ``GET /business/list``. */
+export interface BusinessListResponse {
+  items: BusinessListItem[];
+  /** Convenience copy of the user's active business id (also on User). */
+  active_business_id: number | null;
+  count: number;
+}
+
+/**
+ * Inline 'Add a business' form payload — only the six required
+ * fields of the wizard's ``BasicSection``. The remaining 7
+ * sections are filled out on the regular ``/business`` wizard.
+ */
+export interface BusinessMinimalCreate {
+  legal_name: string;
+  industry: string;
+  established_year: number;
+  employee_count: number;
+  annual_revenue: number;
+  revenue_currency: string;
+}

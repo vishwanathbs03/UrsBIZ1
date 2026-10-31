@@ -47,7 +47,7 @@ function pickTopScheme(s: BusinessSchemesResponse | null | undefined): string | 
     ...(s.schemes.partially_eligible || []),
   ];
   const top = [...list]
-    .filter((x) => x.eligibility_status === "eligible" || x.eligibility_status === "partiallyEligible")
+    .filter((x) => x.eligibility_status === "matching" || x.eligibility_status === "partialMatch")
     .sort((a, b) => (b.matching_score || 0) - (a.matching_score || 0))[0];
   return top ? top.name : list[0]?.name || null;
 }

@@ -44,6 +44,28 @@ class LoginRequest(BaseModel):
     password: Annotated[str, Field(min_length=1, max_length=128)]
 
 
+# ---- Profile update (Sprint 23) ---------------------------------------- #
+
+
+class UserActiveBusinessUpdate(BaseModel):
+    """Payload for PATCH /auth/me.
+
+    Only the fields a user is allowed to mutate are present. The
+    current sprint ships just ``active_business_id``; future
+    iterations can extend this with editable name/email without
+    touching the route signature.
+    """
+
+    active_business_id: int | None = Field(
+        description=(
+            "Business id to mark as 'active' for the user. Must be "
+            "one of the user's owned businesses (the service "
+            "validates ownership and returns 403 otherwise). "
+            "``None`` is accepted and clears the active id."
+        ),
+    )
+
+
 # ---- Responses -----------------------------------------------------------
 
 
@@ -58,6 +80,10 @@ class UserPublic(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    # Sprint 23 — the business row that "owns" the user's session
+    # context. ``None`` when the user has not created a business
+    # yet, or when all their businesses have been deleted.
+    active_business_id: int | None = None
 
 
 class TokenResponse(BaseModel):

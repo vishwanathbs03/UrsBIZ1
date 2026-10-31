@@ -1,0 +1,19 @@
+[tool.pytest.ini_options]
+# Prepend ``backend/`` to sys.path so test modules that do
+# ``from app.utils.database import Base`` (e.g. conftest.py) can
+# resolve the package whether pytest is invoked from the repo
+# root (``python -m pytest``) or from ``backend/`` itself.
+pythonpath = ["backend"]
+# Restrict pytest test discovery to the actual repository test suite.
+# Debug scripts (e.g. scripts/debug/test_backend_ai.py) live outside
+# this path and must NOT participate in repository verification.
+testpaths = ["backend/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    # Tests that need a live external service (Ollama daemon, real
+    # cloud API key, etc.). Skipped by the unit-test CI lane; run
+    # only on the integration lane or on the operator's host.
+    "integration: marks tests that require a live external service",
+]

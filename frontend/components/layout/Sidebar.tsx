@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/common/Logo";
 import { cn } from "@/lib/utils";
-import { isActiveLink, mainNavLinks } from "@/lib/navigation";
+import { isActiveLink, navGroups } from "@/lib/navigation";
 
 interface SidebarProps {
   className?: string;
 }
 
 /**
- * Desktop-only fixed sidebar. Renders nothing on mobile/tablet so the
- * Navbar + MobileDrawer take over there.
+ * Modern Dark Neon Desktop Sidebar (Phase 1).
+ * Features organized hierarchical navigation groups, electric-blue active indicators,
+ * subtle glassmorphism, and deterministic engine trust badge.
  */
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname() ?? "/";
@@ -30,53 +32,101 @@ export function Sidebar({ className }: SidebarProps) {
     <aside
       aria-label="Sidebar navigation"
       className={cn(
-        "hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:z-30 lg:border-r lg:border-border/80 lg:bg-background/95 lg:backdrop-blur-md transition-all duration-200",
+        "hidden lg:fixed lg:inset-y-0 lg:z-30 lg:flex lg:w-64 lg:flex-col",
+        "border-r border-border/80 bg-background/90 backdrop-blur-xl transition-all duration-300",
         className,
       )}
     >
-      <div className="flex h-16 items-center border-b border-border/80 px-6">
+      {/* Brand Header */}
+      <div className="flex h-16 items-center justify-between border-b border-border/80 px-6">
         <Link
           href="/"
           aria-label="UrsBiz — home"
-          className="rounded-md focus-visible:outline-none"
+          className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <Logo />
+          <Logo size="md" />
         </Link>
       </div>
 
-      <nav aria-label="Sidebar primary" className="flex-1 overflow-y-auto p-3">
-        <ul className="flex flex-col gap-1">
-          {mainNavLinks.map((link) => {
-            const Icon = link.icon;
-            const active = isActiveLink(pathname, link.href);
-            return (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
-                    active
-                      ? "bg-primary/10 text-primary font-semibold shadow-xs border-l-2 border-primary pl-2.5"
-                      : "text-muted-foreground hover:bg-accent/80 hover:text-foreground",
-                  )}
-                >
-                  <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "text-muted-foreground")} aria-hidden="true" />
-                  <span className="truncate">{link.label}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+      {/* Grouped Navigation */}
+      <nav
+        aria-label="Sidebar primary"
+        className="scrollbar-thin scrollbar-thumb-border/50 flex-1 space-y-5 overflow-y-auto px-3 py-4"
+      >
+        {navGroups.map((group) => (
+          <div key={group.id} className="space-y-1">
+            <h3 className="px-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">
+              {group.label}
+            </h3>
+            <ul className="space-y-0.5 pt-1">
+              {group.links.map((link) => {
+                const Icon = link.icon;
+                const active = isActiveLink(pathname, link.href);
+                return (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "group relative flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200",
+                        active
+                          ? "shadow-xs border border-primary/25 bg-primary/10 font-semibold text-primary"
+                          : "text-muted-foreground hover:border hover:border-border/60 hover:bg-card/80 hover:text-foreground",
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 truncate">
+                        {/* Active vertical neon highlight bar */}
+                        {active && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute bottom-1.5 left-0 top-1.5 w-1 rounded-r-md bg-accent shadow-[0_0_8px_rgba(59,130,246,0.8)]"
+                          />
+                        )}
+                        <Icon
+                          className={cn(
+                            "size-4 shrink-0 transition-colors duration-200",
+                            active
+                              ? "text-accent drop-shadow-[0_0_6px_rgba(59,130,246,0.5)]"
+                              : "text-muted-foreground group-hover:text-foreground",
+                          )}
+                          aria-hidden="true"
+                        />
+                        <span className="truncate">{link.label}</span>
+                      </div>
+
+                      {/* Badge if present */}
+                      {link.badge && (
+                        <span
+                          className={cn(
+                            "rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide",
+                            link.neonBadge
+                              ? "animate-pulse border border-primary/40 bg-primary/20 text-accent shadow-[0_0_8px_rgba(37,99,235,0.4)]"
+                              : "border border-border/80 bg-secondary text-secondary-foreground",
+                          )}
+                        >
+                          {link.badge}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
-      <div className="border-t border-border/80 p-4">
-        <div className="rounded-xl border border-border/80 bg-card/60 p-3.5 text-card-foreground shadow-xs">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-            Navigation Active
-          </p>
-          <p className="mt-0.5 text-xs font-medium text-muted-foreground truncate">
-            {pathname}
+      {/* Footer Trust & Architecture Badge */}
+      <div className="border-t border-border/80 bg-card/40 p-3.5">
+        <div className="shadow-xs rounded-xl border border-border/80 bg-card/80 p-3 text-card-foreground">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="size-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+              Grounded AI Engine
+            </p>
+          </div>
+          <p className="mt-1 text-[11px] leading-tight text-muted-foreground">
+            Zero hallucinations. Strict mathematical lineage.
           </p>
         </div>
       </div>

@@ -426,7 +426,7 @@ if docker_path:
             )
         chk(
             "backend healthcheck points at /health/live",
-            'http://127.0.0.1:8000/health/live' in out,
+            'http://127.0.0.1:8001/health/live' in out,
         )
     else:
         chk("compose config render", False, err.strip()[:200])

@@ -27,9 +27,14 @@ case "${TARGET}" in
                       up -d --build
         ;;
     prod|production)
-        echo "[deploy] target=production (docker-compose.yml + docker-compose.prod.yml)"
+        # H7.0 — the canonical production overlay was renamed to
+        # docker-compose.production.yml so its name matches its
+        # purpose and the file is grep-friendly. The legacy
+        # docker-compose.prod.yml was removed; this branch must
+        # point at the new name.
+        echo "[deploy] target=production (docker-compose.yml + docker-compose.production.yml)"
         docker compose -f "${ROOT_DIR}/docker-compose.yml" \
-                      -f "${ROOT_DIR}/docker-compose.prod.yml" \
+                      -f "${ROOT_DIR}/docker-compose.production.yml" \
                       --env-file "${ROOT_DIR}/deployment/env/.env.production.example" \
                       up -d --build
         ;;

@@ -1,6 +1,6 @@
 """FastAPI application factory.
 
-Creates and configures the Atlas AI backend application. Keeps startup
+Creates and configures the UrsBiz backend application. Keeps startup
 side-effects isolated so the app is easy to test.
 """
 
@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app.api.v1 import api_router
 from app.config.logging import configure_logging, get_logger
@@ -60,6 +61,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     _check("CORS OK", bool(settings.cors_origins_list), f"origins={settings.cors_origins}")
 
     # 3. Database reachable + schema bootstrap
+    bootstrap_failed: Exception | None = None
     try:
         from app.utils.database import EXPECTED_HEAD_REVISION, get_current_revision
 
@@ -80,6 +82,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             ),
         )
     except Exception as exc:
+        bootstrap_failed = exc
         _check("Database Connected", False, str(exc))
         _check("Migrations Applied", False, f"schema bootstrap failed — {type(exc).__name__}: {exc}")
 
@@ -136,6 +139,27 @@ def create_app() -> FastAPI:
     # ``/api/v1/health`` endpoint is preserved for the dashboard
     # contract.
     app.include_router(monitoring_router)
+
+    # Sprint H6.1 / 2026-08-03 — global exception handler that
+    # returns a STRUCTURED JSON 500 envelope (with the exception
+    # type + message) instead of FastAPI's default
+    # `{"detail": "Internal server error"}`. The frontend can then
+    # surface a specific message instead of the generic
+    # "Failed to fetch" wrapper that masks server errors.
+    import logging as _logging
+    _bootstrap_logger = _logging.getLogger("atlas.error")
+    @app.exception_handler(Exception)
+    async def _structured_500_handler(_request, exc: Exception):
+        _bootstrap_logger.exception("Unhandled exception in request")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "Internal server error",
+                "type": type(exc).__name__,
+                "message": str(exc) if str(exc) else "An unexpected error occurred. Please try again.",
+                "hint": "If this persists, check the backend logs.",
+            },
+        )
 
     @app.get("/", include_in_schema=False)
     def root() -> dict:
