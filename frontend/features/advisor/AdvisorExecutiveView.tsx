@@ -43,6 +43,7 @@ import {
   useAdvisorData,
 } from "@/features/advisor/use-advisor-data";
 import { AdvisorView as DetailedAdvisorView } from "@/features/advisor/AdvisorView";
+import { SmartRecommendationsSection } from "@/features/advisor/SmartRecommendationsSection";
 import type {
   AdvisorAction,
   AdvisorAggregateReport,
@@ -273,6 +274,9 @@ export function AdvisorExecutiveView() {
             />
           </div>
         </ExecutiveInsightCard>
+
+        {/* Context-Aware Smart Recommendations (Phase 5) */}
+        <SmartRecommendationsSection />
 
         {/* Detailed analysis (preserved) */}
         <DetailedAdvisorAccordion />

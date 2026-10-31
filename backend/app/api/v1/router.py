@@ -38,6 +38,7 @@ from app.api.v1.endpoints import (
     scenario,
     schemes_sprint16,
     scoring,
+    smart_recommendations,
     swot,
     twin,
 )
@@ -70,6 +71,7 @@ api_router.include_router(rules.router)
 api_router.include_router(knowledge.router)
 api_router.include_router(ai.router)
 api_router.include_router(recommendations.router)
+api_router.include_router(smart_recommendations.router)
 api_router.include_router(roadmap.router)
 api_router.include_router(scenario.router)
 api_router.include_router(twin.router)
