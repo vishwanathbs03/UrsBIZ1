@@ -455,9 +455,17 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                     </span>
                   </div>
                   <div className="rounded-lg border border-dark-border bg-dark-card p-3">
-                    <span className="text-dark-text-muted block text-[10px] uppercase">Holdout Error (MAE)</span>
+                    <span className="text-dark-text-muted block text-[10px] uppercase">
+                      {productDetail.evaluation_stage === "independent_test_evaluated"
+                        ? "Independent Test (MAE)"
+                        : "Tournament (MAE)"}
+                    </span>
                     <span className="font-mono font-bold text-dark-text-primary mt-1 block">
-                      {productDetail.backtest_metrics.find((m) => m.is_selected)?.mae.toFixed(2) ?? "N/A"}
+                      {productDetail.evaluation_stage === "independent_test_evaluated" &&
+                      productDetail.independent_test_metrics &&
+                      productDetail.independent_test_metrics.length > 0
+                        ? (productDetail.independent_test_metrics.find((m) => m.is_selected)?.mae.toFixed(2) ?? "N/A")
+                        : (productDetail.backtest_metrics.find((m) => m.is_selected)?.mae.toFixed(2) ?? "N/A")}
                     </span>
                   </div>
                 </div>
