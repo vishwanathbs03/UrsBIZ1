@@ -41,6 +41,7 @@ export interface HistoricalPeriodPoint {
   period_end: string;
   actual_quantity: number;
   has_data: boolean;
+  coverage_status?: "active" | "confirmed_zero" | "unconfirmed_gap";
 }
 
 export interface ProductForecastSummaryItem {
@@ -57,6 +58,8 @@ export interface ProductForecastSummaryItem {
   trend_delta_pct?: number | null;
   best_mae?: number | null;
   best_wape?: number | null;
+  range_type?: string;
+  empirical_coverage_pct?: number | null;
   limitation_notes: string[];
 }
 
@@ -74,6 +77,8 @@ export interface ProductForecastDetailResponse {
   history_points: HistoricalPeriodPoint[];
   forecast_points: ForecastPeriodPoint[];
   backtest_metrics: BacktestMetricItem[];
+  range_type?: string;
+  empirical_coverage_pct?: number | null;
   explanation: string;
   limitations: string[];
   provenance: Record<string, any>;
@@ -129,16 +134,18 @@ export const forecastingService = {
   },
 
   /**
-   * Get single product historical demand and future forecast trajectory.
+   * Get single product historical demand and future forecast trajectory with optional product_id routing.
    */
   async getProductForecast(
     productName: string,
     interval: ForecastInterval = "weekly",
-    horizon: number = 4
+    horizon: number = 4,
+    productId?: string | null
   ): Promise<ProductForecastDetailResponse> {
     const encoded = encodeURIComponent(productName);
+    const idParam = productId ? `&product_id=${encodeURIComponent(productId)}` : "";
     return apiClient.get<ProductForecastDetailResponse>(
-      `/forecasting/product/${encoded}?interval=${interval}&horizon=${horizon}`
+      `/forecasting/product/${encoded}?interval=${interval}&horizon=${horizon}${idParam}`
     );
   },
 

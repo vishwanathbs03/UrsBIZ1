@@ -67,12 +67,12 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
   }, [interval, horizon]);
 
   // Fetch single product details when selected
-  const handleSelectProduct = async (productName: string) => {
+  const handleSelectProduct = async (productName: string, productId?: string | null) => {
     setSelectedProductName(productName);
     setDetailLoading(true);
     setDynamicExplanation(null);
     try {
-      const detail = await forecastingService.getProductForecast(productName, interval, horizon);
+      const detail = await forecastingService.getProductForecast(productName, interval, horizon, productId);
       setProductDetail(detail);
     } catch (err) {
       console.error(`Failed to load forecast for ${productName}:`, err);
@@ -344,10 +344,15 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                   <tr
                     key={idx}
                     className="hover:bg-dark-border/20 transition-colors cursor-pointer"
-                    onClick={() => handleSelectProduct(p.product_name)}
+                    onClick={() => handleSelectProduct(p.product_name, p.product_id)}
                   >
                     <td className="p-3 font-semibold text-dark-text-primary max-w-[220px] truncate">
-                      {p.product_name}
+                      <span>{p.product_name}</span>
+                      {p.product_id && (
+                        <span className="ml-1.5 font-mono text-[10px] text-dark-text-muted bg-dark-border/40 px-1 py-0.5 rounded">
+                          {p.product_id}
+                        </span>
+                      )}
                     </td>
                     <td className="p-3">
                       <StatusBadge status={p.data_status} />
@@ -375,7 +380,7 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                         variant="ghost"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleSelectProduct(p.product_name);
+                          handleSelectProduct(p.product_name, p.product_id);
                         }}
                         className="h-6 px-2 text-[11px] text-neon-cyan hover:bg-neon-cyan/10"
                       >
@@ -398,8 +403,13 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
             <div className="flex items-start justify-between border-b border-dark-border pb-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-dark-text-primary">
-                    {selectedProductName}
+                  <h2 className="text-lg font-bold text-dark-text-primary flex items-center gap-2">
+                    <span>{selectedProductName}</span>
+                    {productDetail?.product_id && (
+                      <span className="font-mono text-xs text-dark-text-muted bg-dark-border/50 px-1.5 py-0.5 rounded">
+                        ID: {productDetail.product_id}
+                      </span>
+                    )}
                   </h2>
                   {productDetail && (
                     <ReliabilityBadge reliability={productDetail.reliability} />
@@ -466,7 +476,7 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                         <span className="h-2 w-3 rounded-sm bg-neon-emerald border border-dashed border-neon-emerald" /> Projected
                       </span>
                       <span className="flex items-center gap-1.5 text-neon-emerald/60">
-                        <span className="h-2 w-3 rounded-sm bg-neon-emerald/20 border border-neon-emerald/40" /> 80% Bound
+                        <span className="h-2 w-3 rounded-sm bg-neon-emerald/20 border border-neon-emerald/40" /> Estimated Range
                       </span>
                     </div>
                   </div>
@@ -488,7 +498,9 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                         <ShieldCheck className="h-4 w-4 text-neon-emerald" /> Holdout Model Tournament & Verification
                       </h4>
                       <p className="text-[11px] text-dark-text-muted">
-                        Models were evaluated strictly on out-of-sample holdout periods. Baselines win unless an advanced model delivers &gt; 2% MAE improvement.
+                        {productDetail.provenance.evaluation_method === "rolling_origin"
+                          ? `Evaluated via rolling-origin backtesting across ${productDetail.provenance.rolling_splits_count} walk-forward splits with zero future data leakage.`
+                          : "Evaluated on out-of-sample chronological holdout periods. Baselines win unless an advanced model delivers > 2% MAE improvement."}
                       </p>
                     </div>
                   </div>

@@ -53,17 +53,21 @@ class ForecastPeriodPoint(BaseModel):
     period_start: str  # YYYY-MM-DD
     period_end: str    # YYYY-MM-DD
     predicted_quantity: float = Field(..., ge=0.0, description="Predicted units to be sold (non-negative)")
-    lower_estimate: float = Field(..., ge=0.0, description="Lower prediction bound (80% empirical interval)")
-    upper_estimate: float = Field(..., ge=0.0, description="Upper prediction bound (80% empirical interval)")
+    lower_estimate: float = Field(..., ge=0.0, description="Lower prediction bound (estimated prediction range)")
+    upper_estimate: float = Field(..., ge=0.0, description="Upper prediction bound (estimated prediction range)")
 
 
 class HistoricalPeriodPoint(BaseModel):
-    """A single historical demand observation period."""
+    """A single historical demand observation period with coverage classification."""
     period_label: str
     period_start: str
     period_end: str
     actual_quantity: float = Field(..., ge=0.0, description="Total physical units sold in this period")
     has_data: bool = Field(..., description="True if transactions occurred, False if period had zero sales")
+    coverage_status: str = Field(
+        "active",
+        description="active (sales recorded), confirmed_zero (other business products sold), or unconfirmed_gap (no business records)",
+    )
 
 
 class ProductForecastSummaryItem(BaseModel):
@@ -81,6 +85,8 @@ class ProductForecastSummaryItem(BaseModel):
     trend_delta_pct: Optional[float] = None
     best_mae: Optional[float] = None
     best_wape: Optional[float] = None
+    range_type: Optional[str] = Field("Estimated Prediction Range", description="Label for prediction range")
+    empirical_coverage_pct: Optional[float] = Field(None, description="Actual empirical coverage percentage on holdout evaluations if established")
     limitation_notes: list[str] = Field(default_factory=list)
 
 
@@ -100,6 +106,15 @@ class ProductForecastDetailResponse(BaseModel):
     history_points: list[HistoricalPeriodPoint]
     forecast_points: list[ForecastPeriodPoint]
     backtest_metrics: list[BacktestMetricItem]
+
+    range_type: str = Field(
+        "Estimated Prediction Range",
+        description="Label for uncertainty bounds: 'Estimated Prediction Range' or 'Empirically Validated Range'",
+    )
+    empirical_coverage_pct: Optional[float] = Field(
+        None,
+        description="Empirical percentage of holdout observations captured within prediction bounds",
+    )
 
     explanation: str
     limitations: list[str]

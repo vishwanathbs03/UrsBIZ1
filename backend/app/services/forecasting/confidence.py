@@ -1,7 +1,8 @@
-"""Uncertainty Intervals & Forecast Reliability Scoring (Phase 4).
+"""Uncertainty Intervals & Forecast Reliability Scoring (Phase 4 Hardening).
 
-Computes empirical residual-based prediction intervals (80% bounds scaling with horizon)
-and scores forecast reliability without arbitrary probability claims.
+Defensible Prediction Range Estimation & Holdout Calibration Validation.
+Avoids unverified claims of exact 80% coverage on small MSME samples;
+reports actual empirical coverage when evaluated against holdout observations.
 """
 
 from __future__ import annotations
@@ -12,26 +13,61 @@ import numpy as np
 from app.schemas.forecasting import ForecastReliabilityEnum
 
 
+def evaluate_holdout_interval_coverage(
+    y_test: np.ndarray,
+    lowers: np.ndarray,
+    uppers: np.ndarray,
+) -> float | None:
+    """Evaluate actual empirical coverage of prediction intervals against holdout actuals.
+    
+    Returns:
+        float in [0.0, 1.0] representing fraction of actual holdout points inside [lower, upper],
+        or None if no holdout points.
+    """
+    if len(y_test) == 0 or len(lowers) == 0 or len(uppers) == 0:
+        return None
+    n = min(len(y_test), len(lowers), len(uppers))
+    if n == 0:
+        return None
+    
+    actuals = y_test[:n]
+    low = lowers[:n]
+    up = uppers[:n]
+    
+    covered = (actuals >= low) & (actuals <= up)
+    return float(np.mean(covered))
+
+
 def calculate_prediction_intervals(
     y_history: np.ndarray,
     forecast_preds: np.ndarray,
     backtest_mae: float | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Calculate 80% empirical prediction intervals scaling with forecast horizon step.
+    holdout_empirical_coverage: float | None = None,
+    holdout_eval_count: int = 0,
+) -> tuple[np.ndarray, np.ndarray, str, float | None, str]:
+    """Calculate empirical prediction range scaling with forecast horizon step.
     
-    Uses standard error of historical differences and backtest MAE to define an empirical
-    residual scale:
-      Margin_h = 1.28 * s_e * sqrt(h)
+    Returns:
+      (lowers, uppers, range_type, empirical_coverage_pct, calibration_note)
     
-    Guarantees that lower bound is never negative: lower >= 0.0.
+    Guarantees:
+      1. Lower bound is non-negative: lower >= 0.0.
+      2. If holdout empirical coverage is verified with >= 3 observations, reports actual coverage.
+      3. Otherwise, labels the bounds as 'Estimated Prediction Range (Uncalibrated)'
+         and transparently documents sample-size limitations.
     """
     h = len(forecast_preds)
     if h == 0:
-        return np.array([]), np.array([])
+        return (
+            np.array([], dtype=np.float64),
+            np.array([], dtype=np.float64),
+            "Estimated Prediction Range",
+            None,
+            "No forecast periods to evaluate.",
+        )
 
     n = len(y_history)
     if n > 1:
-        # Standard deviation of period-to-period changes
         diffs = np.diff(y_history)
         s_e = float(np.std(diffs))
         if s_e < 1e-4 and backtest_mae is not None and backtest_mae > 0:
@@ -52,7 +88,26 @@ def calculate_prediction_intervals(
         lowers.append(low)
         uppers.append(high)
 
-    return np.array(lowers, dtype=np.float64), np.array(uppers, dtype=np.float64)
+    low_arr = np.array(lowers, dtype=np.float64)
+    up_arr = np.array(uppers, dtype=np.float64)
+
+    # Assess calibration validity
+    if holdout_empirical_coverage is not None and holdout_eval_count >= 3:
+        cov_pct = round(holdout_empirical_coverage * 100.0, 1)
+        range_type = "Empirically Validated Prediction Range"
+        note = (
+            f"Prediction range evaluated against out-of-sample holdout observations: "
+            f"{cov_pct}% actual coverage observed across {holdout_eval_count} test points."
+        )
+    else:
+        cov_pct = None
+        range_type = "Estimated Prediction Range (Uncalibrated)"
+        note = (
+            "Prediction range represents an empirical estimate based on historical variance. "
+            f"Because historical sample size is limited ({n} periods), exact 80% calibration cannot be claimed."
+        )
+
+    return low_arr, up_arr, range_type, cov_pct, note
 
 
 def evaluate_forecast_reliability(
@@ -61,6 +116,7 @@ def evaluate_forecast_reliability(
     best_wape: float | None,
     best_mae: float | None,
     mean_demand: float,
+    unconfirmed_gaps: int = 0,
 ) -> ForecastReliabilityEnum:
     """Classify forecast reliability based on historical data depth and holdout accuracy."""
     if total_periods < 4:
@@ -68,6 +124,10 @@ def evaluate_forecast_reliability(
 
     # Normalized error ratio
     error_ratio = best_wape if best_wape is not None else ((best_mae / mean_demand) if mean_demand > 0 else 1.0)
+
+    # If dataset has unconfirmed gaps > 20% of timeline, downgrade reliability
+    if unconfirmed_gaps > 0 and (unconfirmed_gaps / total_periods) > 0.20:
+        return ForecastReliabilityEnum.LOW
 
     if total_periods >= 12 and sparsity_ratio <= 0.30 and error_ratio <= 0.25:
         return ForecastReliabilityEnum.HIGH

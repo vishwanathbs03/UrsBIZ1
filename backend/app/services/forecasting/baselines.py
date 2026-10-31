@@ -1,10 +1,11 @@
-"""Deterministic Baseline Forecasting Models (Phase 4).
+"""Deterministic Baseline Forecasting Models (Phase 4 Hardening).
 
 Implements:
   1. Naive Forecast (last observed value)
   2. Simple Moving Average (configurable window, default 3)
   3. Weighted Moving Average (exponential decay / front-weighted recent window)
   4. Seasonal Naive (repeats previous seasonal cycle; strictly requires >= 2 full cycles)
+  5. Intermittent Expected Demand (Sale occurrence rate * Average positive-period quantity)
 """
 
 from __future__ import annotations
@@ -82,3 +83,34 @@ def seasonal_naive_forecast(
         preds.append(val)
 
     return np.array(preds, dtype=np.float64)
+
+
+def intermittent_expected_demand_forecast(
+    y: np.ndarray, horizon: int
+) -> np.ndarray:
+    """Predicts next `horizon` periods using Croston-style Expected Demand Rate.
+    
+    Formula:
+        Expected demand per period = Sale occurrence rate * Average positive-period quantity
+        where:
+            Sale occurrence rate = (number of periods with sales > 0) / (total periods)
+            Average positive-period quantity = sum(positive sales) / (number of periods with sales > 0)
+    
+    Crucial for MSME intermittent demand: Prevents inflating expected demand to the positive-period average
+    when sales occur sporadically.
+    """
+    n = len(y)
+    if n == 0:
+        raise ValueError("Cannot compute intermittent expected demand on empty historical series.")
+    
+    positive_mask = y > 0
+    positive_count = int(np.sum(positive_mask))
+    if positive_count == 0:
+        return np.zeros(horizon, dtype=np.float64)
+    
+    occurrence_rate = positive_count / n
+    avg_positive_qty = float(np.mean(y[positive_mask]))
+    expected_demand = occurrence_rate * avg_positive_qty
+    
+    val = max(0.0, round(expected_demand, 4))
+    return np.full(horizon, val, dtype=np.float64)

@@ -74,6 +74,7 @@ def get_demand_forecast_overview(
 )
 def get_single_product_forecast(
     product_name: str,
+    product_id: Optional[str] = Query(None, description="Optional unique product ID for exact SKU routing"),
     interval: ForecastIntervalEnum = Query(ForecastIntervalEnum.WEEKLY, description="Aggregation interval"),
     horizon: int = Query(4, ge=1, le=12, description="Forecast horizon in interval units"),
     current_user: User = Depends(get_current_user),
@@ -93,7 +94,11 @@ def get_single_product_forecast(
     )
 
     return generate_product_forecast(
-        txns, product_name=product_name, interval=interval, horizon=horizon
+        txns,
+        product_name=product_name,
+        product_id=product_id,
+        interval=interval,
+        horizon=horizon,
     )
 
 

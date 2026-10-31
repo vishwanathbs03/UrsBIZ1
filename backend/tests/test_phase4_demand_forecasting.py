@@ -37,6 +37,7 @@ from app.schemas.forecasting import (
     ForecastReliabilityEnum,
 )
 from app.services.forecasting.baselines import (
+    intermittent_expected_demand_forecast,
     moving_average_forecast,
     naive_forecast,
     seasonal_naive_forecast,
@@ -220,14 +221,21 @@ def test_advanced_forecasting_models():
 
 def test_chronological_evaluation_and_zero_leakage():
     """Verify chronological split, metric calculations, and zero-demand guard in MAPE."""
+    # Series with length 8 triggers walk-forward rolling-origin backtesting
     y = np.array([10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0], dtype=np.float64)
 
     selected_model, metrics, holdout_info = backtest_and_select_model(y, horizon=2)
 
     assert holdout_info["split_possible"] is True
-    assert holdout_info["holdout_periods"] == 2
-    assert holdout_info["train_periods"] == 6
+    assert holdout_info["evaluation_method"] == "rolling_origin"
+    assert holdout_info["rolling_splits_count"] == 3
     assert len(metrics) >= 3  # At least Naive, SMA, WMA evaluated
+
+    # For shorter series (length 6), fixed chronological holdout is used
+    y_short = np.array([10.0, 12.0, 14.0, 16.0, 18.0, 20.0], dtype=np.float64)
+    _, _, short_info = backtest_and_select_model(y_short, horizon=2)
+    assert short_info["evaluation_method"] == "fixed_holdout"
+    assert short_info["holdout_periods"] == 2
 
     # Selected model should be marked in metrics list
     selected_items = [m for m in metrics if m.is_selected]
@@ -274,7 +282,7 @@ def test_prediction_intervals_non_negative_and_scaling():
     y_hist = np.array([5.0, 6.0, 4.0, 5.0, 3.0, 4.0], dtype=np.float64)
     preds = np.array([2.0, 2.0, 2.0, 2.0], dtype=np.float64)
 
-    lowers, uppers = calculate_prediction_intervals(y_hist, preds)
+    lowers, uppers, range_type, cov_pct, note = calculate_prediction_intervals(y_hist, preds)
     assert len(lowers) == 4
     assert len(uppers) == 4
 
@@ -284,6 +292,7 @@ def test_prediction_intervals_non_negative_and_scaling():
     assert np.all(uppers >= preds)
     # Uncertainty margin must widen over horizon steps
     assert (uppers[3] - lowers[3]) >= (uppers[0] - lowers[0])
+    assert "Estimated Prediction Range" in range_type
 
 
 def test_forecast_reliability_grading():
@@ -460,3 +469,166 @@ def test_api_forecasting_multi_tenant_and_switching():
     a1_overview_again = client.get("/api/v1/forecasting/overview").json()
     assert a1_overview_again["total_products"] == 1
     assert a1_overview_again["product_summaries"][0]["product_name"] == "Laser Module"
+
+
+# =============================================================================
+# 10. Hardening Tests for Phase 4 Data Integrity & Evaluation
+# =============================================================================
+
+def test_hardening_missing_periods_vs_confirmed_zero_demand():
+    """Area 1: Verify differentiation between confirmed zero demand and unconfirmed gaps."""
+    # Timeline: 4 weeks
+    # Product A is sold in Week 1 and Week 4.
+    # Product B is sold in Week 2 -> proves business was operating and recording in Week 2!
+    # Week 3 has NO sales for any product -> unconfirmed gap!
+    w1 = datetime(2026, 7, 6, tzinfo=timezone.utc)   # Monday W28
+    w2 = datetime(2026, 7, 13, tzinfo=timezone.utc)  # Monday W29
+    w4 = datetime(2026, 7, 27, tzinfo=timezone.utc)  # Monday W31
+
+    txns = [
+        {"transaction_date": w1, "product_name": "Product A", "quantity": 10.0, "is_duplicate": False},
+        {"transaction_date": w2, "product_name": "Product B", "quantity": 50.0, "is_duplicate": False},
+        {"transaction_date": w4, "product_name": "Product A", "quantity": 15.0, "is_duplicate": False},
+    ]
+
+    series_a = prepare_product_demand_series(txns, "Product A", interval=ForecastIntervalEnum.WEEKLY)
+    assert series_a.total_periods == 4
+    
+    # Week 1: active sales
+    assert series_a.periods[0].coverage_status == "active"
+    assert series_a.periods[0].quantity == 10.0
+
+    # Week 2: confirmed zero (Product B was sold, Product A was 0)
+    assert series_a.periods[1].coverage_status == "confirmed_zero"
+    assert series_a.periods[1].quantity == 0.0
+
+    # Week 3: unconfirmed gap (no sales recorded across the entire business)
+    assert series_a.periods[2].coverage_status == "unconfirmed_gap"
+    assert series_a.periods[2].quantity == 0.0
+
+    # Week 4: active sales
+    assert series_a.periods[3].coverage_status == "active"
+    assert series_a.periods[3].quantity == 15.0
+
+    assert series_a.confirmed_zeros_count == 1
+    assert series_a.unconfirmed_gaps_count == 1
+    # Check limitation notes document this explicitly
+    assert any("Coverage notice: 1 period(s) had no recorded transactions" in note for note in series_a.limitation_notes)
+
+
+def test_hardening_intermittent_demand_expected_rate():
+    """Area 2: Verify that intermittent demand does not inflate expected demand to the positive average."""
+    # Synthetic benchmark series: 1 positive period (100 units) and 9 confirmed zero periods
+    # Total periods = 10, total positive periods = 1
+    # Occurrence rate = 1/10 = 0.10
+    # Average positive quantity = 100.0
+    # Expected demand per period = 0.10 * 100.0 = 10.0 units
+    y_intermittent = np.array([100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
+
+    expected_preds = intermittent_expected_demand_forecast(y_intermittent, horizon=4)
+    # MUST be 10.0 per period, NOT 100.0 (which would be a 10x inflation!)
+    assert np.allclose(expected_preds, [10.0, 10.0, 10.0, 10.0])
+    assert np.sum(expected_preds) == 40.0
+    assert np.sum(expected_preds) < 100.0  # Proves no inflation!
+
+
+def test_hardening_prediction_interval_calibration_and_range_type():
+    """Area 3: Verify estimated prediction range labeling and empirical holdout coverage."""
+    # Small series (< 8 periods): cannot establish calibrated 80% coverage
+    y_small = np.array([20.0, 22.0, 21.0, 23.0, 22.0], dtype=np.float64)
+    preds = np.array([22.0, 22.0, 22.0, 22.0], dtype=np.float64)
+
+    lows, ups, range_type, cov_pct, note = calculate_prediction_intervals(y_small, preds)
+    assert range_type == "Estimated Prediction Range (Uncalibrated)"
+    assert cov_pct is None
+    assert "exact 80% calibration cannot be claimed" in note
+
+    # Series with verified holdout empirical coverage
+    lows_eval, ups_eval, range_eval, cov_eval, note_eval = calculate_prediction_intervals(
+        y_small, preds, holdout_empirical_coverage=1.0, holdout_eval_count=3
+    )
+    assert range_eval == "Empirically Validated Prediction Range"
+    assert cov_eval == 100.0
+    assert "100.0% actual coverage observed across 3 test points" in note_eval
+
+
+def test_hardening_product_identity_routing_and_safe_normalization():
+    """Area 4: Verify product_id as primary key and safe name normalization without merging distinct variants."""
+    base_date = datetime(2026, 8, 3, tzinfo=timezone.utc)
+    
+    # 1. Same product name ("Cotton T-Shirt") with different product_ids ("TS-SMALL" vs "TS-LARGE")
+    # Must NOT be merged into a single product!
+    txns = [
+        # Product 1: TS-SMALL (4 weeks of sales)
+        {"transaction_date": base_date, "product_id": "TS-SMALL", "product_name": "Cotton T-Shirt", "quantity": 10.0, "is_duplicate": False},
+        {"transaction_date": base_date + timedelta(days=7), "product_id": "TS-SMALL", "product_name": "Cotton T-Shirt", "quantity": 12.0, "is_duplicate": False},
+        {"transaction_date": base_date + timedelta(days=14), "product_id": "TS-SMALL", "product_name": "Cotton T-Shirt", "quantity": 15.0, "is_duplicate": False},
+        {"transaction_date": base_date + timedelta(days=21), "product_id": "TS-SMALL", "product_name": "Cotton T-Shirt", "quantity": 18.0, "is_duplicate": False},
+        # Product 2: TS-LARGE (4 weeks of sales)
+        {"transaction_date": base_date, "product_id": "TS-LARGE", "product_name": "Cotton T-Shirt", "quantity": 40.0, "is_duplicate": False},
+        {"transaction_date": base_date + timedelta(days=7), "product_id": "TS-LARGE", "product_name": "Cotton T-Shirt", "quantity": 45.0, "is_duplicate": False},
+        {"transaction_date": base_date + timedelta(days=14), "product_id": "TS-LARGE", "product_name": "Cotton T-Shirt", "quantity": 50.0, "is_duplicate": False},
+        {"transaction_date": base_date + timedelta(days=21), "product_id": "TS-LARGE", "product_name": "Cotton T-Shirt", "quantity": 55.0, "is_duplicate": False},
+    ]
+
+    overview = generate_demand_overview(txns, interval=ForecastIntervalEnum.WEEKLY, horizon=4)
+    # Must have 2 distinct products!
+    assert overview.total_products == 2
+    product_ids = {p.product_id for p in overview.product_summaries}
+    assert product_ids == {"TS-SMALL", "TS-LARGE"}
+
+    # Individual forecast routing with product_id
+    detail_small = generate_product_forecast(txns, "Cotton T-Shirt", product_id="TS-SMALL", horizon=4)
+    assert detail_small.product_id == "TS-SMALL"
+    assert sum(p.actual_quantity for p in detail_small.history_points) == 55.0
+
+    detail_large = generate_product_forecast(txns, "Cotton T-Shirt", product_id="TS-LARGE", horizon=4)
+    assert detail_large.product_id == "TS-LARGE"
+    assert sum(p.actual_quantity for p in detail_large.history_points) == 190.0
+
+    # 2. Similar product names without product_ids: distinct variants must NOT collide
+    variant_txns = [
+        {"transaction_date": base_date, "product_name": "Bearing 6200", "quantity": 5.0, "is_duplicate": False},
+        {"transaction_date": base_date, "product_name": "Bearing 6201", "quantity": 8.0, "is_duplicate": False},
+    ]
+    var_overview = generate_demand_overview(variant_txns)
+    assert var_overview.total_products == 2
+    names = {p.product_name for p in var_overview.product_summaries}
+    assert names == {"Bearing 6200", "Bearing 6201"}
+
+    # 3. Safe normalization: whitespace variation safely unified
+    spacing_txns = [
+        {"transaction_date": base_date, "product_name": "  Steel   Bolt  ", "quantity": 10.0, "is_duplicate": False},
+        {"transaction_date": base_date + timedelta(days=7), "product_name": "Steel Bolt", "quantity": 15.0, "is_duplicate": False},
+    ]
+    space_overview = generate_demand_overview(spacing_txns)
+    assert space_overview.total_products == 1
+    assert space_overview.product_summaries[0].product_name == "Steel Bolt"
+
+
+def test_hardening_rolling_origin_backtesting_and_synthetic_fixtures():
+    """Area 5: Verify rolling-origin walk-forward backtesting with zero future data leakage on synthetic benchmark data."""
+    # Explicitly labeled synthetic test series
+    synthetic_benchmark_series = np.array(
+        [10.0, 12.0, 15.0, 14.0, 18.0, 20.0, 22.0, 25.0, 28.0, 30.0],
+        dtype=np.float64,
+    )
+    assert len(synthetic_benchmark_series) >= 8
+
+    selected_model, metrics, holdout_info = backtest_and_select_model(
+        synthetic_benchmark_series, horizon=4
+    )
+
+    # Must execute rolling-origin backtesting
+    assert holdout_info["evaluation_method"] == "rolling_origin"
+    assert holdout_info["rolling_splits_count"] >= 2
+    assert holdout_info["split_possible"] is True
+
+    # Check metrics are computed on rolling walk-forward test points
+    for m in metrics:
+        assert m.mae >= 0.0
+        assert m.rmse >= m.mae or np.isclose(m.rmse, m.mae)
+        assert m.holdout_periods == holdout_info["rolling_splits_count"]
+
+    # Verify zero future leakage: evaluated origins train strictly on preceding indices
+    assert holdout_info["train_periods"] < len(synthetic_benchmark_series)

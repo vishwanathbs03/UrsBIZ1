@@ -1,14 +1,20 @@
-"""Core Demand Forecasting Engine (Phase 4).
+"""Core Demand Forecasting Engine (Phase 4 Hardening).
 
-Coordinates data preparation, chronological backtesting, model selection,
-prediction interval generation, and structured API responses.
+Coordinates:
+  1. Data preparation with confirmed zero vs. unconfirmed gap separation.
+  2. Safe product identification with product_id as primary key and safe name normalization.
+  3. Intermittent demand rate modeling (occurrence rate * positive average).
+  4. Rolling-origin backtesting and empirical interval calibration validation.
+  5. Multi-product overview with tenant isolation.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Sequence
 import numpy as np
+import pandas as pd
 
 from app.models.sales import SalesTransaction
 from app.schemas.forecasting import (
@@ -23,6 +29,7 @@ from app.schemas.forecasting import (
     ProductForecastSummaryItem,
 )
 from app.services.forecasting.baselines import (
+    intermittent_expected_demand_forecast,
     moving_average_forecast,
     naive_forecast,
     seasonal_naive_forecast,
@@ -35,12 +42,21 @@ from app.services.forecasting.confidence import (
 from app.services.forecasting.data_preparation import (
     PreparedProductSeries,
     prepare_product_demand_series,
+    safe_normalize_product_name,
 )
 from app.services.forecasting.evaluation import backtest_and_select_model
 from app.services.forecasting.models import (
     autoregressive_ridge_forecast,
     holt_linear_exponential_smoothing,
 )
+
+
+@dataclass(frozen=True)
+class ProductIdentityKey:
+    """Safe product identification key distinguishing products with same name but different IDs."""
+    product_id: str | None
+    product_name: str
+    display_label: str
 
 
 def _generate_future_period_labels(
@@ -60,7 +76,6 @@ def _generate_future_period_labels(
             curr += timedelta(days=1)
 
     elif interval == ForecastIntervalEnum.MONTHLY:
-        # Determine next month start
         curr_y = last_end.year
         curr_m = last_end.month + 1
         if curr_m > 12:
@@ -99,7 +114,9 @@ def _generate_future_period_labels(
 
 def _fit_and_project(model_name: str, y: np.ndarray, horizon: int) -> np.ndarray:
     """Project future periods using the selected model on full historical data."""
-    if "Naive" in model_name and "Seasonal" not in model_name:
+    if "Intermittent" in model_name:
+        return intermittent_expected_demand_forecast(y, horizon)
+    elif "Naive" in model_name and "Seasonal" not in model_name:
         return naive_forecast(y, horizon)
     elif "Weighted" in model_name:
         return weighted_moving_average_forecast(y, horizon, window=3)
@@ -110,20 +127,27 @@ def _fit_and_project(model_name: str, y: np.ndarray, horizon: int) -> np.ndarray
     elif "Ridge" in model_name:
         return autoregressive_ridge_forecast(y, horizon, l2_reg=1.0)
     else:
-        # Default Moving Average
         return moving_average_forecast(y, horizon, window=3)
 
 
 def generate_product_forecast(
     transactions: Sequence[SalesTransaction | dict[str, Any]],
     product_name: str,
+    product_id: str | None = None,
     interval: ForecastIntervalEnum = ForecastIntervalEnum.WEEKLY,
     horizon: int = 4,
+    business_active_periods: set[str] | None = None,
 ) -> ProductForecastDetailResponse:
     """Generate complete demand forecast for a single product with full backtesting evaluation."""
-    series = prepare_product_demand_series(transactions, product_name, interval=interval)
+    series = prepare_product_demand_series(
+        transactions,
+        product_name=product_name,
+        product_id=product_id,
+        interval=interval,
+        business_active_periods=business_active_periods,
+    )
 
-    # Convert history into schema points
+    # Convert history into schema points with explicit coverage classification
     history_points = [
         HistoricalPeriodPoint(
             period_label=p.period_label,
@@ -131,6 +155,7 @@ def generate_product_forecast(
             period_end=p.period_end,
             actual_quantity=p.quantity,
             has_data=p.has_data,
+            coverage_status=p.coverage_status,
         )
         for p in series.periods
     ]
@@ -154,6 +179,8 @@ def generate_product_forecast(
             history_points=history_points,
             forecast_points=[],
             backtest_metrics=[],
+            range_type="Estimated Prediction Range (Uncalibrated)",
+            empirical_coverage_pct=None,
             explanation=(
                 f"Demand forecast cannot be calculated for '{series.product_name}'. "
                 + " ".join(series.limitation_notes)
@@ -163,13 +190,19 @@ def generate_product_forecast(
                 "data_source": "sales_transactions",
                 "observations_count": series.total_periods,
                 "active_observations": series.active_periods,
+                "confirmed_zeros_count": series.confirmed_zeros_count,
+                "unconfirmed_gaps_count": series.unconfirmed_gaps_count,
                 "holdout_evaluated": False,
+                "evaluation_method": "none",
             },
         )
 
-    # 1. Backtest candidates on chronological holdout
+    # 1. Backtest candidates on chronological holdout (or rolling-origin if >= 8 periods)
+    is_intermittent = (series.status == DataLimitationStatusEnum.INTERMITTENT_DEMAND)
     selected_model, backtest_metrics, holdout_info = backtest_and_select_model(
-        series.quantities, horizon=min(horizon, 4)
+        series.quantities,
+        horizon=min(horizon, 4),
+        is_intermittent=is_intermittent,
     )
 
     # 2. Fit selected model on full historical series to project future horizon
@@ -177,13 +210,19 @@ def generate_product_forecast(
     # Guarantee non-negative demand
     future_preds = np.maximum(0.0, future_preds)
 
-    # 3. Prediction intervals
+    # 3. Prediction intervals with calibration assessment
     best_item = next((m for m in backtest_metrics if m.is_selected), None)
     best_mae = best_item.mae if best_item else None
     best_wape = best_item.wape if best_item else None
+    emp_cov = holdout_info.get("empirical_coverage")
+    holdout_eval_count = holdout_info.get("holdout_eval_count", 0)
 
-    lowers, uppers = calculate_prediction_intervals(
-        series.quantities, future_preds, backtest_mae=best_mae
+    lowers, uppers, range_type, cov_pct, calib_note = calculate_prediction_intervals(
+        series.quantities,
+        future_preds,
+        backtest_mae=best_mae,
+        holdout_empirical_coverage=emp_cov,
+        holdout_eval_count=holdout_eval_count,
     )
 
     # 4. Generate future period labels
@@ -221,13 +260,14 @@ def generate_product_forecast(
     else:
         demand_trend = "Stable"
 
-    # 6. Reliability classification
+    # 6. Reliability classification (accounting for unconfirmed gaps)
     reliability = evaluate_forecast_reliability(
         total_periods=series.total_periods,
         sparsity_ratio=series.sparsity_ratio,
         best_wape=best_wape,
         best_mae=best_mae,
         mean_demand=hist_avg,
+        unconfirmed_gaps=series.unconfirmed_gaps_count,
     )
 
     # 7. Generate explanation and limitations
@@ -235,11 +275,12 @@ def generate_product_forecast(
         f"Based on {series.total_periods} historical {interval.value} periods, demand for '{product_name}' "
         f"is projected to be {total_forecasted} total units over the next {horizon} {interval.value}s "
         f"(average {round(pred_avg, 1)} units/{interval.value}). "
-        f"Selected {selected_model} via chronological holdout evaluation"
+        f"Selected {selected_model} via {holdout_info.get('evaluation_method', 'backtest')} evaluation"
         + (f" (MAE: {best_mae}, WAPE: {best_wape})." if best_mae is not None else ".")
     )
 
     limitations = list(series.limitation_notes)
+    limitations.append(calib_note)
     if series.total_periods < 12:
         limitations.append(
             f"History spans {series.total_periods} periods. Longer time series will improve accuracy."
@@ -252,10 +293,15 @@ def generate_product_forecast(
         "data_source": "sales_transactions",
         "observations_count": series.total_periods,
         "active_observations": series.active_periods,
+        "confirmed_zeros_count": series.confirmed_zeros_count,
+        "unconfirmed_gaps_count": series.unconfirmed_gaps_count,
         "sparsity_ratio": series.sparsity_ratio,
         "selected_model": selected_model,
+        "evaluation_method": holdout_info.get("evaluation_method", "fixed_holdout"),
+        "rolling_splits_count": holdout_info.get("rolling_splits_count", 0),
         "holdout_evaluated": holdout_info.get("split_possible", False),
         "holdout_periods": holdout_info.get("holdout_periods", 0),
+        "empirical_coverage_pct": cov_pct,
         "backtest_models_count": len(backtest_metrics),
     }
 
@@ -273,10 +319,51 @@ def generate_product_forecast(
         history_points=history_points,
         forecast_points=forecast_points,
         backtest_metrics=backtest_metrics,
+        range_type=range_type,
+        empirical_coverage_pct=cov_pct,
         explanation=explanation,
         limitations=limitations,
         provenance=provenance,
     )
+
+
+def _extract_product_keys(
+    transactions: Sequence[SalesTransaction | dict[str, Any]],
+) -> list[ProductIdentityKey]:
+    """Extract distinct products using product_id as primary key, or safe name normalization.
+    
+    Guarantees:
+      1. If product_id is present and non-empty, (product_id, clean_name) is unique.
+         Different product_ids with identical names (e.g. size/color variants) are NOT merged.
+      2. If product_id is absent, clean_name is the key.
+         Clean name strips leading/trailing whitespace and collapses internal multiple spaces,
+         preserving letter case and distinct variant descriptors (e.g. 'Bolt 10mm' != 'Bolt 12mm').
+    """
+    seen_keys: dict[tuple[str | None, str], ProductIdentityKey] = {}
+
+    for t in transactions:
+        t_is_dup = getattr(t, "is_duplicate", False) if hasattr(t, "is_duplicate") else t.get("is_duplicate", False)
+        if t_is_dup:
+            continue
+
+        raw_name = getattr(t, "product_name", None) if hasattr(t, "product_name") else t.get("product_name")
+        clean_name = safe_normalize_product_name(raw_name)
+        if not clean_name:
+            continue
+
+        raw_id = getattr(t, "product_id", None) if hasattr(t, "product_id") else t.get("product_id")
+        p_id_str = str(raw_id).strip() if raw_id is not None and str(raw_id).strip() else None
+
+        combo_key = (p_id_str, clean_name.lower())
+        if combo_key not in seen_keys:
+            display_label = f"{clean_name} ({p_id_str})" if p_id_str else clean_name
+            seen_keys[combo_key] = ProductIdentityKey(
+                product_id=p_id_str,
+                product_name=clean_name,
+                display_label=display_label,
+            )
+
+    return sorted(seen_keys.values(), key=lambda k: (k.product_name.lower(), k.product_id or ""))
 
 
 def generate_demand_overview(
@@ -285,22 +372,30 @@ def generate_demand_overview(
     horizon: int = 4,
 ) -> DemandForecastOverviewResponse:
     """Generate high-level demand forecast overview across all products for a business."""
-    # Collect unique product names (non-duplicate transactions only)
-    distinct_products: set[str] = set()
+    product_keys = _extract_product_keys(transactions)
+
+    # Collect all business active periods across transactions to identify verified zeros vs gaps
     dates: list[datetime] = []
+    business_active_periods: set[str] = set()
 
     for t in transactions:
         t_is_dup = getattr(t, "is_duplicate", False) if hasattr(t, "is_duplicate") else t.get("is_duplicate", False)
         if t_is_dup:
             continue
-        p_name = getattr(t, "product_name", None) if hasattr(t, "product_name") else t.get("product_name")
-        if p_name and p_name.strip():
-            distinct_products.add(p_name.strip())
         t_date = getattr(t, "transaction_date", None) if hasattr(t, "transaction_date") else t.get("transaction_date")
         if t_date:
-            dates.append(t_date if isinstance(t_date, datetime) else pd.to_datetime(t_date).to_pydatetime())
+            dt = t_date if isinstance(t_date, datetime) else pd.to_datetime(t_date).to_pydatetime()
+            dates.append(dt)
+            # Grouping key
+            if interval == ForecastIntervalEnum.DAILY:
+                business_active_periods.add(dt.strftime("%Y-%m-%d"))
+            elif interval == ForecastIntervalEnum.MONTHLY:
+                business_active_periods.add(dt.strftime("%Y-%m"))
+            else:
+                monday = dt.date() - timedelta(days=dt.weekday())
+                business_active_periods.add(monday.strftime("%Y-%m-%d"))
 
-    if not distinct_products or not dates:
+    if not product_keys or not dates:
         return DemandForecastOverviewResponse(
             total_products=0,
             products_with_forecast=0,
@@ -330,10 +425,14 @@ def generate_demand_overview(
     stable_count = 0
     total_projected = 0.0
 
-    # Sort products alphabetically for deterministic ordering
-    for p_name in sorted(distinct_products):
+    for p_key in product_keys:
         detail = generate_product_forecast(
-            transactions, p_name, interval=interval, horizon=horizon
+            transactions,
+            product_name=p_key.product_name,
+            product_id=p_key.product_id,
+            interval=interval,
+            horizon=horizon,
+            business_active_periods=business_active_periods,
         )
 
         best_m = next((m for m in detail.backtest_metrics if m.is_selected), None)
@@ -353,6 +452,8 @@ def generate_demand_overview(
             trend_delta_pct=detail.trend_delta_pct,
             best_mae=best_m.mae if best_m else None,
             best_wape=best_m.wape if best_m else None,
+            range_type=detail.range_type,
+            empirical_coverage_pct=detail.empirical_coverage_pct,
             limitation_notes=detail.limitations,
         )
         summaries.append(summary_item)
@@ -373,7 +474,7 @@ def generate_demand_overview(
             insufficient_count += 1
 
     return DemandForecastOverviewResponse(
-        total_products=len(distinct_products),
+        total_products=len(product_keys),
         products_with_forecast=with_forecast,
         products_insufficient_history=insufficient_count,
         products_increasing_demand=increasing_count,
