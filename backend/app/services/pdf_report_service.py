@@ -20,9 +20,6 @@ import sys
 import types
 from datetime import datetime, timezone
 
-# Ensure reportlab import compatibility
-if r"C:\Users\Win\AppData\Roaming\Python\Python314\site-packages" not in sys.path:
-    sys.path.append(r"C:\Users\Win\AppData\Roaming\Python\Python314\site-packages")
 
 try:
     import PIL.Image  # noqa: F401

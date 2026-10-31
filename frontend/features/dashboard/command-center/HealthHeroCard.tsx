@@ -68,7 +68,7 @@ export const HealthHeroCard: React.FC<HealthHeroCardProps> = ({ intelligence }) 
     <DashboardCard
       badge="Hero Health"
       title="Business Health Score"
-      caption="Composite index across your profile, operations, financials, compliance, and digital presence."
+      caption="Composite operational index across your profile, foundational data, products & services, team, financials, and online presence."
       className="shadow-soft relative overflow-hidden border-border/80 bg-card/90 backdrop-blur-md transition-all duration-300 hover:border-primary/50"
       data-testid="command-center-health-hero"
     >

@@ -141,8 +141,27 @@ class AssistantContextBuilder:
         analytics_metrics = _project_analytics(analytics)
         report_summaries = _project_reports(reports)
 
+        resolved_biz_id = int(owner_id)
+        if isinstance(profile, dict) and profile.get("id"):
+            try:
+                resolved_biz_id = int(profile["id"])
+            except (ValueError, TypeError):
+                pass
+        elif isinstance(twin, dict):
+            snap_id = (
+                twin.get("identity", {}).get("business_id")
+                or twin.get("identity", {}).get("id")
+                or twin.get("snapshot", {}).get("identity", {}).get("business_id")
+                or twin.get("snapshot", {}).get("identity", {}).get("id")
+            )
+            if snap_id is not None:
+                try:
+                    resolved_biz_id = int(snap_id)
+                except (ValueError, TypeError):
+                    pass
+
         ctx = AssistantContext(
-            business_id=int(owner_id),
+            business_id=resolved_biz_id,
             overall_business_score=_overall_score(twin),
             band=_band(_overall_score(twin)),
             dna=_project_dna(twin),
@@ -593,7 +612,7 @@ def _project_profile_details(profile: Any, twin: Any) -> dict[str, Any]:
         "customer_dependencies": [],
     }
     if isinstance(twin, dict):
-        identity = twin.get("identity") or {}
+        identity = twin.get("identity") or twin.get("snapshot", {}).get("identity") or {}
         if isinstance(identity, dict):
             if identity.get("legal_name"):
                 out["legal_name"] = str(identity["legal_name"])

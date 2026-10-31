@@ -129,6 +129,8 @@ class AuthService:
         self._repo.set_active_business(user, business_id)
         self._repo._db.commit()
         self._repo._db.refresh(user)
+        if self._business_repo:
+            self._business_repo.invalidate_cache(user.id)
         return UserPublic.model_validate(user)
 
     # ---- Internals -----------------------------------------------------

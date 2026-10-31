@@ -25,7 +25,9 @@ def test_dashboard_service_unit():
     db = SessionLocal()
     try:
         # Create test user
-        user = User(email="serviceuser@example.com", password_hash="hash", full_name="Service User")
+        import uuid
+        test_email = f"serviceuser_{uuid.uuid4().hex[:8]}@example.com"
+        user = User(email=test_email, password_hash="hash", full_name="Service User")
         db.add(user)
         db.commit()
         db.refresh(user)

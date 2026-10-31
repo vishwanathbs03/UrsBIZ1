@@ -67,16 +67,33 @@ class BusinessRepository:
     # ---- Read ----------------------------------------------------------
 
     def get_by_owner(self, owner_id: int) -> Business | None:
-        """Return the single business belonging to ``owner_id`` with
+        """Return the active business belonging to ``owner_id`` with
         every nested collection eagerly loaded, or ``None`` if the
         user has not created one yet.
         """
         if owner_id in self._owner_cache:
             return self._owner_cache[owner_id]
 
+        from app.models.user import User
+
+        # Respect the user's active_business_id if set
+        user = self._db.query(User).filter(User.id == owner_id).first()
+        if user and user.active_business_id:
+            stmt = (
+                select(Business)
+                .where(Business.id == user.active_business_id, Business.owner_id == owner_id)
+                .options(*_FULL_LOAD)
+                .execution_options(populate_existing=True)
+            )
+            res = self._db.scalar(stmt)
+            if res is not None:
+                self._owner_cache[owner_id] = res
+                return res
+
         stmt = (
             select(Business)
             .where(Business.owner_id == owner_id)
+            .order_by(Business.id.desc())
             .options(*_FULL_LOAD)
             .execution_options(populate_existing=True)
         )

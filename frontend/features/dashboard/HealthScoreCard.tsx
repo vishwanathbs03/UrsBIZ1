@@ -16,7 +16,7 @@ export function HealthScoreCard({ score = 85 }: HealthScoreCardProps) {
     if (s >= 80) return { grade: "A", status: "Good", tip: "Strong baseline; ready for capital expansion." };
     if (s >= 70) return { grade: "B", status: "Fair", tip: "Update digital presence to boost score." };
     if (s >= 60) return { grade: "C", status: "Needs Improvement", tip: "Address working capital bottlenecks." };
-    return { grade: "D", status: "Critical", tip: "Urgent compliance & cash flow review required." };
+    return { grade: "D", status: "Critical", tip: "Urgent operational & cash flow review required." };
   };
 
   const { grade, status, tip } = getGrade(score);

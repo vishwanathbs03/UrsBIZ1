@@ -76,18 +76,20 @@ class BusinessAnalyticsService:
             "Support & Admin": max(1, round(emp * 0.15)),
         }
 
-        # Deterministic monthly growth (6 months)
-        rev = business.annual_revenue or 120000.0
+        # Deterministic monthly run-rate estimates based on annual revenue
+        raw_rev = float(business.annual_revenue or 0.0)
+        rev = max(0.0, raw_rev)
         m_base = rev / 12.0
         months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
         growth_items = []
         for i, m in enumerate(months):
-            factor = 1.0 + (i * 0.02)
+            factor = 1.0 + (i * 0.02) if rev > 0 else 0.0
+            rate = round(2.0 + i * 0.5, 1) if rev > 0 else 0.0
             growth_items.append(
                 MonthlyGrowthItem(
                     month=m,
                     revenue=round(m_base * factor, 2),
-                    growth_rate=round(2.0 + i * 0.5, 1),
+                    growth_rate=rate,
                 )
             )
 
