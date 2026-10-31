@@ -44,6 +44,20 @@ class BacktestMetricItem(BaseModel):
     mase: Optional[float] = Field(None, description="Mean Absolute Scaled Error relative to naive in-sample baseline")
     holdout_periods: int = Field(..., description="Number of holdout periods used for out-of-sample testing")
     is_selected: bool = Field(False, description="Whether this model was selected for the final production forecast")
+    metric_role: str = Field("model_selection", description="Role of metric: 'model_selection' (tournament diagnostic)")
+
+
+class IndependentEvaluationItem(BaseModel):
+    """Separate, out-of-sample final evaluation metrics on held-out test data not used in model selection."""
+    model_name: str
+    mae: float = Field(..., description="Mean Absolute Error on independent final test segment")
+    rmse: float = Field(..., description="Root Mean Squared Error on independent final test segment")
+    wape: Optional[float] = Field(None, description="Weighted Absolute Percentage Error (sum(|e|) / sum(actuals))")
+    mape: Optional[float] = Field(None, description="Mean Absolute Percentage Error (evaluated on non-zero actuals only)")
+    mase: Optional[float] = Field(None, description="Mean Absolute Scaled Error relative to naive in-sample baseline")
+    test_periods: int = Field(..., description="Number of independent final test periods")
+    is_baseline: bool = Field(False, description="Whether this model is the reference baseline")
+    is_selected: bool = Field(False, description="Whether this model was the selected winner")
 
 
 class ForecastPeriodPoint(BaseModel):
@@ -83,8 +97,16 @@ class ProductForecastSummaryItem(BaseModel):
     forecasted_units_total: float
     demand_trend: str  # Increasing, Decreasing, Stable, Insufficient History
     trend_delta_pct: Optional[float] = None
+    evaluation_stage: str = Field(
+        "insufficient_independent_evaluation_data",
+        description="'independent_test_evaluated' or 'insufficient_independent_evaluation_data'",
+    )
     best_mae: Optional[float] = None
     best_wape: Optional[float] = None
+    independent_test_mae: Optional[float] = Field(None, description="MAE on separate independent test segment, if data was sufficient")
+    independent_test_wape: Optional[float] = Field(None, description="WAPE on separate independent test segment, if data was sufficient")
+    tournament_mae: Optional[float] = Field(None, description="Internal model selection tournament MAE")
+    tournament_wape: Optional[float] = Field(None, description="Internal model selection tournament WAPE")
     range_type: Optional[str] = Field("Estimated Prediction Range", description="Label for prediction range")
     empirical_coverage_summary: Optional[str] = Field(None, description="Diagnostic holdout sample coverage summary, e.g. '100.0% (3/3 holdout points)'")
     empirical_coverage_pct: Optional[float] = Field(None, description="Empirical coverage percentage on holdout evaluations")
@@ -108,6 +130,15 @@ class ProductForecastDetailResponse(BaseModel):
     history_points: list[HistoricalPeriodPoint]
     forecast_points: list[ForecastPeriodPoint]
     backtest_metrics: list[BacktestMetricItem]
+
+    evaluation_stage: str = Field(
+        "insufficient_independent_evaluation_data",
+        description="'independent_test_evaluated' or 'insufficient_independent_evaluation_data'",
+    )
+    independent_test_metrics: Optional[list[IndependentEvaluationItem]] = Field(
+        None,
+        description="Performance metrics on completely held-out final test segment never seen during model selection",
+    )
 
     range_type: str = Field(
         "Estimated Prediction Range",

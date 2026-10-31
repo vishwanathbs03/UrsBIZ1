@@ -23,6 +23,19 @@ export interface BacktestMetricItem {
   mase?: number | null;
   holdout_periods: number;
   is_selected: boolean;
+  metric_role?: string;
+}
+
+export interface IndependentEvaluationItem {
+  model_name: string;
+  mae: number;
+  rmse: number;
+  wape?: number | null;
+  mape?: number | null;
+  mase?: number | null;
+  test_periods: number;
+  is_baseline: boolean;
+  is_selected: boolean;
 }
 
 export interface ForecastPeriodPoint {
@@ -56,8 +69,13 @@ export interface ProductForecastSummaryItem {
   forecasted_units_total: number;
   demand_trend: string;
   trend_delta_pct?: number | null;
+  evaluation_stage?: "independent_test_evaluated" | "insufficient_independent_evaluation_data";
   best_mae?: number | null;
   best_wape?: number | null;
+  independent_test_mae?: number | null;
+  independent_test_wape?: number | null;
+  tournament_mae?: number | null;
+  tournament_wape?: number | null;
   range_type?: string;
   empirical_coverage_summary?: string | null;
   empirical_coverage_pct?: number | null;
@@ -79,6 +97,8 @@ export interface ProductForecastDetailResponse {
   history_points: HistoricalPeriodPoint[];
   forecast_points: ForecastPeriodPoint[];
   backtest_metrics: BacktestMetricItem[];
+  evaluation_stage?: "independent_test_evaluated" | "insufficient_independent_evaluation_data";
+  independent_test_metrics?: IndependentEvaluationItem[] | null;
   range_type?: string;
   empirical_coverage_summary?: string | null;
   empirical_coverage_pct?: number | null;

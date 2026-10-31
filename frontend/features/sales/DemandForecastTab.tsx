@@ -493,64 +493,132 @@ export function DemandForecastTab({ onUploadClick }: DemandForecastTabProps) {
                   </div>
                 </div>
 
-                {/* Holdout Backtesting Tournament */}
-                <div className="rounded-xl border border-dark-border bg-dark-card p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold text-dark-text-primary uppercase tracking-wider flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-neon-emerald" /> Holdout Model Tournament & Verification
-                      </h4>
-                      <p className="text-[11px] text-dark-text-muted">
-                        {productDetail.provenance.evaluation_method === "rolling_origin"
-                          ? `Evaluated via rolling-origin backtesting across ${productDetail.provenance.rolling_splits_count} walk-forward splits (${productDetail.empirical_coverage_samples ?? productDetail.provenance.holdout_periods} horizon points) with zero future data leakage.`
-                          : "Evaluated on out-of-sample chronological holdout periods. Baselines win unless an advanced model delivers > 2% MAE improvement."}
-                      </p>
-                    </div>
-                  </div>
+                {/* Independent Final Test & Model Selection Tournament */}
+                <div className="rounded-xl border border-dark-border bg-dark-card p-5 space-y-4">
+                  {/* Stage 1: If independent test was evaluated, display the separate out-of-sample test card */}
+                  {productDetail.evaluation_stage === "independent_test_evaluated" &&
+                    productDetail.independent_test_metrics &&
+                    productDetail.independent_test_metrics.length > 0 && (
+                      <div className="rounded-lg border border-neon-emerald/30 bg-neon-emerald/5 p-4 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4 text-neon-emerald" />
+                            <h4 className="text-xs font-bold text-dark-text-primary uppercase tracking-wider">
+                              Independent Final Test Evaluation
+                            </h4>
+                          </div>
+                          <span className="rounded bg-neon-emerald/20 px-2 py-0.5 text-[10px] font-mono font-bold text-neon-emerald uppercase">
+                            Separate Held-Out Test Segment
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-dark-text-muted">
+                          Candidate models were trained and selected strictly on earlier history. This final evaluation was conducted on an untouched {productDetail.independent_test_metrics[0].test_periods}-period holdout segment never seen during model selection.
+                        </p>
+                        <div className="overflow-x-auto rounded border border-dark-border/60">
+                          <table className="w-full text-left text-xs">
+                            <thead className="border-b border-dark-border bg-dark-bg/80 text-dark-text-muted">
+                              <tr>
+                                <th className="p-2">Model Role</th>
+                                <th className="p-2">Model Name</th>
+                                <th className="p-2 text-right">Test MAE</th>
+                                <th className="p-2 text-right">RMSE</th>
+                                <th className="p-2 text-right">WAPE</th>
+                                <th className="p-2 text-right">MASE</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-dark-border/50">
+                              {productDetail.independent_test_metrics.map((item, idx) => (
+                                <tr key={idx} className={item.is_selected ? "bg-neon-emerald/10 font-semibold" : ""}>
+                                  <td className="p-2 text-dark-text-muted font-mono text-[11px]">
+                                    {item.is_selected ? (
+                                      <span className="text-neon-emerald flex items-center gap-1">
+                                        <CheckCircle2 className="h-3 w-3" /> Selected Winner
+                                      </span>
+                                    ) : (
+                                      "Reference Baseline"
+                                    )}
+                                  </td>
+                                  <td className="p-2 font-mono text-dark-text-primary">{item.model_name}</td>
+                                  <td className="p-2 text-right font-mono text-neon-emerald">{item.mae.toFixed(2)}</td>
+                                  <td className="p-2 text-right font-mono">{item.rmse.toFixed(2)}</td>
+                                  <td className="p-2 text-right font-mono">
+                                    {item.wape !== null && item.wape !== undefined ? `${(item.wape * 100).toFixed(1)}%` : "—"}
+                                  </td>
+                                  <td className="p-2 text-right font-mono">
+                                    {item.mase !== null && item.mase !== undefined ? item.mase.toFixed(2) : "—"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
 
-                  <div className="overflow-x-auto rounded-lg border border-dark-border">
-                    <table className="w-full text-left text-xs">
-                      <thead className="border-b border-dark-border bg-dark-bg text-dark-text-muted">
-                        <tr>
-                          <th className="p-2.5">Model</th>
-                          <th className="p-2.5 text-right">Holdout MAE</th>
-                          <th className="p-2.5 text-right">RMSE</th>
-                          <th className="p-2.5 text-right">WAPE</th>
-                          <th className="p-2.5 text-right">MASE</th>
-                          <th className="p-2.5 text-center">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-dark-border">
-                        {productDetail.backtest_metrics.map((m, i) => (
-                          <tr
-                            key={i}
-                            className={m.is_selected ? "bg-neon-cyan/10 font-semibold" : "hover:bg-dark-border/10"}
-                          >
-                            <td className="p-2.5 font-mono text-dark-text-primary flex items-center gap-1.5">
-                              {m.is_selected && <CheckCircle2 className="h-3.5 w-3.5 text-neon-cyan" />}
-                              {m.model_name}
-                            </td>
-                            <td className="p-2.5 text-right font-mono">{m.mae.toFixed(2)}</td>
-                            <td className="p-2.5 text-right font-mono">{m.rmse.toFixed(2)}</td>
-                            <td className="p-2.5 text-right font-mono">
-                              {m.wape !== null && m.wape !== undefined ? `${(m.wape * 100).toFixed(1)}%` : "—"}
-                            </td>
-                            <td className="p-2.5 text-right font-mono">
-                              {m.mase !== null && m.mase !== undefined ? m.mase.toFixed(2) : "—"}
-                            </td>
-                            <td className="p-2.5 text-center">
-                              {m.is_selected ? (
-                                <span className="rounded bg-neon-cyan/20 px-2 py-0.5 text-[10px] font-mono text-neon-cyan font-bold uppercase">
-                                  Selected
-                                </span>
-                              ) : (
-                                <span className="text-[10px] text-dark-text-muted">Evaluated</span>
-                              )}
-                            </td>
+                  {/* Stage 2: Internal Model Selection Tournament */}
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-xs font-bold text-dark-text-primary uppercase tracking-wider flex items-center gap-2">
+                          <Layers className="h-4 w-4 text-neon-cyan" /> Internal Model Selection Tournament
+                        </h4>
+                        <p className="text-[11px] text-dark-text-muted">
+                          {productDetail.provenance.evaluation_method === "rolling_origin"
+                            ? `Walk-forward tournament across ${productDetail.provenance.rolling_splits_count} expanding splits. Advanced models win only if they beat the baseline by > 2% MAE.`
+                            : "Chronological holdout tournament. Advanced models win only if they beat the baseline by > 2% MAE."}
+                        </p>
+                      </div>
+                      <span className="rounded bg-dark-bg border border-dark-border px-2 py-0.5 text-[10px] font-mono text-dark-text-muted">
+                        {productDetail.evaluation_stage === "independent_test_evaluated"
+                          ? "Selection Stage Diagnostics"
+                          : "Tournament Diagnostics Only"}
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-lg border border-dark-border">
+                      <table className="w-full text-left text-xs">
+                        <thead className="border-b border-dark-border bg-dark-bg text-dark-text-muted">
+                          <tr>
+                            <th className="p-2.5">Model</th>
+                            <th className="p-2.5 text-right">Tournament MAE</th>
+                            <th className="p-2.5 text-right">RMSE</th>
+                            <th className="p-2.5 text-right">WAPE</th>
+                            <th className="p-2.5 text-right">MASE</th>
+                            <th className="p-2.5 text-center">Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-dark-border">
+                          {productDetail.backtest_metrics.map((m, i) => (
+                            <tr
+                              key={i}
+                              className={m.is_selected ? "bg-neon-cyan/10 font-semibold" : "hover:bg-dark-border/10"}
+                            >
+                              <td className="p-2.5 font-mono text-dark-text-primary flex items-center gap-1.5">
+                                {m.is_selected && <CheckCircle2 className="h-3.5 w-3.5 text-neon-cyan" />}
+                                {m.model_name}
+                              </td>
+                              <td className="p-2.5 text-right font-mono">{m.mae.toFixed(2)}</td>
+                              <td className="p-2.5 text-right font-mono">{m.rmse.toFixed(2)}</td>
+                              <td className="p-2.5 text-right font-mono">
+                                {m.wape !== null && m.wape !== undefined ? `${(m.wape * 100).toFixed(1)}%` : "—"}
+                              </td>
+                              <td className="p-2.5 text-right font-mono">
+                                {m.mase !== null && m.mase !== undefined ? m.mase.toFixed(2) : "—"}
+                              </td>
+                              <td className="p-2.5 text-center">
+                                {m.is_selected ? (
+                                  <span className="rounded bg-neon-cyan/20 px-2 py-0.5 text-[10px] font-mono text-neon-cyan font-bold uppercase">
+                                    Selected
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-dark-text-muted">Evaluated</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
 

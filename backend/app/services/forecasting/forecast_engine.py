@@ -44,7 +44,10 @@ from app.services.forecasting.data_preparation import (
     prepare_product_demand_series,
     safe_normalize_product_name,
 )
-from app.services.forecasting.evaluation import backtest_and_select_model
+from app.services.forecasting.evaluation import (
+    backtest_and_select_model,
+    fit_and_project,
+)
 from app.services.forecasting.models import (
     autoregressive_ridge_forecast,
     holt_linear_exponential_smoothing,
@@ -112,22 +115,7 @@ def _generate_future_period_labels(
     return results
 
 
-def _fit_and_project(model_name: str, y: np.ndarray, horizon: int) -> np.ndarray:
-    """Project future periods using the selected model on full historical data."""
-    if "Intermittent" in model_name:
-        return intermittent_expected_demand_forecast(y, horizon)
-    elif "Naive" in model_name and "Seasonal" not in model_name:
-        return naive_forecast(y, horizon)
-    elif "Weighted" in model_name:
-        return weighted_moving_average_forecast(y, horizon, window=3)
-    elif "Seasonal" in model_name:
-        return seasonal_naive_forecast(y, horizon, season_length=4)
-    elif "Holt" in model_name:
-        return holt_linear_exponential_smoothing(y, horizon)
-    elif "Ridge" in model_name:
-        return autoregressive_ridge_forecast(y, horizon, l2_reg=1.0)
-    else:
-        return moving_average_forecast(y, horizon, window=3)
+_fit_and_project = fit_and_project
 
 
 def generate_product_forecast(
@@ -179,6 +167,8 @@ def generate_product_forecast(
             history_points=history_points,
             forecast_points=[],
             backtest_metrics=[],
+            evaluation_stage="insufficient_independent_evaluation_data",
+            independent_test_metrics=None,
             range_type="Estimated Prediction Range (Uncalibrated)",
             empirical_coverage_pct=None,
             explanation=(
@@ -212,8 +202,16 @@ def generate_product_forecast(
 
     # 3. Prediction intervals with calibration assessment
     best_item = next((m for m in backtest_metrics if m.is_selected), None)
-    best_mae = best_item.mae if best_item else None
-    best_wape = best_item.wape if best_item else None
+    eval_stage = holdout_info.get("evaluation_stage", "insufficient_independent_evaluation_data")
+    is_indep = holdout_info.get("is_independent_evaluation", False)
+
+    if is_indep and holdout_info.get("independent_mae") is not None:
+        best_mae = holdout_info.get("independent_mae")
+        best_wape = holdout_info.get("independent_wape")
+    else:
+        best_mae = holdout_info.get("selection_mae", best_item.mae if best_item else None)
+        best_wape = holdout_info.get("selection_wape", best_item.wape if best_item else None)
+
     emp_cov = holdout_info.get("empirical_coverage")
     holdout_eval_count = holdout_info.get("holdout_eval_count", 0)
     holdout_covered_count = holdout_info.get("holdout_covered_count", 0)
@@ -273,19 +271,38 @@ def generate_product_forecast(
     )
 
     # 7. Generate explanation and limitations
+    if is_indep:
+        eval_desc = (
+            f"Selected {selected_model} via walk-forward tournament on preceding history, "
+            f"independently verified on separate {holdout_info.get('final_test_size', 4)}-period holdout test "
+            f"(Test MAE: {best_mae}, Test WAPE: {best_wape})."
+        )
+    else:
+        tourn_mae = holdout_info.get("selection_mae", best_item.mae if best_item else None)
+        tourn_wape = holdout_info.get("selection_wape", best_item.wape if best_item else None)
+        eval_desc = (
+            f"Selected {selected_model} via {holdout_info.get('evaluation_method', 'backtest')} tournament "
+            f"(Tournament MAE: {tourn_mae}, WAPE: {tourn_wape}). "
+            f"Note: Evaluated as internal model-selection diagnostic (series under {holdout_info.get('required_periods', 12)} periods for separate test holdout)."
+        )
+
     explanation = (
         f"Based on {series.total_periods} historical {interval.value} periods, demand for '{product_name}' "
         f"is projected to be {total_forecasted} total units over the next {horizon} {interval.value}s "
-        f"(average {round(pred_avg, 1)} units/{interval.value}). "
-        f"Selected {selected_model} via {holdout_info.get('evaluation_method', 'backtest')} evaluation"
-        + (f" (MAE: {best_mae}, WAPE: {best_wape})." if best_mae is not None else ".")
+        f"(average {round(pred_avg, 1)} units/{interval.value}). {eval_desc}"
     )
 
     limitations = list(series.limitation_notes)
     limitations.append(calib_note)
-    if series.total_periods < 12:
+    if is_indep:
         limitations.append(
-            f"History spans {series.total_periods} periods. Longer time series will improve accuracy."
+            f"Model was selected on {holdout_info.get('selection_periods', 8)} earlier periods and independently tested on {holdout_info.get('final_test_size', 4)} separate holdout periods."
+        )
+    elif series.total_periods >= 4:
+        limitations.append(
+            f"Model performance represents internal tournament selection diagnostics. "
+            f"Independent out-of-sample test evaluation requires at least {holdout_info.get('required_periods', 12)} historical periods "
+            f"(current series has {series.total_periods} periods)."
         )
     limitations.append(
         "Forecast estimates customer demand only and does not reflect current inventory or supplier lead times."
@@ -299,8 +316,16 @@ def generate_product_forecast(
         "unconfirmed_gaps_count": series.unconfirmed_gaps_count,
         "sparsity_ratio": series.sparsity_ratio,
         "selected_model": selected_model,
+        "evaluation_stage": eval_stage,
+        "is_independent_evaluation": is_indep,
+        "independent_mae": holdout_info.get("independent_mae"),
+        "independent_wape": holdout_info.get("independent_wape"),
+        "selection_mae": holdout_info.get("selection_mae"),
+        "selection_wape": holdout_info.get("selection_wape"),
         "evaluation_method": holdout_info.get("evaluation_method", "fixed_holdout"),
         "rolling_splits_count": holdout_info.get("rolling_splits_count", 0),
+        "selection_periods": holdout_info.get("selection_periods", series.total_periods),
+        "final_test_size": holdout_info.get("final_test_size", 0),
         "holdout_evaluated": holdout_info.get("split_possible", False),
         "holdout_periods": holdout_info.get("holdout_periods", 0),
         "empirical_coverage_pct": cov_pct,
@@ -321,6 +346,8 @@ def generate_product_forecast(
         history_points=history_points,
         forecast_points=forecast_points,
         backtest_metrics=backtest_metrics,
+        evaluation_stage=eval_stage,
+        independent_test_metrics=holdout_info.get("independent_test_metrics"),
         range_type=range_type,
         empirical_coverage_summary=cov_summary,
         empirical_coverage_pct=cov_pct,
@@ -454,8 +481,13 @@ def generate_demand_overview(
             forecasted_units_total=detail.forecasted_units_total,
             demand_trend=detail.demand_trend,
             trend_delta_pct=detail.trend_delta_pct,
-            best_mae=best_m.mae if best_m else None,
-            best_wape=best_m.wape if best_m else None,
+            evaluation_stage=detail.evaluation_stage,
+            best_mae=detail.provenance.get("independent_mae", best_m.mae if best_m else None),
+            best_wape=detail.provenance.get("independent_wape", best_m.wape if best_m else None),
+            independent_test_mae=detail.provenance.get("independent_mae"),
+            independent_test_wape=detail.provenance.get("independent_wape"),
+            tournament_mae=detail.provenance.get("selection_mae", best_m.mae if best_m else None),
+            tournament_wape=detail.provenance.get("selection_wape", best_m.wape if best_m else None),
             range_type=detail.range_type,
             empirical_coverage_summary=detail.empirical_coverage_summary,
             empirical_coverage_pct=detail.empirical_coverage_pct,

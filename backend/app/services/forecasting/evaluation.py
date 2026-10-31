@@ -1,27 +1,27 @@
-"""Chronological Backtesting & Forecast Evaluation Engine (Phase 4 Hardening).
+"""Chronological Backtesting & Forecast Evaluation Engine (Phase 4 Final Hardening).
 
 Enforces strict chronological train/test splitting with zero future data leakage.
-Implements:
-  1. Rolling-origin backtesting (walk-forward cross-validation) for series with >= 8 periods,
-     evaluating the full multi-period forecast horizon (H) across each origin.
-  2. Fixed chronological holdout evaluation for shorter series (4-7 periods) with documented limitations.
-  3. Evidence-based model selection: advanced models win only if they beat the best baseline by > 2% MAE.
-  4. Empirical prediction interval coverage tracking on holdout observations with sample counts.
+Implements a defensible two-stage evaluation architecture:
+  Stage 1: Internal Model Selection Tournament
+    - Chronological rolling-origin backtesting (walk-forward CV) across expanding folds.
+    - Strict > 2% MAE baseline superiority hurdle (advanced models win only if they beat the baseline).
+    - Preference for simpler baselines with zero/constrained parameter capacity in ties or marginal differences.
+    - All tournament metrics are explicitly tagged as model-selection diagnostics (metric_role='model_selection').
 
-Mitigating Optimistic Selection Bias (Reusing Small Folds):
-  When candidate models are evaluated across a limited number of holdout observations, selecting
-  the model with lowest holdout error risks optimistic selection bias (the "winner's curse").
-  Our architecture explicitly prevents this through four structural defenses:
-    a) Baseline Superiority Barrier (>2% MAE hurdle): Advanced models (Holt Linear, AR-Ridge)
-       are selected only if they decisively beat zero-parameter baselines by > 2% MAE.
-       In ties or marginal differences, simpler baselines are strictly chosen.
-    b) Minimal Parameter Capacity: Moving average baselines have zero learned parameters;
-       Holt Linear uses a damped trend (phi=0.9); AR-Ridge applies strong L2 shrinkage (lambda=1.0)
-       to suppress variance in small-sample regimes.
-    c) Multi-Period Trajectory Evaluation: Models are tested on multi-step rollouts (matching
-       the user-facing horizon H), penalizing compounds of single-step errors.
-    d) Diagnostic Labeling: Holdout MAE is exposed as an internal tournament selection metric
-       rather than an uncalibrated future generalization guarantee.
+  Stage 2: Independent Final Test Holdout (when data is statistically sufficient)
+    - When historical length N >= 8 + H_test (minimum 8 periods for selection + H_test for holdout):
+      * The final H_test periods are completely held out as an unseen test segment (y_test = y[-H_test:]).
+      * Candidate models are trained, evaluated, and selected strictly on y_selection = y[:-H_test].
+      * Not a single observation from y_test is seen, used, or leaked during model selection.
+      * The selected winning model and reference baseline are evaluated once on y_test.
+      * Independent out-of-sample metrics (MAE, RMSE, WAPE, MAPE, MASE) are reported in independent_test_metrics.
+      * Evaluation stage is set to 'independent_test_evaluated'.
+    - When historical length N < 8 + H_test (short series):
+      * An independent test is not fabricated.
+      * Metrics are not silently reused or mislabeled as independent generalization.
+      * The tournament is executed on available history to select the best model.
+      * Evaluation stage is set to 'insufficient_independent_evaluation_data'.
+      * Limitations transparently explain that metrics reflect internal tournament selection diagnostics.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ import math
 from typing import Any, Callable
 import numpy as np
 
-from app.schemas.forecasting import BacktestMetricItem
+from app.schemas.forecasting import BacktestMetricItem, IndependentEvaluationItem
 from app.services.forecasting.baselines import (
     intermittent_expected_demand_forecast,
     moving_average_forecast,
@@ -91,6 +91,24 @@ def compute_metrics(
     }
 
 
+def fit_and_project(model_name: str, y: np.ndarray, horizon: int) -> np.ndarray:
+    """Project future periods using the specified model on historical data."""
+    if "Intermittent" in model_name:
+        return intermittent_expected_demand_forecast(y, horizon)
+    elif "Naive" in model_name and "Seasonal" not in model_name:
+        return naive_forecast(y, horizon)
+    elif "Weighted" in model_name:
+        return weighted_moving_average_forecast(y, horizon, window=3)
+    elif "Seasonal" in model_name:
+        return seasonal_naive_forecast(y, horizon, season_length=4)
+    elif "Holt" in model_name:
+        return holt_linear_exponential_smoothing(y, horizon)
+    elif "Ridge" in model_name:
+        return autoregressive_ridge_forecast(y, horizon, l2_reg=1.0)
+    else:
+        return moving_average_forecast(y, horizon, window=3)
+
+
 def _get_candidate_models(
     train_size: int,
     season_length: int = 4,
@@ -146,25 +164,27 @@ def _get_candidate_models(
     return candidates
 
 
-def backtest_and_select_model(
+def run_model_selection_tournament(
     y: np.ndarray,
     horizon: int = 4,
     season_length: int = 4,
     is_intermittent: bool = False,
-) -> tuple[str, list[BacktestMetricItem], dict[str, Any]]:
-    """Perform out-of-sample backtesting, evaluate all eligible models, and select best method.
+) -> tuple[str, str, list[BacktestMetricItem], dict[str, Any]]:
+    """Execute model selection tournament on given historical series y.
     
-    Uses:
-      - Rolling-Origin Backtesting if len(y) >= 8 (evaluating multi-period horizon H).
-      - Fixed Holdout Backtesting if 4 <= len(y) < 8.
+    Evaluates candidates across chronological expanding walk-forward splits (N >= 8)
+    or fixed holdout (4 <= N < 8). Advanced models win only if they beat the baseline
+    by > 2% MAE.
     
     Returns:
-      (selected_model_name, list_of_backtest_metrics, holdout_info)
+        (selected_model_name, best_baseline_name, tournament_metric_items, tournament_info)
     """
     n = len(y)
     if n < 4:
+        default_model = "Intermittent Rate (Expected Demand)" if is_intermittent else "Moving Average (3-Period)"
         return (
-            "Intermittent Rate (Expected Demand)" if is_intermittent else "Moving Average (3-Period)",
+            default_model,
+            default_model,
             [],
             {
                 "train_periods": n,
@@ -173,15 +193,14 @@ def backtest_and_select_model(
                 "holdout_covered_count": 0,
                 "split_possible": False,
                 "evaluation_method": "none",
+                "selection_mae": None,
+                "selection_wape": None,
                 "reason": "Insufficient history (< 4 periods) for holdout backtesting.",
             },
         )
 
-    # -------------------------------------------------------------------------
     # Path A: Rolling-Origin Backtesting (for series with >= 8 periods)
-    # -------------------------------------------------------------------------
     if n >= 8:
-        # Determine number of rolling origin splits: min 2, max 4
         num_splits = min(4, n - 5)
         initial_train_size = n - num_splits
         candidates = _get_candidate_models(
@@ -199,14 +218,11 @@ def backtest_and_select_model(
                 "interval_covered": [],
             }
 
-        # Step through each rolling origin chronologically (expanding window)
-        # Evaluating multi-period forecast trajectory (up to horizon H) at each origin
         expected_eval_points = 0
         for split_idx in range(num_splits):
             origin_t = initial_train_size + split_idx
             y_train_curr = y[:origin_t]
-            
-            # Horizon evaluated from this origin: min(horizon, remaining observations)
+
             eval_h = min(horizon, n - origin_t)
             if eval_h < 1:
                 break
@@ -215,13 +231,10 @@ def backtest_and_select_model(
 
             for name, is_baseline, func in candidates:
                 try:
-                    # Predict eval_h steps ahead with ZERO future data leakage
                     preds_h = np.maximum(0.0, np.array(func(y_train_curr, eval_h), dtype=float))
-                    
                     errs = y_actual_trajectory - preds_h
                     abs_errs = np.abs(errs)
-                    
-                    # Compute prediction range across multi-period trajectory
+
                     lows, ups, _, _, _, _ = calculate_prediction_intervals(
                         y_train_curr, preds_h
                     )
@@ -242,17 +255,15 @@ def backtest_and_select_model(
                 rmse = float(np.sqrt(np.mean(data["sq_errors"])))
                 sum_act = float(np.sum(data["actuals"]))
                 wape = round(float(np.sum(data["abs_errors"]) / sum_act), 4) if sum_act > 0 else None
-                
-                # Guarded MAPE
+
                 acts = np.array(data["actuals"])
                 preds = np.array(data["preds"])
                 nz = acts > 0
                 mape = round(float(np.mean(np.abs(acts[nz] - preds[nz]) / acts[nz]) * 100.0), 2) if np.any(nz) else None
-                
-                # Scaled error
+
                 naive_in_sample = np.mean(np.abs(np.diff(y[:initial_train_size])))
                 mase = round(float(mae / naive_in_sample), 4) if naive_in_sample > 1e-6 else None
-                
+
                 cov_count = sum(1 for c in data["interval_covered"] if c)
                 total_count = len(data["interval_covered"])
                 emp_coverage = float(cov_count / total_count) if total_count > 0 else None
@@ -266,18 +277,16 @@ def backtest_and_select_model(
                 }
                 evaluated_metrics.append((name, data["is_baseline"], metrics_dict, emp_coverage, cov_count, total_count))
 
-        holdout_info = {
+        tourn_info = {
             "evaluation_method": "rolling_origin",
             "rolling_splits_count": num_splits,
             "train_periods": initial_train_size,
-            "holdout_periods": num_splits,
+            "holdout_periods": expected_eval_points,
             "holdout_eval_count": expected_eval_points,
             "split_possible": True,
         }
 
-    # -------------------------------------------------------------------------
     # Path B: Fixed Holdout Backtesting (for shorter series: 4 to 7 periods)
-    # -------------------------------------------------------------------------
     else:
         holdout_size = max(1, min(2, int(math.ceil(n * 0.25))))
         train_size = n - holdout_size
@@ -295,7 +304,6 @@ def backtest_and_select_model(
                 preds = np.maximum(0.0, np.array(func(y_train, eval_h), dtype=float))
                 metrics = compute_metrics(y_test, preds, y_train)
 
-                # Check empirical coverage on holdout points
                 lows, ups, _, _, _, _ = calculate_prediction_intervals(y_train, preds)
                 emp_cov, cov_count, total_count = evaluate_holdout_interval_coverage(y_test, lows, ups)
 
@@ -303,7 +311,7 @@ def backtest_and_select_model(
             except Exception:
                 continue
 
-        holdout_info = {
+        tourn_info = {
             "evaluation_method": "fixed_holdout",
             "train_periods": train_size,
             "holdout_periods": eval_h,
@@ -317,20 +325,22 @@ def backtest_and_select_model(
 
     if not evaluated_metrics:
         fallback_model = "Intermittent Rate (Expected Demand)" if is_intermittent else "Moving Average (3-Period)"
-        holdout_info["holdout_eval_count"] = 0
-        holdout_info["holdout_covered_count"] = 0
-        holdout_info["empirical_coverage"] = None
-        return fallback_model, [], holdout_info
+        tourn_info["holdout_eval_count"] = 0
+        tourn_info["holdout_covered_count"] = 0
+        tourn_info["empirical_coverage"] = None
+        tourn_info["selection_mae"] = None
+        tourn_info["selection_wape"] = None
+        return fallback_model, fallback_model, [], tourn_info
 
-    # -------------------------------------------------------------------------
     # Baseline Superiority Selection: Advanced models win only if > 2% MAE improvement
-    # -------------------------------------------------------------------------
     baseline_evals = [m for m in evaluated_metrics if m[1]]
     advanced_evals = [m for m in evaluated_metrics if not m[1]]
 
     best_baseline = min(baseline_evals, key=lambda x: x[2]["mae"])
-    selected_name = best_baseline[0]
+    best_baseline_name = best_baseline[0]
+    selected_name = best_baseline_name
     best_mae = best_baseline[2]["mae"]
+    best_wape = best_baseline[2]["wape"]
     selected_cov = best_baseline[3]
     selected_cov_count = best_baseline[4]
     selected_total_count = best_baseline[5]
@@ -338,16 +348,19 @@ def backtest_and_select_model(
     if advanced_evals:
         best_advanced = min(advanced_evals, key=lambda x: x[2]["mae"])
         adv_mae = best_advanced[2]["mae"]
-        # Strictly require > 2% MAE improvement over best baseline
         if adv_mae < (best_mae * 0.98):
             selected_name = best_advanced[0]
+            best_mae = adv_mae
+            best_wape = best_advanced[2]["wape"]
             selected_cov = best_advanced[3]
             selected_cov_count = best_advanced[4]
             selected_total_count = best_advanced[5]
 
-    holdout_info["empirical_coverage"] = selected_cov
-    holdout_info["holdout_covered_count"] = selected_cov_count
-    holdout_info["holdout_eval_count"] = selected_total_count
+    tourn_info["empirical_coverage"] = selected_cov
+    tourn_info["holdout_covered_count"] = selected_cov_count
+    tourn_info["holdout_eval_count"] = selected_total_count
+    tourn_info["selection_mae"] = best_mae
+    tourn_info["selection_wape"] = best_wape
 
     metric_items: list[BacktestMetricItem] = [
         BacktestMetricItem(
@@ -359,8 +372,171 @@ def backtest_and_select_model(
             mase=metrics["mase"],
             holdout_periods=total_cnt,
             is_selected=(name == selected_name),
+            metric_role="model_selection",
         )
         for name, _, metrics, _, _, total_cnt in evaluated_metrics
     ]
 
-    return selected_name, metric_items, holdout_info
+    return selected_name, best_baseline_name, metric_items, tourn_info
+
+
+def backtest_and_select_model(
+    y: np.ndarray,
+    horizon: int = 4,
+    season_length: int = 4,
+    is_intermittent: bool = False,
+) -> tuple[str, list[BacktestMetricItem], dict[str, Any]]:
+    """Execute defensible two-stage model selection and independent final evaluation.
+    
+    Architecture:
+      Stage 1: Internal Model Selection Tournament
+        - If N >= 8 + H_test: Candidate models are evaluated and selected strictly
+          on y_selection = y[:-H_test]. y_test is completely held out with ZERO data leakage.
+        - If N < 8 + H_test: Tournament evaluates candidates on full y as model-selection diagnostics.
+      Stage 2: Independent Final Evaluation
+        - If N >= 8 + H_test: The selected model and reference baseline are evaluated once on y_test.
+          Results reported in holdout_info['independent_test_metrics'].
+        - If N < 8 + H_test: Returns evaluation_stage='insufficient_independent_evaluation_data'.
+    
+    Returns:
+      (selected_model_name, list_of_tournament_metrics, holdout_info)
+    """
+    n = len(y)
+    if n < 4:
+        fallback_model = "Intermittent Rate (Expected Demand)" if is_intermittent else "Moving Average (3-Period)"
+        return (
+            fallback_model,
+            [],
+            {
+                "train_periods": n,
+                "holdout_periods": 0,
+                "holdout_eval_count": 0,
+                "holdout_covered_count": 0,
+                "split_possible": False,
+                "evaluation_method": "none",
+                "evaluation_stage": "insufficient_data",
+                "is_independent_evaluation": False,
+                "independent_test_metrics": None,
+                "independent_mae": None,
+                "independent_wape": None,
+                "selection_mae": None,
+                "selection_wape": None,
+                "reason": "Insufficient history (< 4 periods) for holdout backtesting.",
+            },
+        )
+
+    # Required independent holdout test horizon (matches forecast horizon, capped at 4)
+    h_test = min(horizon, 4)
+    min_periods_for_independent_test = 8 + h_test
+
+    # -------------------------------------------------------------------------
+    # Case 1: Series has sufficient history for separate final holdout test
+    # (N >= 8 + H_test: e.g. >= 12 periods for H=4, >= 10 periods for H=2)
+    # -------------------------------------------------------------------------
+    if n >= min_periods_for_independent_test:
+        y_selection = y[:-h_test]
+        y_test = y[-h_test:]
+
+        # Stage 1: Run tournament STRICTLY on y_selection (zero knowledge of y_test)
+        selected_model, best_baseline, tournament_metrics, tourn_info = run_model_selection_tournament(
+            y_selection,
+            horizon=h_test,
+            season_length=season_length,
+            is_intermittent=is_intermittent,
+        )
+
+        # Stage 2: Independent Final Evaluation on y_test (trained on y_selection)
+        pred_selected = np.maximum(0.0, fit_and_project(selected_model, y_selection, h_test))
+        pred_baseline = np.maximum(0.0, fit_and_project(best_baseline, y_selection, h_test))
+
+        metrics_selected = compute_metrics(y_test, pred_selected, y_selection)
+        metrics_baseline = compute_metrics(y_test, pred_baseline, y_selection)
+
+        # Prediction interval coverage on unseen test segment
+        lows_indep, ups_indep, _, _, _, _ = calculate_prediction_intervals(y_selection, pred_selected)
+        covered_indep = (y_test >= lows_indep) & (y_test <= ups_indep)
+        cov_count_indep = int(np.sum(covered_indep))
+        emp_cov_indep = float(cov_count_indep / len(y_test))
+
+        indep_items = [
+            IndependentEvaluationItem(
+                model_name=selected_model,
+                mae=metrics_selected["mae"],
+                rmse=metrics_selected["rmse"],
+                wape=metrics_selected["wape"],
+                mape=metrics_selected["mape"],
+                mase=metrics_selected["mase"],
+                test_periods=len(y_test),
+                is_baseline=(selected_model == best_baseline),
+                is_selected=True,
+            )
+        ]
+        if selected_model != best_baseline:
+            indep_items.append(
+                IndependentEvaluationItem(
+                    model_name=best_baseline,
+                    mae=metrics_baseline["mae"],
+                    rmse=metrics_baseline["rmse"],
+                    wape=metrics_baseline["wape"],
+                    mape=metrics_baseline["mape"],
+                    mase=metrics_baseline["mase"],
+                    test_periods=len(y_test),
+                    is_baseline=True,
+                    is_selected=False,
+                )
+            )
+
+        holdout_info = {
+            "evaluation_stage": "independent_test_evaluated",
+            "is_independent_evaluation": True,
+            "evaluation_method": tourn_info.get("evaluation_method", "rolling_origin"),
+            "rolling_splits_count": tourn_info.get("rolling_splits_count", 0),
+            "train_periods": len(y_selection),
+            "selection_periods": len(y_selection),
+            "final_test_size": len(y_test),
+            "holdout_periods": len(y_test),
+            "holdout_eval_count": len(y_test),
+            "holdout_covered_count": cov_count_indep,
+            "empirical_coverage": emp_cov_indep,
+            "split_possible": True,
+            "independent_test_metrics": indep_items,
+            "independent_mae": metrics_selected["mae"],
+            "independent_wape": metrics_selected["wape"],
+            "selection_mae": tourn_info.get("selection_mae"),
+            "selection_wape": tourn_info.get("selection_wape"),
+            "best_baseline": best_baseline,
+            "required_periods": min_periods_for_independent_test,
+        }
+
+        return selected_model, tournament_metrics, holdout_info
+
+    # -------------------------------------------------------------------------
+    # Case 2: Series is too short for separate final test holdout (4 <= N < 8 + H_test)
+    # (Do not fabricate an independent evaluation; report tournament diagnostics)
+    # -------------------------------------------------------------------------
+    else:
+        selected_model, best_baseline, tournament_metrics, tourn_info = run_model_selection_tournament(
+            y,
+            horizon=horizon,
+            season_length=season_length,
+            is_intermittent=is_intermittent,
+        )
+
+        holdout_info = dict(tourn_info)
+        holdout_info["evaluation_stage"] = "insufficient_independent_evaluation_data"
+        holdout_info["is_independent_evaluation"] = False
+        holdout_info["independent_test_metrics"] = None
+        holdout_info["independent_mae"] = None
+        holdout_info["independent_wape"] = None
+        holdout_info["selection_mae"] = tourn_info.get("selection_mae")
+        holdout_info["selection_wape"] = tourn_info.get("selection_wape")
+        holdout_info["best_baseline"] = best_baseline
+        holdout_info["required_periods"] = min_periods_for_independent_test
+        holdout_info["reason"] = (
+            f"Historical series has {n} periods; insufficient history for a separate independent test segment "
+            f"(requires at least {min_periods_for_independent_test} periods: 8 for rolling-origin model selection + "
+            f"{h_test} for separate final holdout). Reported metrics represent internal model-selection "
+            "tournament diagnostics only."
+        )
+
+        return selected_model, tournament_metrics, holdout_info

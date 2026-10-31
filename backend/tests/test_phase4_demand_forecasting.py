@@ -652,3 +652,124 @@ def test_rolling_origin_evaluates_multi_period_horizon():
     assert holdout_info["holdout_eval_count"] == 6
     for m in metrics:
         assert m.holdout_periods == 6
+
+
+# =============================================================================
+# 11. Independent Evaluation & Model Selection Separation Tests (Final Review)
+# =============================================================================
+
+def test_independent_evaluation_uses_separate_observations_when_sufficient_history():
+    """Verify that when N >= 8 + H_test (e.g. N=12, H=4), model selection and final evaluation
+    use strictly disjoint, chronological subsets with zero data leakage."""
+    # Deterministic synthetic benchmark series of length 12
+    # Note: Synthetic benchmark data for statistical validation, does not assert real MSME accuracy.
+    synthetic_series_12 = np.array(
+        [10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0, 26.0, 28.0, 30.0, 32.0],
+        dtype=np.float64,
+    )
+    horizon = 4
+    # N=12, H_test=4, min required = 8 + 4 = 12.
+    selected_model, tournament_metrics, holdout_info = backtest_and_select_model(
+        synthetic_series_12, horizon=horizon
+    )
+
+    # 1. Independent evaluation must be active
+    assert holdout_info["evaluation_stage"] == "independent_test_evaluated"
+    assert holdout_info["is_independent_evaluation"] is True
+    assert holdout_info["selection_periods"] == 8
+    assert holdout_info["final_test_size"] == 4
+
+    # 2. Independent test metrics must be present and distinct from tournament metrics
+    indep_metrics = holdout_info["independent_test_metrics"]
+    assert indep_metrics is not None
+    assert len(indep_metrics) >= 1
+    # Check winning model in independent test
+    winner_item = next((m for m in indep_metrics if m.is_selected), None)
+    assert winner_item is not None
+    assert winner_item.model_name == selected_model
+    assert winner_item.test_periods == 4
+    assert winner_item.mae >= 0.0
+
+    # 3. Tournament metrics must be labeled as model_selection role
+    for m in tournament_metrics:
+        assert m.metric_role == "model_selection"
+
+
+def test_final_test_segment_never_seen_during_model_selection():
+    """Verify that changing values in the final test segment (y_test) has ZERO impact
+    on the candidate model errors and model selection outcome of the tournament."""
+    # Synthetic series A and B: identical first 8 periods (selection periods),
+    # but radically different final 4 periods (test periods).
+    base_selection = [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0]
+    series_a = np.array(base_selection + [18.0, 19.0, 20.0, 21.0], dtype=np.float64)
+    series_b = np.array(base_selection + [999.0, 1000.0, 1001.0, 1002.0], dtype=np.float64)
+
+    sel_a, tourney_a, info_a = backtest_and_select_model(series_a, horizon=4)
+    sel_b, tourney_b, info_b = backtest_and_select_model(series_b, horizon=4)
+
+    # 1. The winning model MUST be identical
+    assert sel_a == sel_b
+
+    # 2. Every single candidate model's tournament MAE must be IDENTICAL between A and B,
+    # proving mathematically that the final 4 periods NEVER leaked into model selection!
+    map_a = {m.model_name: m.mae for m in tourney_a}
+    map_b = {m.model_name: m.mae for m in tourney_b}
+    for name in map_a:
+        assert np.isclose(map_a[name], map_b[name]), f"Data leakage detected! {name} MAE changed when y_test changed."
+
+    # 3. The independent test metrics on y_test SHOULD differ because y_test actuals are different
+    assert info_a["independent_mae"] != info_b["independent_mae"]
+
+
+def test_short_series_reports_insufficient_independent_data():
+    """Verify that series with N < 8 + H_test transparently report insufficient independent evaluation data
+    without fabricating an out-of-sample evaluation or confusing tournament scores."""
+    # Synthetic series of length 9 with horizon 4 (requires 8 + 4 = 12)
+    synthetic_series_9 = np.array([20.0, 22.0, 21.0, 23.0, 24.0, 22.0, 25.0, 26.0, 24.0], dtype=np.float64)
+    selected_model, tournament_metrics, holdout_info = backtest_and_select_model(
+        synthetic_series_9, horizon=4
+    )
+
+    # Must NOT claim independent evaluation
+    assert holdout_info["evaluation_stage"] == "insufficient_independent_evaluation_data"
+    assert holdout_info["is_independent_evaluation"] is False
+    assert holdout_info["independent_test_metrics"] is None
+    assert holdout_info["independent_mae"] is None
+    assert "insufficient" in holdout_info["reason"]
+    assert "12 periods" in holdout_info["reason"]
+
+    # Tournament metrics must still be provided as selection diagnostics
+    assert len(tournament_metrics) >= 3
+    for m in tournament_metrics:
+        assert m.metric_role == "model_selection"
+
+
+def test_independent_metrics_and_tournament_metrics_not_confused_in_detail_response():
+    """Verify that ProductForecastDetailResponse preserves both independent test metrics
+    and tournament metrics distinctly without conflation."""
+    base_date = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    # Generate 14 weeks of synthetic sales transactions (N=14 >= 12)
+    txns = [
+        {
+            "transaction_date": base_date + timedelta(days=7 * i),
+            "product_name": "Precision Sensor",
+            "quantity": 10.0 + (i * 2.0),
+            "is_duplicate": False,
+        }
+        for i in range(14)
+    ]
+
+    detail = generate_product_forecast(txns, "Precision Sensor", horizon=4)
+
+    assert detail.evaluation_stage == "independent_test_evaluated"
+    assert detail.independent_test_metrics is not None
+    assert len(detail.independent_test_metrics) >= 1
+    assert detail.provenance["is_independent_evaluation"] is True
+    assert detail.provenance["selection_periods"] == 10
+    assert detail.provenance["final_test_size"] == 4
+    assert detail.provenance["independent_mae"] is not None
+
+    # Tournament metrics remain intact for full audit trail
+    assert len(detail.backtest_metrics) >= 3
+    # Explanation explicitly mentions independent holdout test
+    assert "independently verified on separate 4-period holdout test" in detail.explanation
