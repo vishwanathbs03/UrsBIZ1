@@ -156,7 +156,7 @@ def prepare_product_demand_series(
             quantities=np.array([], dtype=np.float64),
             total_periods=0,
             active_periods=0,
-            confirmed_zeros_count=0,
+            zero_recorded_sales_count=0,
             unconfirmed_gaps_count=0,
             total_quantity=0.0,
             sparsity_ratio=1.0,

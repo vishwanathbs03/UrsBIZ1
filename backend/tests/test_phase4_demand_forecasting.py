@@ -877,3 +877,134 @@ def test_four_period_test_horizon_limitation_notice_in_detail_response():
     assert "4 holdout periods" in detail.provenance["test_limitation_notice"]
     assert "multi-season validation requires extended longitudinal data" in detail.provenance["test_limitation_notice"]
 
+def test_final_test_segment_does_not_alter_selected_model_or_baseline_selection():
+    """Verify that model selection is frozen from y_selection and that out-of-sample
+    test metrics on y_test never retroactively flip the selected model."""
+    # 12 periods of sales.
+    # Selection slice: steady upward trend where Moving Average outperforms Naive.
+    y_selection = [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0]
+    # Test slice: sudden drop where Naive performs better than Moving Average on y_test.
+    y_test_drop = [5.0, 5.0, 5.0, 5.0]
+    y_full = np.array(y_selection + y_test_drop, dtype=np.float64)
+
+    selected_model, tournament_metrics, holdout_info = backtest_and_select_model(
+        y_full, horizon=4
+    )
+
+    assert holdout_info["evaluation_stage"] == "independent_test_evaluated"
+    assert holdout_info["is_independent_evaluation"] is True
+
+    indep_metrics = holdout_info["independent_test_metrics"]
+    winner = next(m for m in indep_metrics if m.is_selected)
+
+    # 1. Winner was selected during Stage 1 on y_selection and remains the winner
+    assert winner.model_name == selected_model
+    # 2. Both winner and reference baseline are evaluated on the EXACT same test periods
+    ref_baseline = next(m for m in indep_metrics if m.is_baseline and not m.is_selected)
+    assert winner.test_periods == 4
+    assert ref_baseline.test_periods == 4
+    # 3. Final test results report the out-of-sample metrics without flipping the winner
+    assert winner.mae is not None
+    assert ref_baseline.mae is not None
+
+
+def test_intermittent_parameters_frozen_and_unaffected_by_final_test_values():
+    """Verify that occurrence rate and average positive demand are estimated strictly
+    from y_selection and remain frozen, completely unaffected by y_test actuals."""
+    # y_selection: 2 positive sales of 10.0 out of 8 periods -> occurrence rate 0.25, mean 10.0 -> expected 2.50
+    y_sel = [0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 0.0, 0.0]
+
+    # Deliberately varied y_test segments
+    y_test_zeros = [0.0, 0.0, 0.0, 0.0]
+    y_test_massive = [100.0, 100.0, 100.0, 100.0]
+
+    series_zeros = np.array(y_sel + y_test_zeros, dtype=np.float64)
+    series_massive = np.array(y_sel + y_test_massive, dtype=np.float64)
+
+    sel_zeros, tourney_zeros, holdout_zeros = backtest_and_select_model(series_zeros, horizon=4)
+    sel_massive, tourney_massive, holdout_massive = backtest_and_select_model(series_massive, horizon=4)
+
+    # 1. Model selection must be IDENTICAL
+    assert sel_zeros == sel_massive
+
+    # 2. Tournament metric MAEs on y_selection must be IDENTICAL
+    maes_z = {m.model_name: m.mae for m in tourney_zeros}
+    maes_m = {m.model_name: m.mae for m in tourney_massive}
+    for k in maes_z:
+        assert np.isclose(maes_z[k], maes_m[k])
+
+    # 3. Intermittent projections generated on y_selection must be IDENTICAL (frozen expected demand = 2.50)
+    from app.services.forecasting.evaluation import fit_and_project
+    proj_zeros = fit_and_project(sel_zeros, np.array(y_sel), horizon=4)
+    proj_massive = fit_and_project(sel_massive, np.array(y_sel), horizon=4)
+    np.testing.assert_array_almost_equal(proj_zeros, proj_massive)
+    assert np.allclose(proj_zeros, 2.50)
+
+
+def test_short_history_behavior_across_all_five_tiers():
+    """Verify behavior across all 5 tiers of history depth:
+    Tier 1: No sales history (N=0)
+    Tier 2: 1 to 3 periods (N=2)
+    Tier 3: 4 to 7 periods (N=6, H=4)
+    Tier 4: 8 to 11 periods (N=9, H=4)
+    Tier 5: 12+ periods (N=14, H=4)
+    """
+    base_date = datetime(2026, 1, 5, tzinfo=timezone.utc)
+
+    # Tier 1: N=0 (No transactions)
+    res_t1 = generate_product_forecast([], "SKU-Empty", horizon=4)
+    assert res_t1.data_status == DataLimitationStatusEnum.NO_SALES_HISTORY
+    assert res_t1.forecasted_units_total == 0.0
+    assert res_t1.evaluation_stage == "insufficient_independent_evaluation_data"
+    assert res_t1.independent_test_metrics is None
+    assert res_t1.history_points == []
+
+    # Tier 2: N=2 (1 to 3 periods)
+    txns_t2 = [
+        {"transaction_date": base_date, "product_name": "SKU-Short", "quantity": 10.0, "is_duplicate": False},
+        {"transaction_date": base_date + timedelta(days=7), "product_name": "SKU-Short", "quantity": 15.0, "is_duplicate": False},
+    ]
+    res_t2 = generate_product_forecast(txns_t2, "SKU-Short", horizon=4)
+    assert res_t2.data_status == DataLimitationStatusEnum.INSUFFICIENT_HISTORY
+    assert res_t2.forecasted_units_total == 0.0
+    assert res_t2.evaluation_stage == "insufficient_independent_evaluation_data"
+    assert res_t2.independent_test_metrics is None
+
+    # Tier 3: N=6 (4 <= N < 8, fixed holdout tournament, insufficient for independent test)
+    txns_t3 = [
+        {"transaction_date": base_date + timedelta(days=7 * i), "product_name": "SKU-Mid", "quantity": 10.0 + i, "is_duplicate": False}
+        for i in range(6)
+    ]
+    res_t3 = generate_product_forecast(txns_t3, "SKU-Mid", horizon=4)
+    assert res_t3.data_status == DataLimitationStatusEnum.FORECAST_AVAILABLE
+    assert res_t3.forecasted_units_total > 0.0
+    assert res_t3.evaluation_stage == "insufficient_independent_evaluation_data"
+    assert res_t3.independent_test_metrics is None
+    assert len(res_t3.backtest_metrics) >= 3
+    assert res_t3.provenance["evaluation_method"] == "fixed_holdout"
+
+    # Tier 4: N=9 (8 <= N < 12, rolling-origin tournament, insufficient for independent test)
+    txns_t4 = [
+        {"transaction_date": base_date + timedelta(days=7 * i), "product_name": "SKU-Roll", "quantity": 20.0 + i, "is_duplicate": False}
+        for i in range(9)
+    ]
+    res_t4 = generate_product_forecast(txns_t4, "SKU-Roll", horizon=4)
+    assert res_t4.data_status == DataLimitationStatusEnum.FORECAST_AVAILABLE
+    assert res_t4.evaluation_stage == "insufficient_independent_evaluation_data"
+    assert res_t4.independent_test_metrics is None
+    assert res_t4.provenance["evaluation_method"] == "rolling_origin"
+    assert res_t4.provenance["rolling_splits_count"] > 0
+
+    # Tier 5: N=14 (N >= 12, sufficient for BOTH rolling-origin selection AND independent test)
+    txns_t5 = [
+        {"transaction_date": base_date + timedelta(days=7 * i), "product_name": "SKU-Full", "quantity": 30.0 + i, "is_duplicate": False}
+        for i in range(14)
+    ]
+    res_t5 = generate_product_forecast(txns_t5, "SKU-Full", horizon=4)
+    assert res_t5.data_status == DataLimitationStatusEnum.FORECAST_AVAILABLE
+    assert res_t5.evaluation_stage == "independent_test_evaluated"
+    assert res_t5.independent_test_metrics is not None
+    assert len(res_t5.independent_test_metrics) == 2
+    assert res_t5.provenance["is_independent_evaluation"] is True
+    assert res_t5.provenance["final_test_size"] == 4
+
