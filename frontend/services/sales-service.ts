@@ -88,6 +88,7 @@ export interface SalesSummaryResponse {
   date_range_days: number;
   latest_upload_id?: number;
   latest_upload_filename?: string;
+  duplicate_transactions_excluded?: number;
 }
 
 export interface CustomerMetricItem {
@@ -113,6 +114,7 @@ export interface CustomerInsightsResponse {
   declining_customers: CustomerMetricItem[];
   history_span_days: number;
   declining_threshold_days: number;
+  dataset_reference_date?: string;
   inactivity_definition: string;
 }
 

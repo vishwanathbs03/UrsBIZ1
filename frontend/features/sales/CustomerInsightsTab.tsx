@@ -57,14 +57,21 @@ export function CustomerInsightsTab({ insights }: CustomerInsightsTabProps) {
       </div>
 
       {/* Declining Customers Alert Banner */}
-      {insights.declining_customers.length > 0 && (
+      {insights.declining_customers.length > 0 ? (
         <div className="rounded-xl border border-neon-rose/30 bg-neon-rose/10 p-5">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-neon-rose shrink-0 mt-0.5" />
-            <div>
-              <h4 className="text-sm font-bold text-dark-text-primary">
-                Declining Accounts Warning ({insights.declining_customers.length} Accounts)
-              </h4>
+            <div className="flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-sm font-bold text-dark-text-primary">
+                  Declining Accounts Warning ({insights.declining_customers.length} Accounts)
+                </h4>
+                {insights.dataset_reference_date && (
+                  <span className="rounded bg-dark-bg/80 border border-neon-rose/40 px-2.5 py-0.5 text-[11px] font-mono text-neon-rose">
+                    Reference Date: {insights.dataset_reference_date} ({insights.history_span_days}d span)
+                  </span>
+                )}
+              </div>
               <p className="mt-1 text-xs text-dark-text-muted">
                 {insights.inactivity_definition}
               </p>
@@ -99,6 +106,19 @@ export function CustomerInsightsTab({ insights }: CustomerInsightsTabProps) {
               </tbody>
             </table>
           </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dark-border bg-dark-card p-4 flex items-center justify-between text-xs text-dark-text-muted">
+          <span>
+            {insights.history_span_days >= 90 ? (
+              <>No accounts currently meet the 60-day declining inactivity criteria relative to dataset date ({insights.dataset_reference_date || "latest record"}).</>
+            ) : (
+              <>Customer retention tracking active. 60-day declining inactivity analysis activates once dataset spans &ge; 90 days (current span: {insights.history_span_days} days).</>
+            )}
+          </span>
+          {insights.dataset_reference_date && (
+            <span className="font-mono text-neon-cyan/80">Anchor Date: {insights.dataset_reference_date}</span>
+          )}
         </div>
       )}
 

@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   XCircle,
   ArrowRight,
   ArrowLeft,
@@ -307,6 +308,22 @@ export function SalesUploadWizard({ onSuccess, onCancel }: SalesUploadWizardProp
             </div>
           </div>
 
+          {/* Transparency Callout */}
+          <div className="rounded-lg border border-neon-cyan/20 bg-neon-cyan/5 p-3 text-xs text-dark-text-muted space-y-1.5">
+            <div className="font-semibold text-neon-cyan flex items-center gap-1.5">
+              <AlertCircle className="h-4 w-4" /> Data Ingestion & Quality Protection Rules
+            </div>
+            <p>
+              • <strong>Revenue calculation:</strong> When total amount is missing or empty, it is calculated deterministically as <em>Quantity × Unit Price</em>. If provided revenue differs from computed revenue by &gt;10%, it is retained but flagged in the audit trail.
+            </p>
+            <p>
+              • <strong>Unsupported returns:</strong> Explicit zero or negative revenue entries (returns, credit notes, refunds) are out of scope for Phase 3 and will be flagged as rejected rows.
+            </p>
+            <p>
+              • <strong>Duplicate protection:</strong> Transactions matching prior records (by invoice or date/product/amount) are accepted for audit history but automatically excluded from default analytics to avoid inflating sales metrics.
+            </p>
+          </div>
+
           {/* Sample Rows Preview */}
           <div>
             <h4 className="mb-2 text-xs font-semibold text-dark-text-muted uppercase tracking-wider">
@@ -381,7 +398,7 @@ export function SalesUploadWizard({ onSuccess, onCancel }: SalesUploadWizardProp
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <div className="rounded-lg border border-dark-border bg-dark-bg p-3">
               <span className="text-xs text-dark-text-muted">Quality Score</span>
               <p className="text-xl font-bold text-neon-cyan">
@@ -401,9 +418,15 @@ export function SalesUploadWizard({ onSuccess, onCancel }: SalesUploadWizardProp
               </p>
             </div>
             <div className="rounded-lg border border-dark-border bg-dark-bg p-3">
-              <span className="text-xs text-dark-text-muted">Calculated Revenues</span>
+              <span className="text-xs text-dark-text-muted">Calculated Revs</span>
               <p className="text-xl font-bold text-neon-amber">
                 {uploadResult.quality_summary.calculated_revenues}
+              </p>
+            </div>
+            <div className="rounded-lg border border-dark-border bg-dark-bg p-3">
+              <span className="text-xs text-dark-text-muted">Duplicates (Audit Only)</span>
+              <p className="text-xl font-bold text-dark-text-muted">
+                {uploadResult.quality_summary.duplicate_transactions}
               </p>
             </div>
           </div>

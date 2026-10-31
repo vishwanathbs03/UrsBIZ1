@@ -197,15 +197,19 @@ def test_quality_engine_row_validation_and_revenue_calculation():
         {"date": "2026-08-04", "item": "Switch", "qty": "-5", "price": "50", "total": "250", "buyer": "Apex"},
         # 6. Invalid zero unit price: should be rejected
         {"date": "2026-08-05", "item": "Switch", "qty": "10", "price": "0", "total": "0", "buyer": "Apex"},
-        # 7. Duplicate of row 1: valid but flagged with warning
+        # 7. Duplicate of row 1: accepted into audit history but marked is_duplicate=True
         {"date": "2026-08-01", "item": "Solar Panel 400W", "qty": "10", "price": "15000", "total": "150000", "buyer": "EcoCorp"},
+        # 8. Explicit zero or negative revenue: rejected as unsupported return / credit note
+        {"date": "2026-08-06", "item": "Return Part", "qty": "1", "price": "500", "total": "-500", "buyer": "Apex"},
+        # 9. Inconsistent revenue: differing from qty * price by > 10%, accepted with provided total and warning
+        {"date": "2026-08-07", "item": "Custom Part", "qty": "2", "price": "100", "total": "260", "buyer": "Apex"},
     ]
     df = pd.DataFrame(rows)
     valid_rows, summary = validate_and_process_sales_data(df, mapping)
 
-    assert summary.total_rows_received == 7
-    assert summary.valid_rows == 3  # row 1, row 2, and row 7 (duplicate is accepted but flagged)
-    assert summary.invalid_rows == 4  # row 3, 4, 5, 6
+    assert summary.total_rows_received == 9
+    assert summary.valid_rows == 4  # row 1, row 2, row 7 (duplicate), and row 9 (inconsistent)
+    assert summary.invalid_rows == 5  # row 3, 4, 5, 6, and 8 (negative revenue)
     assert summary.missing_dates == 1
     assert summary.missing_customer_or_product == 1
     assert summary.invalid_quantities == 1
@@ -216,6 +220,16 @@ def test_quality_engine_row_validation_and_revenue_calculation():
     # Check calculated revenue on row 2
     calculated_row = [r for r in valid_rows if r["product_name"] == "Inverter Cable"][0]
     assert calculated_row["total_amount"] == 1000.0
+
+    # Check duplicate row 7 is marked is_duplicate=True, while row 1 is is_duplicate=False
+    dup_rows = [r for r in valid_rows if r["product_name"] == "Solar Panel 400W"]
+    assert len(dup_rows) == 2
+    assert dup_rows[0]["is_duplicate"] is False
+    assert dup_rows[1]["is_duplicate"] is True
+
+    # Check inconsistent revenue on row 9 retained provided value
+    inconsistent_row = [r for r in valid_rows if r["product_name"] == "Custom Part"][0]
+    assert inconsistent_row["total_amount"] == 260.0
 
 
 # =============================================================================
@@ -591,3 +605,253 @@ def test_api_sales_multi_tenant_isolation_and_switching():
     a1_summary_again = client_u1.get("/api/v1/sales/summary").json()
     assert a1_summary_again["has_sales_data"] is True
     assert a1_summary_again["total_revenue"] == 50000.0
+
+
+# =============================================================================
+# 10. Pre-Merge Verification Tests: Duplicate Exclusion & Analytics De-inflation
+# =============================================================================
+
+def test_duplicate_transactions_excluded_from_analytics(isolated_sales_db):
+    """Verify that duplicate transactions are preserved for audit but excluded from analytics."""
+    repo = SalesRepository(isolated_sales_db)
+
+    biz = Business(
+        owner_id=1,
+        legal_name="Precision Spares",
+        industry="Automotive",
+        established_year=2018,
+        annual_revenue=100000.0,
+    )
+    isolated_sales_db.add(biz)
+    isolated_sales_db.commit()
+
+    upload = repo.create_upload(
+        business_id=biz.id,
+        filename="batch1.csv",
+        file_format="csv",
+        file_size_bytes=2048,
+        row_count=3,
+        valid_row_count=3,
+        invalid_row_count=0,
+        status="processed",
+        column_mapping={},
+        quality_summary={},
+    )
+
+    t_date = datetime(2026, 5, 10, 10, 0, tzinfo=timezone.utc)
+    # 2 genuine transactions + 1 exact duplicate of transaction 1
+    rows = [
+        # Txn 1: Genuine
+        {"transaction_date": t_date, "invoice_id": "INV-101", "customer_name": "Hero Moto", "product_name": "Brake Pad", "quantity": 10.0, "unit_price": 500.0, "total_amount": 5000.0, "is_duplicate": False},
+        # Txn 2: Genuine
+        {"transaction_date": t_date, "invoice_id": "INV-102", "customer_name": "Bajaj Auto", "product_name": "Clutch Plate", "quantity": 5.0, "unit_price": 1000.0, "total_amount": 5000.0, "is_duplicate": False},
+        # Txn 3: Duplicate of Txn 1 (same invoice, product, qty, total)
+        {"transaction_date": t_date, "invoice_id": "INV-101", "customer_name": "Hero Moto", "product_name": "Brake Pad", "quantity": 10.0, "unit_price": 500.0, "total_amount": 5000.0, "is_duplicate": True},
+    ]
+    repo.bulk_insert_transactions(upload.id, biz.id, rows)
+
+    # 1. Summary: must exclude the duplicate
+    summary = repo.get_sales_summary(biz.id)
+    assert summary["total_transactions"] == 2  # Only the 2 non-duplicates
+    assert summary["total_revenue"] == 10000.0  # ₹5,000 + ₹5,000, NOT ₹15,000
+    assert summary["total_quantity"] == 15.0   # 10 + 5, NOT 25
+    assert summary["duplicate_transactions_excluded"] == 1
+
+    # 2. Customer insights: Hero Moto should have 1 order, NOT 2 (repeat rate = 0%)
+    cust_insights = repo.get_customer_insights(biz.id)
+    assert cust_insights["total_customers"] == 2
+    assert cust_insights["repeat_customers"] == 0  # Neither is repeat
+    assert cust_insights["repeat_rate_pct"] == 0.0
+    hero_metric = [c for c in cust_insights["top_customers_by_revenue"] if c["customer_name"] == "Hero Moto"][0]
+    assert hero_metric["total_orders"] == 1
+    assert hero_metric["total_revenue"] == 5000.0
+
+    # 3. Product insights: Brake Pad quantity should be 10, NOT 20
+    prod_insights = repo.get_product_insights(biz.id)
+    brake_metric = [p for p in prod_insights["top_products_by_revenue"] if p["product_name"] == "Brake Pad"][0]
+    assert brake_metric["total_quantity_sold"] == 10.0
+    assert brake_metric["total_revenue"] == 5000.0
+    assert prod_insights["total_quantity_sold"] == 15.0
+
+    # 4. Time series: Period revenue must be 10000.0, NOT 15000.0
+    ts = repo.get_time_series(biz.id, "monthly")
+    assert len(ts["points"]) == 1
+    assert ts["points"][0]["revenue"] == 10000.0
+    assert ts["points"][0]["quantity"] == 15.0
+    assert ts["points"][0]["transaction_count"] == 2
+
+
+def test_declining_customer_reference_date_anchor(isolated_sales_db):
+    """Verify that declining customer inactivity is anchored to the dataset max date, not wall-clock."""
+    repo = SalesRepository(isolated_sales_db)
+
+    biz = Business(
+        owner_id=1,
+        legal_name="Historical Hardware",
+        industry="Hardware",
+        established_year=2010,
+        annual_revenue=300000.0,
+    )
+    isolated_sales_db.add(biz)
+    isolated_sales_db.commit()
+
+    upload = repo.create_upload(
+        business_id=biz.id,
+        filename="sales_2024.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        row_count=2,
+        valid_row_count=2,
+        invalid_row_count=0,
+        status="processed",
+        column_mapping={},
+        quality_summary={},
+    )
+
+    # Historical dataset from 2024 (spans 100 days)
+    dt1 = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    dt2 = datetime(2024, 4, 10, tzinfo=timezone.utc)  # Day 100
+    rows = [
+        {"transaction_date": dt1, "customer_name": "Early Buyer", "product_name": "Nails", "quantity": 100, "unit_price": 5, "total_amount": 500, "is_duplicate": False},
+        {"transaction_date": dt2, "customer_name": "Recent Buyer", "product_name": "Hammer", "quantity": 2, "unit_price": 250, "total_amount": 500, "is_duplicate": False},
+    ]
+    repo.bulk_insert_transactions(upload.id, biz.id, rows)
+
+    insights = repo.get_customer_insights(biz.id)
+    # The reference date must be '2024-04-10'
+    assert insights["dataset_reference_date"] == "2024-04-10"
+    # Recent Buyer purchased on 2024-04-10 (0 days from reference date), so status is Active, NOT Declining!
+    recent_buyer = [c for c in insights["top_customers_by_revenue"] if c["customer_name"] == "Recent Buyer"][0]
+    assert recent_buyer["status"] != "Declining"
+    # Early Buyer last purchased 100 days prior to 2024-04-10 (> 60 days inactivity), so status is Declining
+    early_buyer = [c for c in insights["top_customers_by_revenue"] if c["customer_name"] == "Early Buyer"][0]
+    assert early_buyer["status"] == "Declining"
+
+
+def test_cross_upload_duplicate_detection(isolated_sales_db):
+    """Verify that re-uploading overlapping transactions across uploads detects duplicates."""
+    repo = SalesRepository(isolated_sales_db)
+
+    biz = Business(
+        owner_id=1,
+        legal_name="Multi-Upload Works",
+        industry="Electronics",
+        established_year=2020,
+        annual_revenue=200000.0,
+    )
+    isolated_sales_db.add(biz)
+    isolated_sales_db.commit()
+
+    # Upload 1: commits 2 transactions
+    u1 = repo.create_upload(
+        business_id=biz.id,
+        filename="month1.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        row_count=2,
+        valid_row_count=2,
+        invalid_row_count=0,
+        status="processed",
+        column_mapping={},
+        quality_summary={},
+    )
+    t_date = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    u1_rows = [
+        {"transaction_date": t_date, "invoice_id": "INV-001", "product_name": "Sensor A", "quantity": 10.0, "unit_price": 100.0, "total_amount": 1000.0, "is_duplicate": False},
+        {"transaction_date": t_date, "invoice_id": "INV-002", "product_name": "Sensor B", "quantity": 5.0, "unit_price": 200.0, "total_amount": 1000.0, "is_duplicate": False},
+    ]
+    repo.bulk_insert_transactions(u1.id, biz.id, u1_rows)
+
+    # Now simulate Upload 2 containing 1 new row and 1 duplicate of INV-001
+    existing_fps = repo.get_transaction_fingerprints(biz.id)
+    assert len(existing_fps) == 2
+
+    u2_df = pd.DataFrame([
+        # Overlapping row identical to INV-001
+        {"Date": "2026-06-01", "Invoice": "INV-001", "Item": "Sensor A", "Qty": 10, "Price": 100, "Total": 1000},
+        # New row
+        {"Date": "2026-06-02", "Invoice": "INV-003", "Item": "Sensor C", "Qty": 2, "Price": 500, "Total": 1000},
+    ])
+    mapping = ColumnMapping(
+        transaction_date="Date",
+        invoice_id="Invoice",
+        product_name="Item",
+        quantity="Qty",
+        unit_price="Price",
+        total_amount="Total",
+    )
+    valid_rows, summary = validate_and_process_sales_data(u2_df, mapping, existing_fingerprints=existing_fps)
+
+    assert summary.total_rows_received == 2
+    assert summary.valid_rows == 2
+    assert summary.duplicate_transactions == 1  # 1 duplicate detected across uploads
+    assert valid_rows[0]["is_duplicate"] is True
+    assert valid_rows[1]["is_duplicate"] is False
+
+
+def test_upload_cascade_delete_isolation(isolated_sales_db):
+    """Verify that deleting Upload 1 only removes its transactions, leaving Upload 2 intact."""
+    repo = SalesRepository(isolated_sales_db)
+
+    biz = Business(
+        owner_id=1,
+        legal_name="Cascade Cleaners",
+        industry="Services",
+        established_year=2019,
+        annual_revenue=150000.0,
+    )
+    isolated_sales_db.add(biz)
+    isolated_sales_db.commit()
+
+    u1 = repo.create_upload(
+        business_id=biz.id,
+        filename="january.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        row_count=2,
+        valid_row_count=2,
+        invalid_row_count=0,
+        status="processed",
+        column_mapping={},
+        quality_summary={},
+    )
+    u2 = repo.create_upload(
+        business_id=biz.id,
+        filename="february.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        row_count=1,
+        valid_row_count=1,
+        invalid_row_count=0,
+        status="processed",
+        column_mapping={},
+        quality_summary={},
+    )
+
+    t_date = datetime(2026, 1, 15, tzinfo=timezone.utc)
+    u1_rows = [
+        {"transaction_date": t_date, "product_name": "Wash", "quantity": 1.0, "unit_price": 50.0, "total_amount": 50.0, "is_duplicate": False},
+        {"transaction_date": t_date, "product_name": "Iron", "quantity": 2.0, "unit_price": 25.0, "total_amount": 50.0, "is_duplicate": False},
+    ]
+    u2_rows = [
+        {"transaction_date": t_date + timedelta(days=20), "product_name": "Dry Clean", "quantity": 1.0, "unit_price": 200.0, "total_amount": 200.0, "is_duplicate": False},
+    ]
+    repo.bulk_insert_transactions(u1.id, biz.id, u1_rows)
+    repo.bulk_insert_transactions(u2.id, biz.id, u2_rows)
+
+    # Total before delete
+    summary_before = repo.get_sales_summary(biz.id)
+    assert summary_before["total_transactions"] == 3
+    assert summary_before["total_revenue"] == 300.0
+
+    # Delete Upload 1
+    deleted = repo.delete_upload_for_business(u1.id, biz.id)
+    assert deleted is True
+
+    # Upload 2's transactions remain intact
+    summary_after = repo.get_sales_summary(biz.id)
+    assert summary_after["total_transactions"] == 1
+    assert summary_after["total_revenue"] == 200.0
+    u2_txns = isolated_sales_db.query(SalesTransaction).filter(SalesTransaction.upload_id == u2.id).all()
+    assert len(u2_txns) == 1
+    assert u2_txns[0].product_name == "Dry Clean"

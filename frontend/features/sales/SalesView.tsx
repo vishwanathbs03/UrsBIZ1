@@ -197,6 +197,20 @@ export function SalesView() {
           {/* TAB 1: Overview */}
           {activeTab === "overview" && (
             <div className="space-y-6">
+              {Boolean((summary.duplicate_transactions_excluded ?? 0) > 0) && (
+                <div className="rounded-xl border border-neon-cyan/30 bg-neon-cyan/5 p-4 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5 text-dark-text-primary">
+                    <span className="flex h-2 w-2 rounded-full bg-neon-cyan animate-ping" />
+                    <span>
+                      <strong className="text-neon-cyan">{summary.duplicate_transactions_excluded} duplicate transaction{(summary.duplicate_transactions_excluded ?? 0) > 1 ? "s" : ""}</strong> excluded from analytics to prevent revenue and volume inflation.
+                    </span>
+                  </div>
+                  <span className="rounded bg-neon-cyan/20 px-2 py-0.5 text-[10px] font-mono text-neon-cyan uppercase">
+                    Audit Protected
+                  </span>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
                   title="Historical Sales Revenue"

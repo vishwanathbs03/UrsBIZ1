@@ -112,6 +112,7 @@ class SalesSummaryResponse(BaseModel):
     date_range_days: int = 0
     latest_upload_id: Optional[int] = None
     latest_upload_filename: Optional[str] = None
+    duplicate_transactions_excluded: int = 0
 
 
 class CustomerMetricItem(BaseModel):
@@ -141,9 +142,13 @@ class CustomerInsightsResponse(BaseModel):
     declining_customers: list[CustomerMetricItem]
     history_span_days: int
     declining_threshold_days: int = 60
+    dataset_reference_date: Optional[str] = Field(
+        None,
+        description="Latest transaction date in the dataset used as the anchor for calculating customer inactivity.",
+    )
     inactivity_definition: str = (
-        "Customer is considered 'Declining' if no transaction was recorded in the last 60 days, "
-        "provided the business has at least 90 days of overall sales history."
+        "Customer is considered 'Declining' if no transaction was recorded in the last 60 days "
+        "relative to the dataset reference date, provided the business has at least 90 days of overall sales history."
     )
 
 

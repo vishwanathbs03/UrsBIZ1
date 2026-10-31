@@ -77,8 +77,13 @@ class SalesService:
                 f"Required column(s) {missing_in_df} not found in uploaded file headers {list(df.columns)}."
             )
 
+        # Fetch existing fingerprints to prevent duplicate inflation across uploads
+        existing_fps = self.repo.get_transaction_fingerprints(business_id)
+
         # Execute row-by-row quality validation & revenue calculations
-        valid_rows, quality_summary = validate_and_process_sales_data(df, mapping)
+        valid_rows, quality_summary = validate_and_process_sales_data(
+            df, mapping, existing_fingerprints=existing_fps
+        )
 
         # Record upload event
         upload = self.repo.create_upload(

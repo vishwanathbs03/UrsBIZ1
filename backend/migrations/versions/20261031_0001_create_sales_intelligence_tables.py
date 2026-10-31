@@ -73,6 +73,7 @@ def upgrade() -> None:
         sa.Column("quantity", sa.Float(), nullable=False),
         sa.Column("unit_price", sa.Float(), nullable=False),
         sa.Column("total_amount", sa.Float(), nullable=False),
+        sa.Column("is_duplicate", sa.Boolean(), nullable=False, server_default=sa.text("0")),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -123,15 +124,33 @@ def upgrade() -> None:
         ["product_name"],
         unique=False,
     )
+    op.create_index(
+        "ix_sales_transactions_is_duplicate",
+        "sales_transactions",
+        ["is_duplicate"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_sales_transactions_product_name", table_name="sales_transactions")
-    op.drop_index("ix_sales_transactions_customer_name", table_name="sales_transactions")
-    op.drop_index("ix_sales_transactions_transaction_date", table_name="sales_transactions")
-    op.drop_index("ix_sales_transactions_upload_id", table_name="sales_transactions")
-    op.drop_index("ix_sales_transactions_business_id", table_name="sales_transactions")
+    # Safely drop indexes and tables
+    for idx in [
+        "ix_sales_transactions_is_duplicate",
+        "ix_sales_transactions_product_name",
+        "ix_sales_transactions_customer_name",
+        "ix_sales_transactions_transaction_date",
+        "ix_sales_transactions_upload_id",
+        "ix_sales_transactions_business_id",
+    ]:
+        try:
+            op.drop_index(idx, table_name="sales_transactions")
+        except Exception:
+            pass
+
     op.drop_table("sales_transactions")
 
-    op.drop_index("ix_sales_uploads_business_id", table_name="sales_uploads")
+    try:
+        op.drop_index("ix_sales_uploads_business_id", table_name="sales_uploads")
+    except Exception:
+        pass
     op.drop_table("sales_uploads")

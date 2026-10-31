@@ -74,6 +74,7 @@ class SalesRepository:
                 quantity=float(r["quantity"]),
                 unit_price=float(r["unit_price"]),
                 total_amount=float(r["total_amount"]),
+                is_duplicate=bool(r.get("is_duplicate", False)),
             )
             for r in rows
         ]
@@ -109,17 +110,59 @@ class SalesRepository:
         self.db.commit()
         return True
 
+    def get_transaction_fingerprints(self, business_id: int) -> set[tuple]:
+        """Fetch existing transaction fingerprints to prevent duplicate inflation across uploads."""
+        txns = (
+            self.db.query(
+                SalesTransaction.transaction_date,
+                SalesTransaction.invoice_id,
+                SalesTransaction.product_name,
+                SalesTransaction.customer_name,
+                SalesTransaction.customer_id,
+                SalesTransaction.quantity,
+                SalesTransaction.total_amount,
+            )
+            .filter(SalesTransaction.business_id == business_id)
+            .all()
+        )
+        fps: set[tuple] = set()
+        for t in txns:
+            p_name = (t.product_name or "").strip().lower()
+            q_val = round(float(t.quantity), 4)
+            tot_val = round(float(t.total_amount), 2)
+            if t.invoice_id:
+                fps.add(("inv", t.invoice_id.strip().lower(), p_name, q_val, tot_val))
+            else:
+                date_str = t.transaction_date.strftime("%Y-%m-%d")
+                c_name = (t.customer_name or t.customer_id or "").strip().lower()
+                fps.add(("date", date_str, c_name, p_name, q_val, tot_val))
+        return fps
+
     # =========================================================================
     # Aggregations & Analytics
     # =========================================================================
 
-    def get_sales_summary(self, business_id: int) -> dict[str, Any]:
+    def get_sales_summary(
+        self, business_id: int, include_duplicates: bool = False
+    ) -> dict[str, Any]:
         """Compute high-level summary metrics from historical sales transactions."""
-        txns = (
-            self.db.query(SalesTransaction)
-            .filter(SalesTransaction.business_id == business_id)
-            .all()
+        query = self.db.query(SalesTransaction).filter(
+            SalesTransaction.business_id == business_id
         )
+        if not include_duplicates:
+            query = query.filter(SalesTransaction.is_duplicate.is_(False))
+        txns = query.all()
+
+        duplicate_count = (
+            self.db.query(func.count(SalesTransaction.id))
+            .filter(
+                SalesTransaction.business_id == business_id,
+                SalesTransaction.is_duplicate.is_(True),
+            )
+            .scalar()
+            or 0
+        )
+
         if not txns:
             return {
                 "has_sales_data": False,
@@ -133,6 +176,7 @@ class SalesRepository:
                 "date_range_days": 0,
                 "latest_upload_id": None,
                 "latest_upload_filename": None,
+                "duplicate_transactions_excluded": duplicate_count,
             }
 
         total_rev = sum(t.total_amount for t in txns)
@@ -167,16 +211,19 @@ class SalesRepository:
             "date_range_days": date_span,
             "latest_upload_id": latest_upload.id if latest_upload else None,
             "latest_upload_filename": latest_upload.filename if latest_upload else None,
+            "duplicate_transactions_excluded": duplicate_count,
         }
 
-    def get_customer_insights(self, business_id: int) -> dict[str, Any]:
+    def get_customer_insights(
+        self, business_id: int, include_duplicates: bool = False
+    ) -> dict[str, Any]:
         """Compute deterministic customer purchase metrics and retention analysis."""
-        txns = (
-            self.db.query(SalesTransaction)
-            .filter(SalesTransaction.business_id == business_id)
-            .order_by(SalesTransaction.transaction_date.asc())
-            .all()
+        query = self.db.query(SalesTransaction).filter(
+            SalesTransaction.business_id == business_id
         )
+        if not include_duplicates:
+            query = query.filter(SalesTransaction.is_duplicate.is_(False))
+        txns = query.order_by(SalesTransaction.transaction_date.asc()).all()
 
         if not txns:
             return {
@@ -190,6 +237,7 @@ class SalesRepository:
                 "declining_customers": [],
                 "history_span_days": 0,
                 "declining_threshold_days": 60,
+                "dataset_reference_date": None,
             }
 
         dataset_max_date = max(t.transaction_date for t in txns)
@@ -221,7 +269,7 @@ class SalesRepository:
                 new_cust_count += 1
 
             # Inactivity status determination
-            # Documented definition: customer is Declining if no purchase in >= 60 days
+            # Customer is Declining if no purchase in >= 60 days relative to dataset_max_date
             # provided the overall business history spans >= 90 days.
             days_since_last = (dataset_max_date - c_max_date).days
             if history_span >= 90 and days_since_last >= 60:
@@ -281,16 +329,19 @@ class SalesRepository:
             "declining_customers": declining_sorted,
             "history_span_days": history_span,
             "declining_threshold_days": 60,
+            "dataset_reference_date": dataset_max_date.strftime("%Y-%m-%d"),
         }
 
-    def get_product_insights(self, business_id: int) -> dict[str, Any]:
+    def get_product_insights(
+        self, business_id: int, include_duplicates: bool = False
+    ) -> dict[str, Any]:
         """Compute product intelligence, separating revenue rankings from volume rankings."""
-        txns = (
-            self.db.query(SalesTransaction)
-            .filter(SalesTransaction.business_id == business_id)
-            .order_by(SalesTransaction.transaction_date.asc())
-            .all()
+        query = self.db.query(SalesTransaction).filter(
+            SalesTransaction.business_id == business_id
         )
+        if not include_duplicates:
+            query = query.filter(SalesTransaction.is_duplicate.is_(False))
+        txns = query.order_by(SalesTransaction.transaction_date.asc()).all()
 
         if not txns:
             return {
@@ -393,15 +444,15 @@ class SalesRepository:
         }
 
     def get_time_series(
-        self, business_id: int, granularity: str = "monthly"
+        self, business_id: int, granularity: str = "monthly", include_duplicates: bool = False
     ) -> dict[str, Any]:
         """Aggregate sales into time buckets (monthly, weekly, or daily) without artificial zero-interpolation."""
-        txns = (
-            self.db.query(SalesTransaction)
-            .filter(SalesTransaction.business_id == business_id)
-            .order_by(SalesTransaction.transaction_date.asc())
-            .all()
+        query = self.db.query(SalesTransaction).filter(
+            SalesTransaction.business_id == business_id
         )
+        if not include_duplicates:
+            query = query.filter(SalesTransaction.is_duplicate.is_(False))
+        txns = query.order_by(SalesTransaction.transaction_date.asc()).all()
 
         if not txns:
             return {

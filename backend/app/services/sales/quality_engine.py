@@ -59,7 +59,9 @@ def _parse_float(raw_val: Any) -> float | None:
 
 
 def validate_and_process_sales_data(
-    df: pd.DataFrame, mapping: ColumnMapping
+    df: pd.DataFrame,
+    mapping: ColumnMapping,
+    existing_fingerprints: set[tuple] | None = None,
 ) -> tuple[list[dict[str, Any]], DataQualitySummary]:
     """Validate DataFrame row by row against mapping and generate quality audit summary."""
     total_rows = len(df)
@@ -75,7 +77,9 @@ def validate_and_process_sales_data(
     invalid_rows_count = 0
     flagged_rows_count = 0
 
-    seen_fingerprints: set[tuple] = set()
+    seen_fingerprints: set[tuple] = (
+        set(existing_fingerprints) if existing_fingerprints else set()
+    )
 
     for idx, row in df.iterrows():
         row_num = int(idx) + 1  # 1-based row index for user friendliness
@@ -184,14 +188,40 @@ def validate_and_process_sales_data(
 
         # 6. Revenue Calculation & Consistency
         total_amount: float | None = None
+        is_revenue_missing = False
+
         if mapping.total_amount:
             raw_total = row.get(mapping.total_amount)
-            total_amount = _parse_float(raw_total)
+            if (
+                raw_total is None
+                or (isinstance(raw_total, float) and math.isnan(raw_total))
+                or str(raw_total).strip() == ""
+                or str(raw_total).strip().lower() in ["nan", "none", "null", "nat"]
+            ):
+                is_revenue_missing = True
+            else:
+                total_amount = _parse_float(raw_total)
+                if total_amount is None:
+                    # Non-empty string could not be parsed as a float
+                    issues.append(
+                        QualityIssue(
+                            row_index=row_num,
+                            issue_type="invalid_total_amount",
+                            severity="error",
+                            message=f"Total amount '{raw_total}' could not be parsed as a valid numeric amount.",
+                            field="total_amount",
+                            value=str(raw_total),
+                        )
+                    )
+                    row_has_error = True
+        else:
+            is_revenue_missing = True
 
         if not row_has_error and qty is not None and unit_price is not None:
             expected_total = round(qty * unit_price, 2)
-            if total_amount is None or total_amount <= 0:
-                # Calculate revenue deterministically from quantity * unit_price
+
+            if is_revenue_missing:
+                # Deterministically calculate missing revenue
                 total_amount = expected_total
                 calculated_revenues_count += 1
                 flagged_rows_count += 1
@@ -200,49 +230,77 @@ def validate_and_process_sales_data(
                         row_index=row_num,
                         issue_type="calculated_revenue",
                         severity="warning",
-                        message=f"Revenue was missing; calculated as {qty} × {unit_price} = {total_amount}",
+                        message=f"Revenue was missing in source row; calculated deterministically as {qty} × {unit_price} = {total_amount}",
                         field="total_amount",
                         value=total_amount,
                     )
                 )
             else:
-                # Check for severe inconsistency (> 10% discrepancy)
-                diff = abs(total_amount - expected_total)
-                if expected_total > 0 and (diff / expected_total) > 0.10:
-                    flagged_rows_count += 1
+                assert total_amount is not None
+                if total_amount <= 0:
+                    # Explicit zero or negative revenue provided -> reject as unsupported return / credit note
+                    row_has_error = True
                     issues.append(
                         QualityIssue(
                             row_index=row_num,
-                            issue_type="inconsistent_revenue",
-                            severity="warning",
+                            issue_type="unsupported_zero_or_negative_revenue",
+                            severity="error",
                             message=(
-                                f"Provided revenue ({total_amount}) differs from qty × unit_price ({expected_total}). "
-                                "Recorded provided revenue."
+                                f"Explicit zero or negative revenue ({total_amount}) is not supported. "
+                                "Returns, refunds, credit notes, and zero-value adjustments are currently out of scope."
                             ),
                             field="total_amount",
                             value=total_amount,
                         )
                     )
+                else:
+                    # Positive revenue provided: check for severe discrepancy (> 10%)
+                    diff = abs(total_amount - expected_total)
+                    if expected_total > 0 and (diff / expected_total) > 0.10:
+                        flagged_rows_count += 1
+                        issues.append(
+                            QualityIssue(
+                                row_index=row_num,
+                                issue_type="inconsistent_revenue",
+                                severity="warning",
+                                message=(
+                                    f"Provided revenue ({total_amount}) differs from qty × unit_price ({expected_total}). "
+                                    "Recorded provided revenue."
+                                ),
+                                field="total_amount",
+                                value=total_amount,
+                            )
+                        )
 
         # 7. Duplicate Check
-        if not row_has_error and txn_date is not None:
-            fingerprint = (
-                txn_date.strftime("%Y-%m-%d"),
-                invoice_id or "",
-                product_name.lower(),
-                (customer_name or "").lower(),
-                qty,
-                total_amount,
-            )
+        is_duplicate = False
+        if not row_has_error and txn_date is not None and total_amount is not None and qty is not None:
+            date_str = txn_date.strftime("%Y-%m-%d")
+            p_name = product_name.strip().lower()
+            q_val = round(qty, 4)
+            tot_val = round(total_amount, 2)
+
+            if invoice_id:
+                fingerprint = ("inv", invoice_id.strip().lower(), p_name, q_val, tot_val)
+            else:
+                c_name = (customer_name or customer_id or "").strip().lower()
+                fingerprint = ("date", date_str, c_name, p_name, q_val, tot_val)
+
             if fingerprint in seen_fingerprints:
                 duplicate_count += 1
                 flagged_rows_count += 1
+                is_duplicate = True
                 issues.append(
                     QualityIssue(
                         row_index=row_num,
                         issue_type="duplicate_transaction",
                         severity="warning",
-                        message="Identical transaction found earlier in dataset (same date, invoice, product, qty, total).",
+                        message=(
+                            "Duplicate transaction detected (matches previous date/invoice, product, quantity & total). "
+                            "Row accepted for audit trail but excluded from default analytics to prevent metric inflation."
+                        ),
+                        field="invoice_id" if invoice_id else "transaction_date",
+                        value=invoice_id or date_str,
                     )
                 )
             else:
@@ -268,6 +326,7 @@ def validate_and_process_sales_data(
                     "quantity": qty,
                     "unit_price": unit_price,
                     "total_amount": total_amount,
+                    "is_duplicate": is_duplicate,
                 }
             )
 
