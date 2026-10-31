@@ -167,6 +167,15 @@ class SmartRecommendationEngine:
                 status=curr_status,
                 status_updated_at=status_updated,
                 notes=rec_notes,
+                what_is_happening=cand.get("what_is_happening"),
+                why_it_matters=cand.get("why_it_matters"),
+                root_cause=cand.get("root_cause"),
+                missed_opportunity=cand.get("missed_opportunity"),
+                action_scenario=cand.get("action_scenario"),
+                cost_of_inaction=cand.get("cost_of_inaction"),
+                measurement_kpis=cand.get("measurement_kpis", []),
+                implementation_difficulty=cand.get("implementation_difficulty", "Tactical"),
+                prerequisites_and_tradeoffs=cand.get("prerequisites_and_tradeoffs", []),
             )
             scored_items.append(item)
 

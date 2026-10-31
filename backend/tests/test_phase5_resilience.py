@@ -382,6 +382,7 @@ def test_sales_upload_partial_processing_status(db_session: Session):
     assert response.valid_row_count == 2
     assert response.invalid_row_count == 1
     assert response.quality_summary.invalid_rows == 1
+    db_session.rollback()
 
 
 # --------------------------------------------------------------------------- #

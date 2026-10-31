@@ -63,6 +63,17 @@ export interface SmartRecommendationItem {
   status: RecommendationStatus;
   status_updated_at?: string | null;
   notes?: string | null;
+
+  // 9-Pillar Business Growth Consultant Dimensions
+  what_is_happening?: string | null;
+  why_it_matters?: string | null;
+  root_cause?: string | null;
+  missed_opportunity?: string | null;
+  action_scenario?: string | null;
+  cost_of_inaction?: string | null;
+  measurement_kpis?: string[];
+  implementation_difficulty?: "Quick Win" | "Tactical" | "Strategic";
+  prerequisites_and_tradeoffs?: string[];
 }
 
 export interface SmartRecommendationsResponse {
@@ -79,6 +90,14 @@ export interface SmartRecommendationsResponse {
   recommendations: SmartRecommendationItem[];
 }
 
+export interface ImplementationPhase {
+  phase: string;
+  timeframe: string;
+  focus: string;
+  steps: string[];
+  resources?: string;
+}
+
 export interface RecommendationExplainResponse {
   recommendation_id: string;
   title: string;
@@ -86,6 +105,19 @@ export interface RecommendationExplainResponse {
   is_ai_generated: boolean;
   practical_steps: string[];
   limitations: string[];
+
+  // 9-Pillar Executive Diagnostic Brief
+  executive_summary?: string | null;
+  what_is_happening?: string | null;
+  what_is_going_wrong?: string | null;
+  why_is_it_happening?: string | null;
+  missed_opportunity?: string | null;
+  action_outcome?: string | null;
+  inaction_cost?: string | null;
+  implementation_phases?: ImplementationPhase[];
+  measurement_kpis?: string[];
+  confidence_score?: number | null;
+  data_quality_label?: string | null;
 }
 
 export interface CrossSignalInsight {

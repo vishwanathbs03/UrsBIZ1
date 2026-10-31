@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
+  AlertOctagon,
   AlertTriangle,
   ArrowRight,
   Award,
@@ -19,6 +20,7 @@ import {
   RotateCcw,
   ShieldAlert,
   Sparkles,
+  Timer,
   TrendingUp,
   XCircle,
   Zap,
@@ -124,6 +126,12 @@ export function SmartRecommendationCard({
             <Zap className="size-3 text-amber-400" />
             Score: <strong className="text-foreground">{item.priority_score}</strong>/100
           </span>
+          {item.implementation_difficulty && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-400">
+              <Timer className="size-3" />
+              {item.implementation_difficulty}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -141,6 +149,17 @@ export function SmartRecommendationCard({
           {item.description}
         </p>
       </div>
+
+      {/* Cost of Inaction Callout */}
+      {item.cost_of_inaction && (
+        <div className="flex items-start gap-2 rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-2.5 text-xs text-rose-300">
+          <AlertTriangle className="size-3.5 shrink-0 text-rose-400 mt-0.5" />
+          <div className="flex-1">
+            <strong className="text-rose-400 font-semibold">Cost of Inaction: </strong>
+            <span className="text-rose-200/90">{item.cost_of_inaction}</span>
+          </div>
+        </div>
+      )}
 
       {/* Impact & Confidence Bar */}
       <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/40 bg-secondary/20 p-2.5 text-xs sm:grid-cols-4">
@@ -274,21 +293,150 @@ export function SmartRecommendationCard({
         </div>
       )}
 
-      {/* AI Explanation Accordion Card */}
+      {/* AI Executive Growth Consultant Brief */}
       {aiExplanation && (
-        <div className="rounded-lg border border-primary/30 bg-primary/[0.04] p-3 text-xs">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="flex items-center gap-1.5 font-semibold text-primary">
-              <Sparkles className="size-3.5" />
-              AI Contextual Explanation
-            </span>
-            <span className="text-[10px] font-mono text-muted-foreground">
-              {aiExplanation.is_ai_generated ? "Gemini 2.0 Flash" : "Deterministic Fallback Engine"}
-            </span>
+        <div className="rounded-xl border border-primary/40 bg-primary/[0.03] p-4 text-xs shadow-inner">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-primary/20 pb-2.5 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="flex size-6 items-center justify-center rounded-full bg-primary/20 text-primary">
+                <Sparkles className="size-3.5" />
+              </span>
+              <div>
+                <h5 className="font-semibold text-foreground text-sm flex items-center gap-1.5">
+                  AI Executive Growth Consultant Brief
+                </h5>
+                <p className="text-[10px] text-muted-foreground">
+                  Personalized 9-Pillar Diagnostic & Strategic Action Framework
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-mono text-primary font-medium">
+                {aiExplanation.is_ai_generated ? "Gemini 2.0 Flash" : "Deterministic Engine"}
+              </span>
+              <span className="rounded border border-border/60 bg-secondary/50 px-2 py-0.5 text-[10px] text-muted-foreground">
+                Confidence: {aiExplanation.confidence_score ?? item.confidence}%
+              </span>
+            </div>
           </div>
-          <p className="text-foreground/90 whitespace-pre-line leading-relaxed">
-            {aiExplanation.explanation}
-          </p>
+
+          {/* Executive Summary */}
+          <div className="mb-3 rounded-lg border border-border/50 bg-background/60 p-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-primary block mb-1">
+              Executive Bottom-Line
+            </span>
+            <p className="text-foreground/90 leading-relaxed font-medium">
+              {aiExplanation.executive_summary || aiExplanation.explanation}
+            </p>
+          </div>
+
+          {/* 2 Strategic Analysis Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            {/* Diagnosis & Root Cause */}
+            <div className="space-y-2 rounded-lg border border-border/40 bg-secondary/20 p-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                <AlertOctagon className="size-3" />
+                Diagnosis & Root Cause
+              </span>
+              <div className="space-y-1.5 text-[11px]">
+                <div>
+                  <strong className="text-foreground">What is happening: </strong>
+                  <span className="text-muted-foreground">
+                    {aiExplanation.what_is_happening || item.what_is_happening || item.business_context}
+                  </span>
+                </div>
+                <div>
+                  <strong className="text-rose-400">Core vulnerability: </strong>
+                  <span className="text-muted-foreground">
+                    {aiExplanation.what_is_going_wrong || item.why_it_matters || item.reasoning}
+                  </span>
+                </div>
+                <div>
+                  <strong className="text-amber-400">Why it happens: </strong>
+                  <span className="text-muted-foreground">
+                    {aiExplanation.why_is_it_happening || item.root_cause || item.reasoning}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Impact Trade-off: Action vs Inaction */}
+            <div className="space-y-2 rounded-lg border border-border/40 bg-secondary/20 p-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+                <TrendingUp className="size-3" />
+                Strategic Outcome Analysis
+              </span>
+              <div className="space-y-1.5 text-[11px]">
+                <div>
+                  <strong className="text-emerald-400">If you take action: </strong>
+                  <span className="text-muted-foreground">
+                    {aiExplanation.action_outcome || item.action_scenario || item.expected_benefit}
+                  </span>
+                </div>
+                <div>
+                  <strong className="text-rose-400">If you do nothing: </strong>
+                  <span className="text-rose-300/90">
+                    {aiExplanation.inaction_cost || item.cost_of_inaction || "Compounding operational friction and revenue risk."}
+                  </span>
+                </div>
+                <div>
+                  <strong className="text-primary">Missed opportunity: </strong>
+                  <span className="text-muted-foreground">
+                    {aiExplanation.missed_opportunity || item.missed_opportunity || item.expected_benefit}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Phased Roadmap */}
+          {aiExplanation.implementation_phases && aiExplanation.implementation_phases.length > 0 && (
+            <div className="mb-3 rounded-lg border border-border/40 bg-secondary/10 p-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-primary flex items-center gap-1 mb-2">
+                <ListChecks className="size-3" />
+                Phased Implementation Playbook
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {aiExplanation.implementation_phases.map((ph, idx) => (
+                  <div key={idx} className="rounded border border-border/40 bg-background/50 p-2 text-[11px]">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <strong className="text-primary font-semibold">{ph.phase}</strong>
+                      <span className="text-[9px] text-muted-foreground font-mono">{ph.timeframe}</span>
+                    </div>
+                    <p className="text-muted-foreground text-[10px] mb-1.5">{ph.focus}</p>
+                    <ul className="list-inside list-disc space-y-0.5 text-[10px] text-foreground/90">
+                      {ph.steps.map((s, sIdx) => (
+                        <li key={sIdx}>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* KPI Target Trackers */}
+          {((aiExplanation.measurement_kpis && aiExplanation.measurement_kpis.length > 0) || (item.measurement_kpis && item.measurement_kpis.length > 0)) && (
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/30 text-[11px]">
+              <span className="text-muted-foreground font-medium flex items-center gap-1">
+                <CheckCircle2 className="size-3 text-emerald-400" />
+                Target KPIs:
+              </span>
+              {(aiExplanation.measurement_kpis || item.measurement_kpis || []).map((kpi, kIdx) => (
+                <span key={kIdx} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                  {kpi}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Limitations Disclosure */}
+          {aiExplanation.limitations.length > 0 && (
+            <div className="mt-2.5 pt-2 border-t border-border/30 text-[10px] text-amber-400/90 flex items-center gap-1">
+              <HelpCircle className="size-3 shrink-0" />
+              <span><strong>Data Consideration:</strong> {aiExplanation.limitations[0]}</span>
+            </div>
+          )}
         </div>
       )}
       {aiError && (

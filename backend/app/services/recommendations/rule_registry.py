@@ -122,6 +122,15 @@ class RecommendationRuleRegistry:
                     "limitations": ["Reflects recorded transaction data only; does not observe off-ledger sales or contractual multi-year commitments."],
                     "source_modules": ["Sales Intelligence", "Customer Insights"],
                     "source_module_link": "/sales?tab=customers",
+                    "what_is_happening": f"Top 3 customers currently generate {top_3_pct}% of total sales.",
+                    "why_it_matters": "If any primary client delays orders or switches suppliers, operational cash flow faces immediate shock.",
+                    "root_cause": "Historical reliance on early anchor accounts without systematic outreach to mid-tier B2B accounts.",
+                    "missed_opportunity": "Unlocking consistent recurring orders from underserved regional businesses.",
+                    "action_scenario": "Acquiring 2-3 mid-tier accounts diversifies turnover and reduces top-3 share below 45%.",
+                    "cost_of_inaction": f"Vulnerability to a {top_3_pct}% revenue wipeout if major accounts pause procurement.",
+                    "measurement_kpis": ["Top 3 revenue concentration %", "New active accounts acquired", "Monthly revenue stability"],
+                    "implementation_difficulty": "Strategic",
+                    "prerequisites_and_tradeoffs": ["Requires dedicated outreach time by owner/sales lead; temporary ramp-up time."],
                 })
 
         # Rule 1.2: Flagship Product Cross-Selling
@@ -186,7 +195,83 @@ class RecommendationRuleRegistry:
                     "limitations": ["Bundle adoption depends on customer purchasing preferences and price elasticity."],
                     "source_modules": ["Sales Intelligence", "Product Insights"],
                     "source_module_link": "/sales?tab=products",
+                    "what_is_happening": f"'{p_name}' accounts for {p_share}% of total sales revenue.",
+                    "why_it_matters": "Single-product over-concentration leaves business exposed if that SKU slows down.",
+                    "root_cause": "Customers primarily know the business for one hero item and lack awareness of catalog depth.",
+                    "missed_opportunity": "Higher basket size and increased AOV through bundled accessories and consumables.",
+                    "action_scenario": f"Bundling lifts Average Order Value above the ₹{cust.average_order_value:,.2f} baseline.",
+                    "cost_of_inaction": "Slow inventory turnover on secondary items and missed margin on accessory attachments.",
+                    "measurement_kpis": ["Average Order Value (AOV)", "Multi-item order %", "Secondary SKU sales volume"],
+                    "implementation_difficulty": "Quick Win",
+                    "prerequisites_and_tradeoffs": ["Requires setting package pricing tiers without eroding standalone margins."],
                 })
+
+        # Rule 1.3: Average Order Value Expansion via Volume Tiering
+        if sales.has_sales_data and cust.average_order_value and cust.average_order_value > 0 and cust.repeat_customers >= 1:
+            aov = cust.average_order_value
+            candidates.append({
+                "id": f"rec_RULE_REV_AOV_VOLUME_TIERING_{biz_id}_GLOBAL_v1",
+                "title": f"Introduce Volume Pricing Tiers to Lift Average Order Value (₹{aov:,.2f})",
+                "category": RecommendationCategory.REVENUE_GROWTH,
+                "description": (
+                    f"Your current Average Order Value (AOV) across repeat customers is ₹{aov:,.2f}. "
+                    "Introducing structured 2x and 3x volume brackets with modest percentage incentives encourages commercial buyers to consolidate orders."
+                ),
+                "business_context": f"Active customer base of {cust.total_customers} with {cust.repeat_customers} repeat buyers.",
+                "evidence": [
+                    f"Baseline Average Order Value: ₹{aov:,.2f}.",
+                    f"Repeat customer count: {cust.repeat_customers} accounts ({cust.repeat_rate_pct}% repeat rate).",
+                    f"Total recorded orders: {sales.total_transactions}.",
+                ],
+                "reasoning": "Tiered quantity discounts lower per-order fulfillment, packaging, and dispatch overhead while boosting gross revenue.",
+                "recommended_actions": [
+                    "Define volume brackets: Tier 1 (standard), Tier 2 (1.5x AOV with 3% incentive), Tier 3 (2.5x AOV with 6% incentive).",
+                    "Communicate tiered pricing on digital quotes and WhatsApp order confirmations.",
+                    "Test volume pricing with your top 5 most frequent purchasers.",
+                ],
+                "action_plan": ActionPlan(
+                    objective=f"Lift baseline AOV from ₹{aov:,.2f} by at least 15% through order consolidation",
+                    suggested_timeframe="30 Days",
+                    success_metric=f"Achieve AOV above ₹{aov * 1.15:,.2f} over next 30 days",
+                    steps=[
+                        ActionStep(
+                            step_number=1,
+                            title="Structure Volume Price Brackets",
+                            description="Calculate contribution margins to ensure volume discounts maintain healthy net profit.",
+                            timeframe="Days 1-5",
+                            resources_required="Product margin sheet",
+                        ),
+                        ActionStep(
+                            step_number=2,
+                            title="Roll Out to Frequent Buyers",
+                            description="Present tiered options during next purchase inquiries.",
+                            timeframe="Days 6-20",
+                            resources_required="Sales quotation template",
+                        ),
+                    ],
+                ),
+                "expected_benefit": "Larger order sizes, lower per-transaction packaging/logistics overhead, and higher monthly revenue velocity.",
+                "estimated_impact": None,
+                "impact_unit": None,
+                "urgency": 70,
+                "impact": 75,
+                "evidence_strength": sales_ev_strength,
+                "confidence": 92.0,
+                "feasibility": 85,
+                "data_quality": "High",
+                "limitations": ["Incentives must be calibrated to protect gross margin contribution."],
+                "source_modules": ["Sales Intelligence", "Customer Insights"],
+                "source_module_link": "/sales?tab=customers",
+                "what_is_happening": f"Average order size across repeat buyers stands at ₹{aov:,.2f}.",
+                "why_it_matters": "Frequent small orders multiply logistics, billing, and packaging costs compared to consolidated orders.",
+                "root_cause": "Absence of structured incentives that reward clients for ordering in larger economic batches.",
+                "missed_opportunity": "15-25% increase in order values without requiring new customer acquisition.",
+                "action_scenario": "Consolidated order batches increase cash flow predictability and reduce administrative overhead.",
+                "cost_of_inaction": "Continued high packaging and handling costs for small, piecemeal orders.",
+                "measurement_kpis": ["Average Order Value (AOV)", "Repeat order interval", "Net contribution margin %"],
+                "implementation_difficulty": "Quick Win",
+                "prerequisites_and_tradeoffs": ["Requires verifying unit margins to ensure volume discounts remain accretive."],
+            })
 
         # ---------------------------------------------------------------------
         # Category 2: Cost Optimization
@@ -249,6 +334,15 @@ class RecommendationRuleRegistry:
                     "limitations": ["UrsBiz does not track inventory balances, carrying costs, or warehouse space. Recommendations are limited to sales volume review; do not take liquidation or restocking actions without physical count."],
                     "source_modules": ["Sales Intelligence", "Product Insights"],
                     "source_module_link": "/sales?tab=products",
+                    "what_is_happening": f"Identified low-volume product(s) ({low_names}) contributing under 5% of unit turnover.",
+                    "why_it_matters": "Tying up working capital and warehouse attention in non-moving items.",
+                    "root_cause": "Catalog expansion without active lifecycle rationalization.",
+                    "missed_opportunity": "Reallocating operating cash to faster-turning, high-demand SKUs.",
+                    "action_scenario": "Leaner product portfolio with faster inventory rotation.",
+                    "cost_of_inaction": "Continued storage overhead, obsolescence risk, and wasted marketing effort.",
+                    "measurement_kpis": ["Slow SKU volume contribution %", "Active catalog velocity"],
+                    "implementation_difficulty": "Tactical",
+                    "prerequisites_and_tradeoffs": ["Audit customer demand before deciding to phase out or bundle."],
                 })
 
         # ---------------------------------------------------------------------
@@ -312,6 +406,66 @@ class RecommendationRuleRegistry:
                 "limitations": ["Historical spend represents past turnover only and is not guaranteed recoverable revenue."],
                 "source_modules": ["Sales Intelligence", "Customer Insights"],
                 "source_module_link": "/sales?tab=customers",
+                "what_is_happening": f"{inact_count} repeat accounts have placed zero orders in over 60 days.",
+                "why_it_matters": "Losing repeat accounts forces high acquisition expenses for replacement buyers.",
+                "root_cause": "Post-purchase contact drop-off; lack of recurring follow-up touchpoint.",
+                "missed_opportunity": "Reclaiming stable recurring purchase cycles from known accounts.",
+                "action_scenario": "Reactivating 20-30% of lapsed buyers stabilizes monthly baseline.",
+                "cost_of_inaction": "Permanent buyer defection to competitors and escalating customer acquisition spend.",
+                "measurement_kpis": ["Lapsed customer reactivation rate %", "Customer repurchase interval (days)"],
+                "implementation_difficulty": "Quick Win",
+                "prerequisites_and_tradeoffs": ["Requires phone/WhatsApp outreach; ensure adequate staff capacity to fulfill reorders."],
+            })
+
+        # Rule 3.2: Top-Tier Account VIP Retention Protocol
+        if sales.has_sales_data and cust.top_customers_by_revenue and cust.repeat_customers >= 1:
+            top_client = cust.top_customers_by_revenue[0]
+            top_name = top_client.get("customer_name") or "Primary Client"
+            top_rev = top_client.get("total_revenue", 0.0)
+            candidates.append({
+                "id": f"rec_RULE_RETENTION_TOP_TIER_VIP_SERVICE_{biz_id}_GLOBAL_v1",
+                "title": f"Establish Priority Service & Review Protocol for Top Account '{top_name}'",
+                "category": RecommendationCategory.CUSTOMER_RETENTION,
+                "description": (
+                    f"'{top_name}' is your largest individual revenue contributor (₹{top_rev:,.2f}). "
+                    "Institute a monthly executive check-in, priority order processing, and customized terms to lock in relationship loyalty."
+                ),
+                "business_context": f"Top account contributes significant share of recorded revenue ₹{sales.total_revenue:,.2f}.",
+                "evidence": [
+                    f"Top customer revenue: ₹{top_rev:,.2f} (historical context only).",
+                    f"Total recorded business revenue: ₹{sales.total_revenue:,.2f}.",
+                    f"Account relationship: Top-ranked revenue contributor.",
+                ],
+                "reasoning": "Retaining anchor clients is the single highest ROI retention activity for growing MSMEs.",
+                "recommended_actions": [
+                    f"Schedule a bi-monthly operational review with the purchasing lead at '{top_name}'.",
+                    "Offer guaranteed 48-hour order dispatch and flexible credit terms within credit limits.",
+                    "Anticipate their quarterly procurement calendar to reserve production capacity.",
+                ],
+                "expected_benefit": "Zero churn risk on flagship revenue stream and multi-quarter order visibility.",
+                "estimated_impact": None,
+                "impact_unit": None,
+                "urgency": 75,
+                "impact": 90,
+                "evidence_strength": sales_ev_strength,
+                "confidence": 95.0,
+                "feasibility": 90,
+                "data_quality": "High",
+                "limitations": [
+                    "Requires senior management or owner time to personally nurture the relationship.",
+                    "Past client turnover represents historical spend only; retention is not guaranteed without active service agreements.",
+                ],
+                "source_modules": ["Sales Intelligence", "Customer Insights"],
+                "source_module_link": "/sales?tab=customers",
+                "what_is_happening": f"'{top_name}' represents a major revenue pillar for your enterprise.",
+                "why_it_matters": "Losing this relationship would directly threaten ongoing payroll and vendor commitments.",
+                "root_cause": "Transactional interactions without formalized executive relationship management.",
+                "missed_opportunity": "Deepening share-of-wallet with your largest customer.",
+                "action_scenario": "Guarantees contract renewal and preferred supplier status for upcoming financial cycles.",
+                "cost_of_inaction": "Competitor inroads through targeted discounts or aggressive sales poaching.",
+                "measurement_kpis": ["Anchor client retention %", "On-time delivery fulfillment rate", "Client satisfaction score"],
+                "implementation_difficulty": "Quick Win",
+                "prerequisites_and_tradeoffs": ["Requires executive time investment from owner."],
             })
 
         # ---------------------------------------------------------------------
@@ -351,6 +505,15 @@ class RecommendationRuleRegistry:
                     "limitations": ["Market demand for secondary SKUs must be verified through small-scale promotion."],
                     "source_modules": ["Sales Intelligence", "Product Insights"],
                     "source_module_link": "/sales?tab=products",
+                    "what_is_happening": f"Leading single SKU represents {top_pct}% of all product turnover.",
+                    "why_it_matters": "Any supply bottleneck or competitor discount in this category threatens company solvency.",
+                    "root_cause": "Historical marketing focused exclusively on the fastest seller without cross-promoting catalog depth.",
+                    "missed_opportunity": "Building a balanced portfolio with 2-3 reliable revenue engines.",
+                    "action_scenario": "Diversifies product turnover and cushions margins against single-category demand swings.",
+                    "cost_of_inaction": "Acute enterprise risk if substitute products enter the market.",
+                    "measurement_kpis": ["Single-SKU revenue share %", "Secondary SKU monthly growth %"],
+                    "implementation_difficulty": "Tactical",
+                    "prerequisites_and_tradeoffs": ["Requires small marketing budget or sales rep reorientation toward secondary lines."],
                 })
 
         # ---------------------------------------------------------------------
@@ -422,6 +585,15 @@ class RecommendationRuleRegistry:
                     "limitations": (lead_grower.limitation_notes or []) + ["UrsBiz does not observe warehouse inventory, reorder quantities, or stockout dates; recommendations are limited to demand trend review."],
                     "source_modules": ["Demand Forecasting"],
                     "source_module_link": "/sales?tab=forecast",
+                    "what_is_happening": f"Demand for '{lead_grower.product_name}' is projected to increase ({p_units} units over next {p_horizon} periods).",
+                    "why_it_matters": "Failing to verify supplier capacity ahead of time results in stockouts and delayed customer fulfillment.",
+                    "root_cause": "Positive seasonal or market trajectory identified by backtested forecasting models.",
+                    "missed_opportunity": "Fulfilling surge demand fully and capturing market share from slower competitors.",
+                    "action_scenario": "Synchronizing supply schedules guarantees on-time order fulfillment without rush freight charges.",
+                    "cost_of_inaction": "Missed sales orders, dissatisfied buyers, and negative word-of-mouth.",
+                    "measurement_kpis": ["Order fill rate %", "Supplier lead-time adherence", "Forecast vs actual sales tracking"],
+                    "implementation_difficulty": "Tactical",
+                    "prerequisites_and_tradeoffs": ["Review supplier minimum order quantities and terms."],
                 })
 
             # Rule 5.2: Demand Decline Monitoring
@@ -463,6 +635,15 @@ class RecommendationRuleRegistry:
                     "limitations": (lead_decliner.limitation_notes or []) + ["UrsBiz does not calculate inventory write-downs or order cancellations. Recommends reviewing sales performance and customer demand drivers."],
                     "source_modules": ["Demand Forecasting"],
                     "source_module_link": "/sales?tab=forecast",
+                    "what_is_happening": f"Demand for '{lead_decliner.product_name}' shows downward momentum ({p_units} units over next {p_horizon} periods).",
+                    "why_it_matters": "Over-ordering materials for a contracting product line ties up critical working capital.",
+                    "root_cause": "Shifting customer preferences or seasonal cyclicality detected by predictive analytics.",
+                    "missed_opportunity": "Proactively redirecting promotional focus and purchasing capital to expanding product lines.",
+                    "action_scenario": "Minimizes dead stock and aligns procurement with verified demand run-rates.",
+                    "cost_of_inaction": "Excess inventory accumulation and margin erosion from distress discounting.",
+                    "measurement_kpis": ["Product unit run-rate", "Customer reorder frequency", "Gross margin contribution %"],
+                    "implementation_difficulty": "Tactical",
+                    "prerequisites_and_tradeoffs": ["Verify whether contraction is temporary or structural before modifying agreements."],
                 })
 
             # Rule 5.3: Intermittent Demand Review
@@ -507,6 +688,15 @@ class RecommendationRuleRegistry:
                     "limitations": (lead_intermittent.limitation_notes or []) + ["Intermittent demand exhibits irregular order timing; point forecasts reflect average period demand rather than guaranteed order dates. UrsBiz does not calculate reorder points or safety stock."],
                     "source_modules": ["Demand Forecasting"],
                     "source_module_link": "/sales?tab=forecast",
+                    "what_is_happening": f"'{lead_intermittent.product_name}' displays sporadic, irregular demand patterns.",
+                    "why_it_matters": "Linear periodic ordering creates either chronic overstocking or sudden unfulfillable stockouts.",
+                    "root_cause": "Institutional or batch-purchasing clients ordering large quantities separated by prolonged quiet periods.",
+                    "missed_opportunity": "Establishing advance order commitments or reservation deposits with irregular buyers.",
+                    "action_scenario": "Flexible, order-driven procurement protects cash flow while servicing sporadic demand profitably.",
+                    "cost_of_inaction": "Capital trapped in stagnant stock during quiet intervals.",
+                    "measurement_kpis": ["Intermittent order frequency", "Average batch size", "Order lead time"],
+                    "implementation_difficulty": "Tactical",
+                    "prerequisites_and_tradeoffs": ["Requires direct communication with bulk institutional purchasers."],
                 })
 
         # ---------------------------------------------------------------------
@@ -574,6 +764,15 @@ class RecommendationRuleRegistry:
                 "limitations": ["Requires periodic maintenance to keep product availability up to date."],
                 "source_modules": ["Business Profile", "Digital Health"],
                 "source_module_link": "/business",
+                "what_is_happening": "Business currently has no verified digital storefront or e-commerce ordering channel.",
+                "why_it_matters": "B2B and retail buyers verify credibility online; absence limits reach to local physical contacts.",
+                "root_cause": "Traditional reliance on offline foot-traffic and word-of-mouth.",
+                "missed_opportunity": "Inbound discovery from buyers searching online across regional and national markets.",
+                "action_scenario": "A 24/7 digital product showcase and instant inquiry channel expands inbound customer acquisition.",
+                "cost_of_inaction": "Steady loss of emerging buyers who discover and order from digitally enabled competitors.",
+                "measurement_kpis": ["Website visitor inquiries", "Digital lead conversions", "Digital Twin Health Score"],
+                "implementation_difficulty": "Tactical",
+                "prerequisites_and_tradeoffs": ["Initial setup investment in domain, photography, and catalog copywriting."],
             })
 
         # ---------------------------------------------------------------------
@@ -612,6 +811,59 @@ class RecommendationRuleRegistry:
                 "limitations": ["Software implementation requires initial ledger setup time."],
                 "source_modules": ["Business Profile", "Health Score"],
                 "source_module_link": "/business",
+                "what_is_happening": "Business profile does not have verified annual turnover or formalized accounting records.",
+                "why_it_matters": "Inability to present formal financial records blocks bank credit, subsidies, and investor confidence.",
+                "root_cause": "Ad-hoc paper billing and informal transaction tracking.",
+                "missed_opportunity": "Securing low-interest bank working capital lines and statutory tax deductions.",
+                "action_scenario": "Formalized books enable instant credit appraisal and accurate gross margin tracking.",
+                "cost_of_inaction": "Severe credit rationing, tax audit penalties, and blind operational spending.",
+                "measurement_kpis": ["Financial readiness score", "Accounting software adoption", "Monthly reconciliation cadence"],
+                "implementation_difficulty": "Quick Win",
+                "prerequisites_and_tradeoffs": ["Requires small monthly software subscription and basic staff training."],
+            })
+        elif sales.has_sales_data and sales.total_revenue > 0:
+            # Rule 7.2: Working Capital Acceleration via Payment Terms & Early Settlement Incentives
+            candidates.append({
+                "id": f"rec_RULE_FIN_PAYMENT_TERMS_ACCELERATION_{biz_id}_GLOBAL_v1",
+                "title": "Establish Standardized Payment Terms (Net-30) & 2% Quick-Pay Incentive",
+                "category": RecommendationCategory.FINANCIAL_MANAGEMENT,
+                "description": (
+                    "Managing commercial cash flow requires strict credit terms. "
+                    "Institute formal Net-30 payment milestones with a 2% early settlement discount (2/10 Net 30) to accelerate accounts receivable collection."
+                ),
+                "business_context": f"Total sales throughput: ₹{sales.total_revenue:,.2f} across {sales.total_transactions} orders.",
+                "evidence": [
+                    f"Recorded transactions: {sales.total_transactions} orders.",
+                    f"Total sales volume: ₹{sales.total_revenue:,.2f}.",
+                    f"Customer concentration: {cust.total_customers} tracked accounts.",
+                ],
+                "reasoning": "Unstructured payment terms lead to creeping receivable days (DSO), forcing business owners to borrow expensive emergency capital.",
+                "recommended_actions": [
+                    "Specify payment milestones (50% deposit, balance Net-30) on all written quotes and invoices.",
+                    "Offer 2% cash discount for invoice settlement within 10 days of delivery.",
+                    "Set up automated WhatsApp/email invoice reminders on Day 21 and Day 28.",
+                ],
+                "expected_benefit": "Faster cash conversion cycle, reduced debtor aging, and lower reliance on overdraft facilities.",
+                "estimated_impact": None,
+                "impact_unit": None,
+                "urgency": 75,
+                "impact": 80,
+                "evidence_strength": sales_ev_strength,
+                "confidence": 92.0,
+                "feasibility": 85,
+                "data_quality": "High",
+                "limitations": ["Requires buyer agreement; larger enterprise buyers may mandate their standard 60-90 day procurement cycles."],
+                "source_modules": ["Sales Intelligence", "Financial Health"],
+                "source_module_link": "/sales",
+                "what_is_happening": "Sales orders are fulfilled without standardized payment milestones or automated collection reminders.",
+                "why_it_matters": "Delayed buyer payments choke working capital and prevent timely restocking and payroll.",
+                "root_cause": "Informal credit granted without clear written milestone terms or early payment incentives.",
+                "missed_opportunity": "Accelerating cash conversion cycle by 15-25 days without bank financing costs.",
+                "action_scenario": "Predictable weekly cash inflows and reduced bad debt risk.",
+                "cost_of_inaction": "Working capital crunch forcing emergency high-interest borrowing or supplier payment defaults.",
+                "measurement_kpis": ["Days Sales Outstanding (DSO)", "On-time invoice payment %", "Cash conversion cycle (days)"],
+                "implementation_difficulty": "Quick Win",
+                "prerequisites_and_tradeoffs": ["Requires updating invoice templates and communicating terms clearly before order acceptance."],
             })
 
         # ---------------------------------------------------------------------
@@ -671,6 +923,15 @@ class RecommendationRuleRegistry:
                 "limitations": ["Supported formats: CSV, XLSX up to 10MB."],
                 "source_modules": ["Sales Intelligence", "System Audit"],
                 "source_module_link": "/sales?tab=upload",
+                "what_is_happening": "UrsBiz has zero recorded sales transactions for this business profile.",
+                "why_it_matters": "All predictive algorithms, churn detectors, and inventory demand planning modules remain locked.",
+                "root_cause": "Sales ledger has not been exported or uploaded into the UrsBiz ingestion pipeline.",
+                "missed_opportunity": "Automated detection of customer drop-offs, bestsellers, and predictive growth trajectories.",
+                "action_scenario": "Unlocks complete predictive analytics, AI explanation briefs, and What-If scenario simulations.",
+                "cost_of_inaction": "Operating business decisions on intuition rather than verified sales intelligence.",
+                "measurement_kpis": ["Ingested transaction records", "Coverage date range (days)", "Sales Intelligence status"],
+                "implementation_difficulty": "Quick Win",
+                "prerequisites_and_tradeoffs": ["Requires exporting invoice CSV/Excel from current billing system."],
             })
         elif health.missing_fields and len(health.missing_fields) > 2:
             # Rule 8.2: Profile Completion
@@ -705,6 +966,15 @@ class RecommendationRuleRegistry:
                 "limitations": ["Self-reported profile data."],
                 "source_modules": ["Business Profile", "Health Score"],
                 "source_module_link": "/business",
+                "what_is_happening": f"Digital Twin profile is missing key operational attributes ({missing_clean}).",
+                "why_it_matters": "Incomplete data restricts accurate government subsidy matching and strategic AI reasoning.",
+                "root_cause": "Initial onboarding completed with only basic registration fields.",
+                "missed_opportunity": "Unlocking high-matching public grants and targeted sector recommendations.",
+                "action_scenario": "Reaching 90%+ completeness activates tailored compliance and subsidy opportunities.",
+                "cost_of_inaction": "Missing out on eligible government schemes and lower accuracy in automated health diagnostics.",
+                "measurement_kpis": ["Digital Twin Completeness %", "Health Score", "Scheme match count"],
+                "implementation_difficulty": "Quick Win",
+                "prerequisites_and_tradeoffs": ["10-15 minutes of administrative time to input operating details."],
             })
 
         # ---------------------------------------------------------------------
@@ -776,6 +1046,15 @@ class RecommendationRuleRegistry:
                 ],
                 "source_modules": ["Government Schemes"],
                 "source_module_link": "/schemes",
+                "what_is_happening": f"Profile matches eligibility parameters for {lead_scheme.name}.",
+                "why_it_matters": "Subsidized government backing dramatically lowers the cost of capital and technology adoption.",
+                "root_cause": "Public policies created specifically to foster MSME competitiveness in {profile.industry}.",
+                "missed_opportunity": f"Benefiting from {', '.join(lead_scheme.benefits or ['subsidized financing'])} without commercial loan rates.",
+                "action_scenario": "Approved application grants access to designated state benefits and concessionary finance.",
+                "cost_of_inaction": "Paying unnecessary high commercial interest or bearing 100% of modernization costs out of pocket.",
+                "measurement_kpis": ["Application submission acknowledgment", "Sanction letter turnaround", "Subsidy benefit received"],
+                "implementation_difficulty": "Tactical",
+                "prerequisites_and_tradeoffs": ["Requires active Udyam registration and clean GST filing compliance."],
             })
 
         # ---------------------------------------------------------------------
@@ -813,6 +1092,15 @@ class RecommendationRuleRegistry:
                 "limitations": ["Exporting involves cross-border logistics, customs documentation, and compliance obligations."],
                 "source_modules": ["Business Profile", "SWOT Analysis"],
                 "source_module_link": "/business",
+                "what_is_happening": "Business is 100% reliant on local domestic demand without international market exposure.",
+                "why_it_matters": "Domestic economic slowdowns or local tax changes directly impact total revenue with no geographic hedge.",
+                "root_cause": "Perceived regulatory complexity of cross-border trade.",
+                "missed_opportunity": "Higher export margins and foreign currency earnings across regional markets.",
+                "action_scenario": "Securing export credentials allows bidding on international buyer requests and trade fairs.",
+                "cost_of_inaction": "Complete exposure to domestic economic cycles and localized price wars.",
+                "measurement_kpis": ["Export readiness score", "IEC registration status", "International buyer inquiries"],
+                "implementation_difficulty": "Strategic",
+                "prerequisites_and_tradeoffs": ["Requires IEC registration, GST LUT filing, and international shipping partner."],
             })
 
         return candidates

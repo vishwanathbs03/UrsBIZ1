@@ -98,6 +98,17 @@ class SmartRecommendationItem(BaseModel):
     status_updated_at: Optional[str] = Field(default=None)
     notes: Optional[str] = Field(default=None)
 
+    # Enhanced 9-Pillar Business Consultant Dimensions
+    what_is_happening: Optional[str] = Field(default=None, description="Diagnostic analysis of current business state")
+    why_it_matters: Optional[str] = Field(default=None, description="Business severity, operational risk, or growth constraint")
+    root_cause: Optional[str] = Field(default=None, description="Verified data-backed root cause explaining why this occurs")
+    missed_opportunity: Optional[str] = Field(default=None, description="Value or strategic advantage currently left on the table")
+    action_scenario: Optional[str] = Field(default=None, description="Projected outcome if the owner implements the recommended actions")
+    cost_of_inaction: Optional[str] = Field(default=None, description="Direct cost, compounding risk, and downsides if the owner takes no action")
+    measurement_kpis: list[str] = Field(default_factory=list, description="Target metrics and milestones to measure improvement")
+    implementation_difficulty: str = Field(default="Tactical", description="'Quick Win' (1-7d) | 'Tactical' (8-30d) | 'Strategic' (30-90d)")
+    prerequisites_and_tradeoffs: list[str] = Field(default_factory=list, description="Operational prerequisites and strategic trade-offs")
+
 
 class SmartRecommendationsResponse(BaseModel):
     """Response envelope for GET /api/v1/recommendations."""
@@ -135,7 +146,7 @@ class RecommendationExplainRequest(BaseModel):
 
 
 class RecommendationExplainResponse(BaseModel):
-    """Response for AI-powered recommendation explanation."""
+    """Response for AI-powered recommendation explanation with 9-pillar executive diagnostic brief."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -145,3 +156,16 @@ class RecommendationExplainResponse(BaseModel):
     is_ai_generated: bool
     practical_steps: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
+
+    # 9-Pillar Executive Diagnostic Brief
+    executive_summary: Optional[str] = Field(default=None, description="Concise bottom-line assessment")
+    what_is_happening: Optional[str] = Field(default=None, description="Current operational state diagnosis")
+    what_is_going_wrong: Optional[str] = Field(default=None, description="Core business vulnerability or bottleneck")
+    why_is_it_happening: Optional[str] = Field(default=None, description="Multi-signal root cause explanation")
+    missed_opportunity: Optional[str] = Field(default=None, description="Strategic upside or revenue left on table")
+    action_outcome: Optional[str] = Field(default=None, description="Projected outcome if recommendation is implemented")
+    inaction_cost: Optional[str] = Field(default=None, description="Direct cost and risk of doing nothing")
+    implementation_phases: list[dict[str, Any]] = Field(default_factory=list, description="Phased implementation roadmap (Days 1-7, 8-30, 31-60)")
+    measurement_kpis: list[str] = Field(default_factory=list, description="Measurable milestones and tracking metrics")
+    confidence_score: Optional[float] = Field(default=None, description="Confidence in underlying data (0-100)")
+    data_quality_label: Optional[str] = Field(default=None, description="Data quality tier: High, Moderate, Limited, Insufficient")
