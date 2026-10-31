@@ -185,6 +185,19 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
             REQUEST_DURATION.labels(method=method, endpoint=endpoint).observe(
                 duration / 1000.0,
             )
+            service_status = "ok" if status_code < 400 else ("error" if status_code >= 500 else "warning")
+            error_cat = None
+            if status_code == 429:
+                error_cat = "rate_limit"
+            elif status_code in {401, 403}:
+                error_cat = "auth"
+            elif status_code == 422:
+                error_cat = "validation"
+            elif status_code == 503:
+                error_cat = "service_unavailable"
+            elif status_code >= 500:
+                error_cat = "internal_error"
+
             self._logger.info(
                 "request",
                 extra={
@@ -193,8 +206,14 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                     ),
                     "method": method,
                     "path": endpoint,
+                    "endpoint": endpoint,
                     "duration_ms": round(duration, 3),
+                    "execution_duration_ms": round(duration, 3),
                     "status": status_code,
+                    "service_status": service_status,
+                    "error_category": error_cat,
+                    "retry_count": getattr(request.state, "retry_count", 0),
+                    "fallback_usage": getattr(request.state, "fallback_usage", False),
                     "user_id": self._user_id(request),
                 },
             )
@@ -248,13 +267,21 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                     "exception_type": type(exc).__name__,
                 },
             )
+            request_id = getattr(request.state, REQUEST_ID_ATTR, "") or uuid.uuid4().hex
             return JSONResponse(
                 status_code=500,
-                content={"detail": "Internal server error"},
+                content={
+                    "error_code": "INTERNAL_SERVER_ERROR",
+                    "safe_message": "An unexpected error occurred. Please try again.",
+                    "detail": "Internal server error",
+                    "request_id": request_id,
+                    "retryable": True,
+                    "service_name": "fastapi",
+                    "hint": "If this persists, check the backend logs.",
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                },
                 headers={
-                    REQUEST_ID_HEADER: getattr(
-                        request.state, REQUEST_ID_ATTR, ""
-                    ),
+                    REQUEST_ID_HEADER: request_id,
                 },
             )
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.recommendation_lifecycle import RecommendationLifecycleState
@@ -46,30 +47,53 @@ class RecommendationLifecycleRepository:
         status: str,
         notes: str | None = None,
     ) -> RecommendationLifecycleState:
-        """Update or create a recommendation state transition."""
+        """Update or create a recommendation state transition with concurrency protection and idempotency."""
         now = datetime.now(timezone.utc)
         record = self.get_state(business_id, recommendation_id)
-        if record is None:
-            record = RecommendationLifecycleState(
-                business_id=business_id,
-                recommendation_id=recommendation_id,
-                status=status,
-                notes=notes,
-                first_viewed_at=now if status == "Viewed" else None,
-                status_updated_at=now,
-            )
-            self.db.add(record)
-        else:
-            record.status = status
-            record.status_updated_at = now
-            if notes is not None:
-                record.notes = notes
-            if status == "Viewed" and record.first_viewed_at is None:
-                record.first_viewed_at = now
 
-        self.db.commit()
-        self.db.refresh(record)
-        return record
+        # Idempotent check — if already in desired state with identical notes, skip redundant DB write
+        if record is not None and record.status == status and (notes is None or record.notes == notes):
+            return record
+
+        try:
+            if record is None:
+                record = RecommendationLifecycleState(
+                    business_id=business_id,
+                    recommendation_id=recommendation_id,
+                    status=status,
+                    notes=notes,
+                    first_viewed_at=now if status == "Viewed" else None,
+                    status_updated_at=now,
+                )
+                self.db.add(record)
+                self.db.commit()
+            else:
+                record.status = status
+                record.status_updated_at = now
+                if notes is not None:
+                    record.notes = notes
+                if status == "Viewed" and record.first_viewed_at is None:
+                    record.first_viewed_at = now
+                self.db.commit()
+
+            self.db.refresh(record)
+            return record
+        except IntegrityError:
+            # Concurrent insert race condition: reload existing record and update
+            self.db.rollback()
+            existing = self.get_state(business_id, recommendation_id)
+            if existing is not None:
+                existing.status = status
+                existing.status_updated_at = now
+                if notes is not None:
+                    existing.notes = notes
+                self.db.commit()
+                self.db.refresh(existing)
+                return existing
+            raise
+        except Exception:
+            self.db.rollback()
+            raise
 
     def record_first_views(
         self, business_id: int, recommendation_ids: list[str]
@@ -92,4 +116,7 @@ class RecommendationLifecycleRepository:
                 changed = True
 
         if changed:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()

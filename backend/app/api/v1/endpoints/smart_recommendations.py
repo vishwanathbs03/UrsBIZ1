@@ -67,17 +67,22 @@ def get_smart_recommendations(
     category: Optional[str] = Query(None, description="Filter by category (e.g. 'Revenue Growth', 'Customer Retention')"),
     priority: Optional[str] = Query(None, description="Filter by priority ('Critical', 'High', 'Medium', 'Low')"),
     status: Optional[str] = Query(None, description="Filter by lifecycle status ('New', 'Viewed', 'Accepted', 'In Progress', 'Completed', 'Dismissed')"),
+    limit: int = Query(50, ge=1, le=200, description="Pagination page size"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SmartRecommendationsResponse:
     business = _get_active_business(current_user, db)
     engine = SmartRecommendationEngine(db)
-    return engine.generate_recommendations(
+    res = engine.generate_recommendations(
         business=business,
         category_filter=category,
         priority_filter=priority,
         status_filter=status,
     )
+    if offset > 0 or limit < len(res.recommendations):
+        res.recommendations = res.recommendations[offset : offset + limit]
+    return res
 
 
 @router.get(

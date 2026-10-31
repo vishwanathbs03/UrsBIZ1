@@ -23,6 +23,7 @@ corrupted install) so the API can still come up.
 """
 
 from collections.abc import Generator
+from contextlib import contextmanager
 import logging
 import threading
 from urllib.parse import urlparse
@@ -106,12 +107,26 @@ SessionLocal = sessionmaker(
 
 
 def get_db() -> Generator[Session, None, None]:
-    """FastAPI dependency that yields a database session."""
+    """FastAPI dependency that yields a database session with guaranteed rollback on error."""
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
+
+
+@contextmanager
+def safe_transaction(db: Session) -> Generator[Session, None, None]:
+    """Explicit transaction context manager that commits on success and safely rolls back on exception."""
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 # -- Sprint H2: Alembic-driven schema bootstrap -----------------------
@@ -133,7 +148,7 @@ _bootstrap_done: set[str] = set()
 # ``alembic_version`` row; a mismatch means the operator forgot
 # to run ``alembic upgrade head`` (or vice versa) and we attempt
 # to bring the DB forward.
-EXPECTED_HEAD_REVISION = "20260814_0001"
+EXPECTED_HEAD_REVISION = "20261101_0004"
 
 # Tables that must exist for the schema to be considered
 # "complete" at the head revision. The list is a strict superset
@@ -153,6 +168,13 @@ EXPECTED_TABLES_AT_HEAD: tuple[str, ...] = (
     "chat_messages",
     "action_items",
     "notification_items",
+    "sales_uploads",
+    "sales_transactions",
+    "recommendation_lifecycle",
+    "recommendation_feedback",
+    "business_data_provenance",
+    "business_data_quality_audits",
+    "idempotency_records",
 )
 
 

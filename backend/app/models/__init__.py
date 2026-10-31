@@ -13,6 +13,7 @@ from app.models.chat import ChatMessage, ChatSession
 from app.models.data_provenance import BusinessDataProvenance, BusinessDataQualityAudit
 from app.models.digital_presence import DigitalPresence
 from app.models.export_history import ExportHistory
+from app.models.idempotency import IdempotencyRecord
 from app.models.notification_item import NotificationItem
 from app.models.product import Product
 from app.models.recommendation_feedback import RecommendationFeedback
@@ -39,4 +40,5 @@ __all__ = [
     "RecommendationFeedback",
     "BusinessDataProvenance",
     "BusinessDataQualityAudit",
+    "IdempotencyRecord",
 ]

@@ -391,7 +391,9 @@ export function SalesUploadWizard({ onSuccess, onCancel }: SalesUploadWizardProp
         <div className="space-y-6">
           <div className="rounded-xl border border-neon-emerald/30 bg-neon-emerald/10 p-5 text-center">
             <CheckCircle2 className="mx-auto h-10 w-10 text-neon-emerald" />
-            <h3 className="mt-2 text-lg font-bold text-dark-text-primary">Ingestion Completed</h3>
+            <h3 className="mt-2 text-lg font-bold text-dark-text-primary">
+              {uploadResult.status === "partial_success" ? "Partial Ingestion Completed" : "Ingestion Completed"}
+            </h3>
             <p className="text-xs text-dark-text-muted">
               {uploadResult.valid_row_count.toLocaleString()} valid transactions ingested out of{" "}
               {uploadResult.row_count.toLocaleString()} rows.

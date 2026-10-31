@@ -15,6 +15,7 @@ from app.schemas.smart_recommendations import (
     RecommendationExplainResponse,
     SmartRecommendationItem,
 )
+from app.services.ai.resilient_client import ResilientGeminiClient
 
 logger = logging.getLogger(__name__)
 
@@ -83,35 +84,22 @@ def explain_recommendation(
             f"Limitations: {', '.join(rec.limitations)}\n"
         )
 
-        headers = {
-            "Authorization": f"Bearer {settings.ai_api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": settings.ai_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content},
-            ],
-            "max_tokens": 300,
-            "temperature": 0.2,
-        }
-
-        url = f"{settings.ai_base_url.rstrip('/')}/chat/completions"
-        with httpx.Client(timeout=8.0) as client:
-            resp = client.post(url, headers=headers, json=payload)
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"].strip()
-                if content and len(content) > 30:
-                    return RecommendationExplainResponse(
-                        recommendation_id=rec.id,
-                        title=rec.title,
-                        explanation=content,
-                        is_ai_generated=True,
-                        practical_steps=practical_steps,
-                        limitations=rec.limitations,
-                    )
+        client = ResilientGeminiClient(timeout_seconds=8.0, max_retries=2, settings=settings)
+        content = client.execute_chat_completion(
+            system_prompt=system_prompt,
+            user_content=user_content,
+            max_tokens=300,
+            temperature=0.2,
+        )
+        if content and len(content.strip()) > 30:
+            return RecommendationExplainResponse(
+                recommendation_id=rec.id,
+                title=rec.title,
+                explanation=content.strip(),
+                is_ai_generated=True,
+                practical_steps=practical_steps,
+                limitations=rec.limitations,
+            )
     except Exception as e:
         logger.warning(f"Gemini recommendation explanation failed, using deterministic fallback: {e}")
 

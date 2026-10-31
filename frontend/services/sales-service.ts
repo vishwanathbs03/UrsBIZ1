@@ -1,5 +1,5 @@
 /**
- * Sales Service — API client integration for Phase 3 Sales Intelligence.
+ * Sales Service — API client integration for Phase 3 Sales Intelligence & Phase 5 Resilience.
  */
 
 import { apiClient } from "@/services/api-client";
@@ -170,7 +170,7 @@ export const salesService = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: "Preview failed" }));
-      throw new Error(err.detail || `Upload preview failed with status ${res.status}`);
+      throw new Error(err.safe_message || err.detail || `Upload preview failed with status ${res.status}`);
     }
     return res.json();
   },
@@ -180,13 +180,17 @@ export const salesService = {
     formData.append("file", file);
     formData.append("mapping", JSON.stringify(mapping));
 
+    const idempotencyKey = `upload_${file.name}_${file.size}_${file.lastModified}`;
     const res = await fetch("/api/v1/sales/upload/confirm", {
       method: "POST",
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+      },
       body: formData,
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: "Ingestion failed" }));
-      throw new Error(err.detail || `Ingestion failed with status ${res.status}`);
+      throw new Error(err.safe_message || err.detail || `Ingestion failed with status ${res.status}`);
     }
     return res.json();
   },

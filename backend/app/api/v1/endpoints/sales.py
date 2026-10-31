@@ -1,4 +1,4 @@
-"""API router for Sales Ingestion and Sales Intelligence (Phase 3)."""
+"""API router for Sales Ingestion and Sales Intelligence (Phase 3 & Phase 5 Resilience)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from fastapi import (
     Depends,
     File,
     Form,
+    Header,
     HTTPException,
     Query,
     UploadFile,
@@ -93,10 +94,11 @@ async def preview_sales_file(
 async def confirm_and_ingest_sales(
     file: UploadFile = File(..., description="Sales CSV or Excel file"),
     mapping: str = Form(..., description="JSON string of ColumnMapping"),
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Validates rows against mapping, audits data quality, and commits sales records."""
+    """Validates rows against mapping, audits data quality, and commits sales records with idempotency."""
     business = _get_active_business(current_user, db)
 
     try:
@@ -116,6 +118,7 @@ async def confirm_and_ingest_sales(
             filename=file.filename or "uploaded_sales",
             file_bytes=content,
             mapping=col_mapping,
+            idempotency_key=idempotency_key,
         )
     except EmptyFileError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
@@ -198,13 +201,16 @@ def get_sales_time_series(
     summary="List all historical sales uploads and quality audits for the active business",
 )
 def list_sales_uploads(
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of upload records to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Returns historical upload log and data quality scores."""
+    """Returns historical upload log and data quality scores with pagination."""
     business = _get_active_business(current_user, db)
     svc = SalesService(db)
-    return svc.list_uploads(business.id)
+    uploads = svc.list_uploads(business.id)
+    return uploads[offset : offset + limit]
 
 
 @router.delete(

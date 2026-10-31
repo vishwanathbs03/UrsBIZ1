@@ -140,25 +140,72 @@ def create_app() -> FastAPI:
     # contract.
     app.include_router(monitoring_router)
 
-    # Sprint H6.1 / 2026-08-03 — global exception handler that
-    # returns a STRUCTURED JSON 500 envelope (with the exception
-    # type + message) instead of FastAPI's default
-    # `{"detail": "Internal server error"}`. The frontend can then
-    # surface a specific message instead of the generic
-    # "Failed to fetch" wrapper that masks server errors.
+    # Centralized Failure Handling & Resilience Handlers (Phase 5)
+    import uuid
     import logging as _logging
+    from datetime import datetime, timezone
+    from sqlalchemy.exc import SQLAlchemyError
+    from app.core.errors import AppResilienceError
+
     _bootstrap_logger = _logging.getLogger("atlas.error")
+
+    @app.exception_handler(AppResilienceError)
+    async def _resilience_error_handler(request, exc: AppResilienceError):
+        req_id = getattr(request.state, "request_id", None) or uuid.uuid4().hex
+        _bootstrap_logger.warning("AppResilienceError [%s]: %s (request_id=%s)", exc.error_code, exc.safe_message, req_id)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error_code": exc.error_code,
+                "safe_message": exc.safe_message,
+                "detail": exc.safe_message,
+                "request_id": req_id,
+                "retryable": exc.retryable,
+                "service_name": exc.service_name,
+                "hint": exc.hint,
+                "extra_details": exc.extra_details,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            headers={"X-Request-ID": req_id},
+        )
+
+    @app.exception_handler(SQLAlchemyError)
+    async def _sqlalchemy_error_handler(request, exc: SQLAlchemyError):
+        req_id = getattr(request.state, "request_id", None) or uuid.uuid4().hex
+        _bootstrap_logger.error("Database error in %s: %s (request_id=%s)", request.url.path, exc, req_id, exc_info=True)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error_code": "DATABASE_UNAVAILABLE",
+                "safe_message": "Database operation temporarily failed. Changes were safely rolled back. Please retry.",
+                "detail": "Database operation temporarily failed. Changes were safely rolled back. Please retry.",
+                "request_id": req_id,
+                "retryable": True,
+                "service_name": "database",
+                "hint": "Wait a few seconds and refresh.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            headers={"X-Request-ID": req_id},
+        )
+
     @app.exception_handler(Exception)
-    async def _structured_500_handler(_request, exc: Exception):
-        _bootstrap_logger.exception("Unhandled exception in request")
+    async def _structured_500_handler(request, exc: Exception):
+        req_id = getattr(request.state, "request_id", None) or uuid.uuid4().hex
+        _bootstrap_logger.exception("Unhandled exception in request (request_id=%s)", req_id)
         return JSONResponse(
             status_code=500,
             content={
+                "error_code": "INTERNAL_SERVER_ERROR",
+                "safe_message": "An unexpected server error occurred. Please try again.",
                 "detail": "Internal server error",
                 "type": type(exc).__name__,
-                "message": str(exc) if str(exc) else "An unexpected error occurred. Please try again.",
+                "request_id": req_id,
+                "retryable": True,
+                "service_name": "fastapi",
                 "hint": "If this persists, check the backend logs.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
+            headers={"X-Request-ID": req_id},
         )
 
     @app.get("/", include_in_schema=False)

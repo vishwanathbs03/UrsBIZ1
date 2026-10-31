@@ -44,6 +44,7 @@ from app.services.recommendations.evaluation_engine import (
     GroundedFindingBuilder,
     StructuredObservabilityLogger,
 )
+from app.services.ai.resilient_client import ResilientGeminiClient
 from app.services.ai.tool_router.types import (
     BusinessComparisonArgs,
     BusinessHealthArgs,
@@ -1519,26 +1520,16 @@ class OpenEndedBusinessIntelligenceEngine:
             f"Please provide an articulate, executive-grade consultation response in 2-3 short, focused paragraphs."
         )
 
-        headers = {
-            "Authorization": f"Bearer {settings.ai_api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": settings.ai_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content},
-            ],
-            "max_tokens": 400,
-            "temperature": 0.2,
-        }
-
-        url = f"{settings.ai_base_url.rstrip('/')}/chat/completions"
-        with httpx.Client(timeout=_TOOL_EXECUTION_TIMEOUT_SECONDS) as client:
-            resp = client.post(url, headers=headers, json=payload)
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"].strip()
-                if content and len(content) > 40:
-                    return content
+        client = ResilientGeminiClient(
+            timeout_seconds=_TOOL_EXECUTION_TIMEOUT_SECONDS,
+            max_retries=2,
+        )
+        content = client.execute_chat_completion(
+            system_prompt=system_prompt,
+            user_content=user_content,
+            max_tokens=400,
+            temperature=0.2,
+        )
+        if content and len(content.strip()) > 40:
+            return content.strip()
         return None
