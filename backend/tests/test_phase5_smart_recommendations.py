@@ -355,8 +355,13 @@ def test_unsupported_numerical_claims_prevention(db_session, test_user_and_busin
         if rec.estimated_impact is not None:
             assert rec.impact_unit is not None, f"Recommendation {rec.id} has estimated_impact without impact_unit"
             assert rec.estimated_impact > 0
-        # Qualitative recommendations must have null impact rather than fake numbers
-        if rec.category in [RecommendationCategory.DIGITAL_TRANSFORMATION, RecommendationCategory.GOVERNMENT_SCHEMES]:
+        # Qualitative / policy / forecasting / retention recommendations must have null impact rather than fake numbers
+        if rec.category in [
+            RecommendationCategory.CUSTOMER_RETENTION,
+            RecommendationCategory.DEMAND_PLANNING,
+            RecommendationCategory.DIGITAL_TRANSFORMATION,
+            RecommendationCategory.GOVERNMENT_SCHEMES,
+        ]:
             assert rec.estimated_impact is None, f"{rec.category} should not assert speculative estimated financial impact"
 
 
@@ -552,10 +557,13 @@ def test_demand_forecasting_integration_in_recommendations(db_session, test_user
 
     lead_rec = demand_recs[0]
     assert "Industrial Sensor" in lead_rec.title or "Industrial Sensor" in lead_rec.description
-    assert lead_rec.estimated_impact is not None
-    assert lead_rec.impact_unit == "units forecasted demand"
+    # Mandatory audit boundary: Demand forecasting recommendations do NOT calculate reorder amounts or financial gains
+    assert lead_rec.estimated_impact is None
+    assert lead_rec.impact_unit is None
     assert lead_rec.source_module_link == "/sales?tab=forecast"
     assert any("forecast" in e.lower() or "units" in e.lower() for e in lead_rec.evidence)
+    # Discloses inventory boundary limitation
+    assert any("inventory" in lim.lower() for lim in lead_rec.limitations)
 
 
 # =============================================================================
@@ -589,4 +597,89 @@ def test_dismissed_recommendation_filtering(db_session, test_user_and_business):
     resp_all = engine_inst.generate_recommendations(business=business, status_filter="all")
     all_ids = [r.id for r in resp_all.recommendations]
     assert target_rec.id in all_ids
+
+
+# =============================================================================
+# 13. Audit Boundary Enforcements (Five Mandatory Corrections)
+# =============================================================================
+
+def test_audit_boundary_enforcements(db_session, test_user_and_business):
+    """Verify all 5 audit corrections:
+
+    1. Inventory boundaries (no reorder quantities, no stockout claims).
+    2. Customer revenue as evidence only (estimated_impact is None).
+    3. Canonical composite ID format: rec_{rule}_{biz}_{entity}_v1.
+    4. Decoupled evidence strength and confidence.
+    5. Government scheme safety with official authority and URL.
+    """
+    user, business = test_user_and_business
+    sales_repo = SalesRepository(db_session)
+
+    upload = sales_repo.create_upload(
+        business_id=business.id,
+        filename="boundary_test.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        row_count=10,
+        valid_row_count=10,
+        invalid_row_count=0,
+        status="confirmed",
+        column_mapping={"transaction_date": "date", "product_name": "product"},
+        quality_summary={"valid_pct": 100.0},
+    )
+
+    now = datetime.now(timezone.utc)
+    old_date = datetime(2025, 1, 15, tzinfo=timezone.utc)
+    recent_date = datetime(2025, 10, 1, tzinfo=timezone.utc)
+
+    tx_rows = [
+        {"transaction_date": recent_date, "customer_id": "CUST_1", "customer_name": "Concentrated Buyer", "product_id": "P_TOP", "product_name": "Top Gear", "quantity": 100, "unit_price": 500, "total_amount": 50000},
+        {"transaction_date": recent_date, "customer_id": "CUST_1", "customer_name": "Concentrated Buyer", "product_id": "P_TOP", "product_name": "Top Gear", "quantity": 40, "unit_price": 500, "total_amount": 20000},
+        {"transaction_date": old_date, "customer_id": "CUST_2", "customer_name": "Lapsed Repeat Account", "product_id": "P_DRILL", "product_name": "HSS Drill", "quantity": 20, "unit_price": 100, "total_amount": 2000},
+        {"transaction_date": old_date, "customer_id": "CUST_2", "customer_name": "Lapsed Repeat Account", "product_id": "P_DRILL", "product_name": "HSS Drill", "quantity": 30, "unit_price": 100, "total_amount": 3000},
+    ]
+    sales_repo.bulk_insert_transactions(upload.id, business.id, tx_rows)
+
+    engine_inst = SmartRecommendationEngine(db_session)
+    response = engine_inst.generate_recommendations(business=business)
+
+    # 1. Composite ID schema verification
+    for rec in response.recommendations:
+        assert rec.id.startswith("rec_"), f"ID {rec.id} must start with 'rec_'"
+        assert rec.id.endswith("_v1"), f"ID {rec.id} must end with '_v1'"
+        parts = rec.id.split("_")
+        assert len(parts) >= 5, f"ID {rec.id} must have canonical composite segments"
+        assert str(business.id) in parts, f"ID {rec.id} must contain business_id {business.id}"
+
+    # 2. Customer Retention revenue boundaries
+    retention_recs = [r for r in response.recommendations if r.category == RecommendationCategory.CUSTOMER_RETENTION]
+    assert len(retention_recs) > 0
+    for r in retention_recs:
+        assert r.estimated_impact is None, "Customer retention must NOT estimate recoverable revenue"
+        assert r.impact_unit is None
+        assert any("historical context" in e.lower() for e in r.evidence), "Evidence must state historical context"
+        assert any("not guaranteed" in lim.lower() for lim in r.limitations)
+
+    # 3. Inventory & Demand boundaries
+    demand_recs = [r for r in response.recommendations if r.category == RecommendationCategory.DEMAND_PLANNING]
+    for r in demand_recs:
+        assert r.estimated_impact is None, "Demand forecasting must NOT claim reorder quantities"
+        assert "stockout" not in r.title.lower()
+        assert "reorder quantity" not in r.description.lower()
+        assert any("inventory" in lim.lower() for lim in r.limitations)
+
+    # 4. Decoupled Evidence vs Confidence
+    for r in response.recommendations:
+        # Confidence is statistical reliability / grade (e.g. 70-95%)
+        assert 60 <= r.confidence <= 100
+        # Evidence strength measures data volume/history span
+        assert 10 <= r.priority_score <= 100
+
+    # 5. Government Scheme safety
+    scheme_recs = [r for r in response.recommendations if r.category == RecommendationCategory.GOVERNMENT_SCHEMES]
+    assert len(scheme_recs) > 0
+    for r in scheme_recs:
+        assert r.estimated_impact is None
+        assert any("Official" in e for e in r.evidence)
+        assert any("official eligibility" in lim.lower() for lim in r.limitations)
 
