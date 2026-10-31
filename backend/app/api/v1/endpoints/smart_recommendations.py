@@ -1,8 +1,12 @@
-"""Context-Aware Smart Recommendations API Endpoints (Phase 5).
+"""Context-Aware Smart Recommendations API Endpoints (Phase 5 Advanced Intelligence).
 
 Endpoints for:
   - GET /recommendations: List context-grounded recommendations with category/priority/status filters
-  - PATCH /recommendations/{id}/status: Update recommendation lifecycle status (New -> Viewed -> Accepted -> In Progress -> Completed -> Dismissed)
+  - GET /recommendations/advanced-overview: Next Best Action, Multi-Signal Insights, Root Causes, and Opportunities
+  - GET /recommendations/growth-strategy: 3-Horizon personalized growth roadmap
+  - POST /recommendations/scenarios/simulate: Deterministic What-If impact simulation
+  - POST /recommendations/feedback: Submit owner feedback and automatic recommendation suppression
+  - PATCH /recommendations/{id}/status: Update recommendation lifecycle status
   - POST /recommendations/{id}/explain: AI explanation with deterministic fallback
 """
 
@@ -18,9 +22,16 @@ from app.repositories.business_repository import BusinessRepository
 from app.repositories.recommendation_lifecycle_repository import (
     RecommendationLifecycleRepository,
 )
+from app.schemas.advanced_recommendations import (
+    AdvancedRecommendationsOverviewResponse,
+    PersonalizedGrowthStrategy,
+    RecommendationFeedbackCreate,
+    RecommendationFeedbackResponse,
+    ScenarioSimulationRequest,
+    ScenarioSimulationResponse,
+)
 from app.schemas.smart_recommendations import (
     RecommendationExplainResponse,
-    RecommendationStatus,
     RecommendationStatusUpdateRequest,
     SmartRecommendationItem,
     SmartRecommendationsResponse,
@@ -65,6 +76,68 @@ def get_smart_recommendations(
         priority_filter=priority,
         status_filter=status,
     )
+
+
+@router.get(
+    "/advanced-overview",
+    response_model=AdvancedRecommendationsOverviewResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get advanced intelligence overview (Next Best Action, Multi-Signal Insights, Root Causes, Opportunities)",
+)
+def get_advanced_overview(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AdvancedRecommendationsOverviewResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.get_advanced_overview(business=business)
+
+
+@router.get(
+    "/growth-strategy",
+    response_model=PersonalizedGrowthStrategy,
+    status_code=status.HTTP_200_OK,
+    summary="Get personalized 3-horizon growth strategy (0-30d, 31-90d, 3-12m)",
+)
+def get_growth_strategy(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PersonalizedGrowthStrategy:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.get_growth_strategy(business=business)
+
+
+@router.post(
+    "/scenarios/simulate",
+    response_model=ScenarioSimulationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Simulate deterministic What-If business scenarios",
+)
+def simulate_scenario(
+    payload: ScenarioSimulationRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ScenarioSimulationResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.simulate_scenario(business=business, req=payload)
+
+
+@router.post(
+    "/feedback",
+    response_model=RecommendationFeedbackResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Submit owner feedback and auto-suppress dismissed recommendations",
+)
+def submit_recommendation_feedback(
+    payload: RecommendationFeedbackCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RecommendationFeedbackResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.record_feedback(business=business, req=payload)
 
 
 @router.patch(

@@ -28,6 +28,7 @@ import { LevelBadge } from "@/features/dashboard/LevelBadge";
 import { levelToTone } from "@/features/dashboard/tones";
 import { cn } from "@/lib/utils";
 import type {
+  FeedbackType,
   RecommendationExplainResponse,
   RecommendationPriority,
   RecommendationStatus,
@@ -38,6 +39,7 @@ interface SmartRecommendationCardProps {
   item: SmartRecommendationItem;
   onUpdateStatus: (id: string, status: RecommendationStatus, notes?: string) => Promise<any>;
   onExplain: (id: string) => Promise<RecommendationExplainResponse>;
+  onFeedback?: (id: string, feedback: FeedbackType) => Promise<any>;
   isUpdatingStatus?: boolean;
 }
 
@@ -67,6 +69,7 @@ export function SmartRecommendationCard({
   item,
   onUpdateStatus,
   onExplain,
+  onFeedback,
   isUpdatingStatus,
 }: SmartRecommendationCardProps) {
   const [showPlan, setShowPlan] = useState(false);
@@ -74,6 +77,7 @@ export function SmartRecommendationCard({
   const [aiExplanation, setAiExplanation] = useState<RecommendationExplainResponse | null>(null);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<string | null>(null);
 
   const catStyle =
     CATEGORY_COLORS[item.category] || "text-primary bg-primary/10 border-primary/20";
@@ -379,6 +383,47 @@ export function SmartRecommendationCard({
             >
               <RotateCcw className="size-3.5" />
             </Button>
+          )}
+        </div>
+
+        {/* Feedback Bar */}
+        <div className="flex flex-wrap items-center justify-between border-t border-border/40 pt-2 text-[11px] text-muted-foreground">
+          <span>Was this recommendation relevant for your business?</span>
+          {feedbackSubmitted ? (
+            <span className="font-semibold text-emerald-400">Feedback recorded. Thank you!</span>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onFeedback) await onFeedback(item.id, "Useful");
+                  setFeedbackSubmitted("Useful");
+                }}
+                className="rounded px-2 py-0.5 hover:bg-secondary hover:text-foreground border border-border/60 transition-colors"
+              >
+                Useful
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onFeedback) await onFeedback(item.id, "Already implemented");
+                  setFeedbackSubmitted("Already implemented");
+                }}
+                className="rounded px-2 py-0.5 hover:bg-secondary hover:text-foreground border border-border/60 transition-colors"
+              >
+                Already Done
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onFeedback) await onFeedback(item.id, "Not relevant");
+                  setFeedbackSubmitted("Not relevant");
+                }}
+                className="rounded px-2 py-0.5 hover:bg-secondary hover:text-foreground border border-border/60 transition-colors"
+              >
+                Not Relevant
+              </button>
+            </div>
           )}
         </div>
       </div>

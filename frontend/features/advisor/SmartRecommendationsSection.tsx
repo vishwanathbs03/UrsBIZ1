@@ -66,6 +66,7 @@ export function SmartRecommendationsSection() {
     refetch,
     updateStatus,
     isUpdatingStatus,
+    submitFeedback,
     explain,
   } = useSmartRecommendations();
 
@@ -217,6 +218,7 @@ export function SmartRecommendationsSection() {
                 item={item}
                 onUpdateStatus={updateStatus}
                 onExplain={explain}
+                onFeedback={submitFeedback}
                 isUpdatingStatus={isUpdatingStatus}
               />
             ))}
