@@ -15,6 +15,7 @@ from app.models.digital_presence import DigitalPresence
 from app.models.export_history import ExportHistory
 from app.models.idempotency import IdempotencyRecord
 from app.models.notification_item import NotificationItem
+from app.models.personalization import BusinessPersonalizationSettings
 from app.models.product import Product
 from app.models.recommendation_feedback import RecommendationFeedback
 from app.models.recommendation_lifecycle import RecommendationLifecycleState
@@ -38,6 +39,7 @@ __all__ = [
     "SalesTransaction",
     "RecommendationLifecycleState",
     "RecommendationFeedback",
+    "BusinessPersonalizationSettings",
     "BusinessDataProvenance",
     "BusinessDataQualityAudit",
     "IdempotencyRecord",

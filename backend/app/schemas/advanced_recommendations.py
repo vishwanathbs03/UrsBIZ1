@@ -321,7 +321,7 @@ class RecommendationFeedbackCreate(BaseModel):
     recommendation_id: str
     feedback_type: str = Field(
         ...,
-        description="'Helpful' | 'Useful' | 'Not helpful' | 'Incorrect information' | 'Missing information' | 'Not relevant to my business' | 'Not relevant' | 'Already implemented' | 'Need more explanation' | 'Not feasible'",
+        description="'Helpful' | 'Useful' | 'Relevant' | 'Not helpful' | 'Incorrect information' | 'Missing information' | 'Not relevant to my business' | 'Not relevant' | 'Already implemented' | 'Need more explanation' | 'Need more information' | 'Not feasible' | 'Too expensive' | 'Not aligned with my current goal'",
     )
     outcome_notes: Optional[str] = None
 

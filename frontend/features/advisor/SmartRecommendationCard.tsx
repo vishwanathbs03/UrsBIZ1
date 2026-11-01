@@ -80,6 +80,7 @@ export function SmartRecommendationCard({
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<string | null>(null);
+  const [showPersonalization, setShowPersonalization] = useState(false);
 
   const catStyle =
     CATEGORY_COLORS[item.category] || "text-primary bg-primary/10 border-primary/20";
@@ -130,6 +131,18 @@ export function SmartRecommendationCard({
             <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-400">
               <Timer className="size-3" />
               {item.implementation_difficulty}
+            </span>
+          )}
+          {item.goal_alignment_score !== undefined && item.goal_alignment_score !== null && item.goal_alignment_score >= 80 && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 text-[11px] font-medium text-purple-400">
+              <Sparkles className="size-3 text-purple-400" />
+              Goal Aligned
+            </span>
+          )}
+          {item.maturity_fit_score !== undefined && item.maturity_fit_score !== null && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-400">
+              <Compass className="size-3 text-blue-400" />
+              Fit: {item.maturity_fit_score}%
             </span>
           )}
         </div>
@@ -288,6 +301,46 @@ export function SmartRecommendationCard({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Personalization & Business Fit Callout */}
+      {item.personalization_explanation && (
+        <div className="border-t border-border/40 pt-2">
+          <button
+            type="button"
+            onClick={() => setShowPersonalization(!showPersonalization)}
+            className="flex w-full items-center justify-between text-xs font-medium text-purple-400 hover:text-purple-300 transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-purple-400" />
+              Personalized Business Fit: {item.personalization_explanation.ranking_rationale.split(":")[0]}
+            </span>
+            {showPersonalization ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+          </button>
+
+          {showPersonalization && (
+            <div className="mt-2.5 space-y-2 rounded-lg border border-purple-500/20 bg-purple-500/[0.03] p-3 text-xs">
+              <div>
+                <strong className="text-purple-300 font-semibold">Why Relevant: </strong>
+                <span className="text-muted-foreground">{item.personalization_explanation.why_relevant_to_this_business}</span>
+              </div>
+              <div>
+                <strong className="text-blue-300 font-semibold">Maturity Stage Fit: </strong>
+                <span className="text-muted-foreground">{item.personalization_explanation.maturity_suitability}</span>
+              </div>
+              <div>
+                <strong className="text-emerald-300 font-semibold">Ranking Rationale: </strong>
+                <span className="text-foreground/90">{item.personalization_explanation.ranking_rationale}</span>
+              </div>
+              {item.personalization_explanation.constraints_considered?.length > 0 && (
+                <div className="text-[11px] text-muted-foreground pt-1 border-t border-purple-500/10">
+                  <strong className="text-amber-400">Evaluated Constraints: </strong>
+                  {item.personalization_explanation.constraints_considered.join(", ")}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -570,6 +623,28 @@ export function SmartRecommendationCard({
                 className="rounded px-2 py-0.5 hover:bg-secondary hover:text-foreground border border-border/60 transition-colors"
               >
                 Not Relevant
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onFeedback) await onFeedback(item.id, "Too expensive");
+                  setFeedbackSubmitted("Too expensive");
+                }}
+                className="rounded px-2 py-0.5 hover:bg-secondary hover:text-foreground border border-border/60 transition-colors"
+                title="Flag recommendation as exceeding resource budget"
+              >
+                Too Expensive
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onFeedback) await onFeedback(item.id, "Not aligned with my current goal");
+                  setFeedbackSubmitted("Not aligned with goal");
+                }}
+                className="rounded px-2 py-0.5 hover:bg-secondary hover:text-foreground border border-border/60 transition-colors"
+                title="Flag recommendation as not matching current strategic goals"
+              >
+                Not My Goal
               </button>
             </div>
           )}

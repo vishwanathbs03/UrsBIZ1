@@ -38,6 +38,10 @@ from app.schemas.smart_recommendations import (
     SmartRecommendationItem,
     SmartRecommendationsResponse,
 )
+from app.schemas.personalization import (
+    PersonalizationSettingsUpdate,
+    RecommendationPersonalizationProfile,
+)
 from app.services.recommendations.explanation_service import explain_recommendation
 from app.services.recommendations.recommendation_engine import SmartRecommendationEngine
 from app.utils.database import get_db
@@ -113,6 +117,37 @@ def get_growth_strategy(
     business = _get_active_business(current_user, db)
     engine = SmartRecommendationEngine(db)
     return engine.get_growth_strategy(business=business)
+
+
+@router.get(
+    "/personalization/profile",
+    response_model=RecommendationPersonalizationProfile,
+    status_code=status.HTTP_200_OK,
+    summary="Get structured recommendation personalization profile (Business DNA, goals, constraints)",
+)
+def get_personalization_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RecommendationPersonalizationProfile:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.get_personalization_profile(business=business)
+
+
+@router.put(
+    "/personalization/settings",
+    response_model=RecommendationPersonalizationProfile,
+    status_code=status.HTTP_200_OK,
+    summary="Update owner recommendation goals, resource constraints, and preferences",
+)
+def update_personalization_settings(
+    payload: PersonalizationSettingsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RecommendationPersonalizationProfile:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.update_personalization_settings(business=business, payload=payload)
 
 
 @router.post(

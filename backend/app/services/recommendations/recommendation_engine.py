@@ -20,6 +20,7 @@ Enforces strict inventory and revenue boundaries:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 import logging
 from typing import Any, Optional
 from sqlalchemy.orm import Session
@@ -65,6 +66,15 @@ from app.services.recommendations.quality_engine import RecommendationQualityEng
 from app.services.recommendations.root_cause_engine import RootCauseEngine
 from app.services.recommendations.rule_registry import RecommendationRuleRegistry
 from app.services.recommendations.scenario_engine import ScenarioSimulationEngine
+from app.repositories.personalization_repository import PersonalizationRepository
+from app.services.recommendations.personalization_engine import PersonalizationEngine
+from app.schemas.personalization import (
+    BusinessConstraintType,
+    BusinessGoalType,
+    BusinessMaturityLevel,
+    PersonalizationSettingsUpdate,
+    RecommendationPersonalizationProfile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +89,8 @@ class SmartRecommendationEngine:
         self.prioritizer = RecommendationPrioritizationService()
         self.lifecycle_repo = RecommendationLifecycleRepository(db)
         self.feedback_repo = RecommendationFeedbackRepository(db)
+        self.personalization_repo = PersonalizationRepository(db)
+        self.personalization_engine = PersonalizationEngine()
         self.quality_engine = RecommendationQualityEngine()
         self.multi_signal_engine = MultiSignalEngine()
         self.root_cause_engine = RootCauseEngine()
@@ -126,7 +138,29 @@ class SmartRecommendationEngine:
         # Get feedback suppressions
         suppressed_ids = self.feedback_repo.get_suppressed_recommendation_ids(business.id)
 
-        # Tier 2: Deterministic Prioritization Scoring
+        # Tier 2c: Personalization & Business DNA Adaptation Profile
+        pers_settings = self.personalization_repo.get_or_create_settings(business.id, business=business)
+        try:
+            active_goals = json.loads(pers_settings.goals)
+        except Exception:
+            active_goals = []
+        try:
+            active_constraints = json.loads(pers_settings.constraints)
+        except Exception:
+            active_constraints = []
+        try:
+            focus_areas = json.loads(pers_settings.focus_areas)
+        except Exception:
+            focus_areas = []
+
+        recent_feedback = self.personalization_repo.get_recent_feedback(business.id)
+        maturity, maturity_drivers = self.personalization_engine.evaluate_maturity(
+            business=business,
+            sales_total_revenue=ctx.sales.total_revenue,
+            sales_tx_count=ctx.sales.total_transactions,
+        )
+
+        # Tier 2: Deterministic Prioritization Scoring with Personalization Adaptation
         scored_items: list[SmartRecommendationItem] = []
         for cand in raw_candidates:
             u = cand.get("urgency", 50)
@@ -135,12 +169,62 @@ class SmartRecommendationEngine:
             conf = cand.get("confidence", 70.0)
             feas = cand.get("feasibility", 60)
 
-            p_score, p_level = self.prioritizer.calculate_score(
-                urgency=u,
-                impact=imp,
-                evidence_strength=ev,
-                confidence=conf,
-                feasibility=feas,
+            # Personalization Sub-scores
+            goal_align = self.personalization_engine.calculate_goal_alignment(
+                category=cand["category"],
+                title=cand["title"],
+                description=cand["description"],
+                active_goals=active_goals,
+            )
+            mat_fit = self.personalization_engine.calculate_maturity_fit(
+                category=cand["category"],
+                maturity=maturity,
+                difficulty=cand.get("implementation_difficulty", "Tactical"),
+            )
+            const_pen, const_warns = self.personalization_engine.evaluate_constraints(
+                category=cand["category"],
+                title=cand["title"],
+                description=cand["description"],
+                active_constraints=active_constraints,
+                preferred_investment=pers_settings.preferred_investment_level,
+                preferred_effort=pers_settings.preferred_effort_level,
+            )
+            pref_score = self.personalization_engine.calculate_preference_score(
+                category=cand["category"],
+                recent_feedback=recent_feedback,
+                focus_areas=focus_areas,
+            )
+
+            p_score, p_level, pers_comp, adj_feas = (
+                self.personalization_engine.compute_personalized_priority(
+                    base_urgency=u,
+                    base_impact=imp,
+                    evidence_strength=ev,
+                    confidence=conf,
+                    base_feasibility=feas,
+                    goal_alignment_score=goal_align,
+                    maturity_fit_score=mat_fit,
+                    preference_score=pref_score,
+                    constraint_penalty=const_pen,
+                )
+            )
+
+            pers_expl = self.personalization_engine.build_personalization_explanation(
+                business=business,
+                category=cand["category"],
+                title=cand["title"],
+                maturity=maturity,
+                maturity_drivers=maturity_drivers,
+                active_goals=active_goals,
+                active_constraints=active_constraints,
+                constraint_warnings=const_warns,
+                missing_data=ctx.data_limitations,
+                goal_score=goal_align,
+                maturity_score=mat_fit,
+                pref_score=pref_score,
+                constraint_pen=const_pen,
+                priority_rank=1,
+                is_critical_risk=(u >= 80.0),
             )
 
             state_record = persisted_states.get(cand["id"])
@@ -193,6 +277,11 @@ class SmartRecommendationEngine:
                 is_autonomous_opportunity=cand.get("is_autonomous_opportunity", False),
                 opportunity_quality_status=cand.get("opportunity_quality_status"),
                 opportunity_hypothesis_id=cand.get("opportunity_hypothesis_id"),
+                personalization_explanation=pers_expl.model_dump(),
+                personalization_score=pers_comp,
+                goal_alignment_score=goal_align,
+                maturity_fit_score=mat_fit,
+                constraint_adjusted_feasibility=adj_feas,
             )
             scored_items.append(item)
 
@@ -201,6 +290,13 @@ class SmartRecommendationEngine:
 
         # Sort by deterministic priority score descending
         filtered_items.sort(key=lambda r: r.priority_score, reverse=True)
+
+        # Update ranking rationale numbers post-sort
+        for rank_idx, item in enumerate(filtered_items, start=1):
+            if item.personalization_explanation and "ranking_rationale" in item.personalization_explanation:
+                item.personalization_explanation["ranking_rationale"] = (
+                    item.personalization_explanation["ranking_rationale"].replace("Ranked #1", f"Ranked #{rank_idx}")
+                )
 
         # Apply Suppression & Filters
         if not status_filter or status_filter.lower() != "all":
@@ -347,11 +443,21 @@ class SmartRecommendationEngine:
         self, business: Business, req: RecommendationFeedbackCreate
     ) -> RecommendationFeedbackResponse:
         """Record owner feedback on a recommendation and apply automatic suppression if appropriate."""
+        # Check if recommendation is an enterprise risk alert
+        is_risk = any(
+            k in req.recommendation_id.lower()
+            for k in ("risk", "churn", "concentration", "solvency", "runway")
+        )
+
+        # Do not permanently suppress critical risk alerts merely because owner dismissed them
+        suppress_flag = False if is_risk else None
+
         feedback = self.feedback_repo.record_feedback(
             business_id=business.id,
             recommendation_id=req.recommendation_id,
             feedback_type=req.feedback_type,
             outcome_notes=req.outcome_notes,
+            suppress=suppress_flag,
         )
 
         # If suppressed or already implemented, update lifecycle status
@@ -362,13 +468,28 @@ class SmartRecommendationEngine:
                 status="Completed",
                 notes=req.outcome_notes or "Marked as already implemented by owner",
             )
-        elif req.feedback_type in ("Not relevant", "Not relevant to my business", "Incorrect information", "Not feasible"):
-            self.lifecycle_repo.update_status(
-                business_id=business.id,
-                recommendation_id=req.recommendation_id,
-                status="Dismissed",
-                notes=req.outcome_notes or f"Marked as {req.feedback_type} by owner",
-            )
+        elif req.feedback_type in (
+            "Not relevant",
+            "Not relevant to my business",
+            "Incorrect information",
+            "Not feasible",
+            "Too expensive",
+            "Not aligned with my current goal",
+        ):
+            if is_risk:
+                self.lifecycle_repo.update_status(
+                    business_id=business.id,
+                    recommendation_id=req.recommendation_id,
+                    status="Viewed",
+                    notes="Critical risk alert retained for business safety despite dismissal.",
+                )
+            else:
+                self.lifecycle_repo.update_status(
+                    business_id=business.id,
+                    recommendation_id=req.recommendation_id,
+                    status="Dismissed",
+                    notes=req.outcome_notes or f"Marked as {req.feedback_type} by owner",
+                )
 
         return RecommendationFeedbackResponse(
             id=feedback.id,
@@ -379,6 +500,66 @@ class SmartRecommendationEngine:
             outcome_notes=feedback.outcome_notes,
             created_at=feedback.created_at.isoformat() if feedback.created_at else "",
         )
+
+    def get_personalization_profile(
+        self, business: Business
+    ) -> RecommendationPersonalizationProfile:
+        """Construct structured Recommendation Personalization Profile."""
+        ctx = self.context_service.build_context(business)
+        pers_settings = self.personalization_repo.get_or_create_settings(business.id, business=business)
+        try:
+            active_goals = json.loads(pers_settings.goals)
+        except Exception:
+            active_goals = []
+        try:
+            active_constraints = json.loads(pers_settings.constraints)
+        except Exception:
+            active_constraints = []
+        try:
+            focus_areas = json.loads(pers_settings.focus_areas)
+        except Exception:
+            focus_areas = []
+
+        maturity, maturity_drivers = self.personalization_engine.evaluate_maturity(
+            business=business,
+            sales_total_revenue=ctx.sales.total_revenue,
+            sales_tx_count=ctx.sales.total_transactions,
+        )
+        feedback_summary = self.personalization_repo.get_feedback_summary(business.id)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        updated_iso = (
+            pers_settings.updated_at.isoformat()
+            if pers_settings.updated_at
+            else now_iso
+        )
+
+        return RecommendationPersonalizationProfile(
+            business_id=business.id,
+            business_name=business.legal_name or "Your Business",
+            industry=business.industry or "General MSME",
+            sub_industry=business.sub_industry,
+            business_type=business.business_type,
+            dna_archetype="Pragmatic Operator",
+            dna_stage=maturity.value,
+            evaluated_maturity=maturity,
+            maturity_drivers=maturity_drivers,
+            active_goals=active_goals,
+            active_constraints=active_constraints,
+            preferred_effort_level=pers_settings.preferred_effort_level,
+            preferred_investment_level=pers_settings.preferred_investment_level,
+            focus_areas=focus_areas,
+            feedback_summary=feedback_summary,
+            source=pers_settings.source,
+            updated_at=updated_iso,
+        )
+
+    def update_personalization_settings(
+        self, business: Business, payload: PersonalizationSettingsUpdate
+    ) -> RecommendationPersonalizationProfile:
+        """Update owner personalization preferences and constraints."""
+        self.personalization_repo.update_settings(business.id, payload)
+        return self.get_personalization_profile(business)
 
     def ask_recommendation_question(
         self, business: Business, req: RecommendationAskRequest

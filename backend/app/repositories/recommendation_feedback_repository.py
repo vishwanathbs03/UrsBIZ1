@@ -74,6 +74,8 @@ class RecommendationFeedbackRepository:
                 "Not relevant to my business",
                 "Incorrect information",
                 "Not feasible",
+                "Too expensive",
+                "Not aligned with my current goal",
             )
 
         feedback = RecommendationFeedback(

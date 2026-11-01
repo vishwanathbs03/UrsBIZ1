@@ -51,6 +51,17 @@ def generate_deterministic_explanation(rec: SmartRecommendationItem) -> str:
     if rec.limitations:
         narrative_parts.append(f"**Data considerations:** {rec.limitations[0]}")
 
+    if rec.personalization_explanation:
+        mat_text = rec.personalization_explanation.get("maturity_suitability")
+        if mat_text:
+            narrative_parts.append(f"**Business maturity suitability:** {mat_text}")
+        constraints_list = rec.personalization_explanation.get("constraints_considered")
+        if constraints_list:
+            narrative_parts.append(f"**Constraints evaluated:** {', '.join(constraints_list)}")
+        ranking_text = rec.personalization_explanation.get("ranking_rationale")
+        if ranking_text:
+            narrative_parts.append(f"**Ranking rationale:** {ranking_text}")
+
     return "\n\n".join(narrative_parts)
 
 

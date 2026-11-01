@@ -77,6 +77,13 @@ export interface SmartRecommendationItem {
   is_autonomous_opportunity?: boolean;
   opportunity_quality_status?: string | null;
   opportunity_hypothesis_id?: string | null;
+
+  // Personalization & Business DNA Adaptation
+  personalization_explanation?: PersonalizationExplanation | null;
+  personalization_score?: number | null;
+  goal_alignment_score?: number | null;
+  maturity_fit_score?: number | null;
+  constraint_adjusted_feasibility?: number | null;
 }
 
 export interface SmartRecommendationsResponse {
@@ -281,6 +288,7 @@ export interface ScenarioSimulationResponse {
 export type FeedbackType =
   | "Helpful"
   | "Useful"
+  | "Relevant"
   | "Not helpful"
   | "Incorrect information"
   | "Missing information"
@@ -288,7 +296,10 @@ export type FeedbackType =
   | "Not relevant"
   | "Already implemented"
   | "Need more explanation"
-  | "Not feasible";
+  | "Need more information"
+  | "Not feasible"
+  | "Too expensive"
+  | "Not aligned with my current goal";
 
 export type AnswerabilityStatus =
   | "ANSWERABLE"
@@ -408,4 +419,46 @@ export interface RecommendationAskResponse {
   grounded_findings?: GroundedFinding[];
   quality_evaluation?: AnswerQualityEvaluation | null;
   trust_label?: string;
+}
+
+export interface PersonalizationExplanation {
+  why_relevant_to_this_business: string;
+  triggering_conditions: string[];
+  maturity_suitability: string;
+  constraints_considered: string[];
+  missing_information: string[];
+  ranking_rationale: string;
+  goal_alignment_score: number;
+  maturity_fit_score: number;
+  preference_score: number;
+  constraint_penalty: number;
+  is_critical_risk_override?: boolean;
+}
+
+export interface RecommendationPersonalizationProfile {
+  business_id: number;
+  business_name: string;
+  industry: string;
+  sub_industry?: string | null;
+  business_type?: string | null;
+  dna_archetype: string;
+  dna_stage: string;
+  evaluated_maturity: "Early Stage" | "Growing" | "Established";
+  maturity_drivers: string[];
+  active_goals: string[];
+  active_constraints: string[];
+  preferred_effort_level: string;
+  preferred_investment_level: string;
+  focus_areas: string[];
+  feedback_summary: Record<string, number>;
+  source: string;
+  updated_at: string;
+}
+
+export interface PersonalizationSettingsUpdate {
+  goals: string[];
+  constraints: string[];
+  preferred_effort_level?: string;
+  preferred_investment_level?: string;
+  focus_areas?: string[];
 }

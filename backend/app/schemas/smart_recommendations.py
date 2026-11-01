@@ -112,6 +112,13 @@ class SmartRecommendationItem(BaseModel):
     opportunity_quality_status: Optional[str] = Field(default=None, description="VERIFIED_OPPORTUNITY | PROMISING_OPPORTUNITY | NEEDS_INVESTIGATION")
     opportunity_hypothesis_id: Optional[str] = Field(default=None, description="ID of underlying OpportunityHypothesis")
 
+    # Adaptive Personalization Intelligence
+    personalization_explanation: Optional[dict[str, Any]] = Field(default=None, description="Adaptive explanation details (why relevant, maturity suitability, constraints)")
+    personalization_score: Optional[float] = Field(default=None, description="Personalization composite score (0-100)")
+    goal_alignment_score: Optional[float] = Field(default=None, description="Alignment with active owner goals (0-100)")
+    maturity_fit_score: Optional[float] = Field(default=None, description="Suitability for current business maturity (0-100)")
+    constraint_adjusted_feasibility: Optional[float] = Field(default=None, description="Feasibility adjusted for known constraints")
+
 
 class SmartRecommendationsResponse(BaseModel):
     """Response envelope for GET /api/v1/recommendations."""
