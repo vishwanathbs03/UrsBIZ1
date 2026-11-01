@@ -42,6 +42,10 @@ from app.schemas.personalization import (
     PersonalizationSettingsUpdate,
     RecommendationPersonalizationProfile,
 )
+from app.schemas.portfolio import (
+    PortfolioSequenceUpdateRequest,
+    RecommendationPortfolioResponse,
+)
 from app.services.recommendations.explanation_service import explain_recommendation
 from app.services.recommendations.recommendation_engine import SmartRecommendationEngine
 from app.utils.database import get_db
@@ -117,6 +121,21 @@ def get_growth_strategy(
     business = _get_active_business(current_user, db)
     engine = SmartRecommendationEngine(db)
     return engine.get_growth_strategy(business=business)
+
+
+@router.get(
+    "/portfolio",
+    response_model=RecommendationPortfolioResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get optimized recommendation portfolio with dependencies, conflicts, and execution sequence",
+)
+def get_recommendation_portfolio(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RecommendationPortfolioResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.get_recommendation_portfolio(business=business)
 
 
 @router.get(

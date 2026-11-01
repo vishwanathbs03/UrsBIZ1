@@ -462,3 +462,63 @@ export interface PersonalizationSettingsUpdate {
   preferred_investment_level?: string;
   focus_areas?: string[];
 }
+
+export interface RecommendationDependency {
+  recommendation_id: string;
+  depends_on_id: string;
+  dependency_type: "PREREQUISITE" | "ENABLER" | "DATA_DEPENDENCY";
+  reason: string;
+  is_satisfied: boolean;
+}
+
+export interface RecommendationConflict {
+  conflict_id: string;
+  rec_a_id: string;
+  rec_a_title: string;
+  rec_b_id: string;
+  rec_b_title: string;
+  conflict_type: "RESOURCE_COMPETITION" | "STRATEGIC_CONTRADICTION" | "TIMING_MISMATCH";
+  description: string;
+  evidence_a: string[];
+  evidence_b: string[];
+  trade_off_analysis: string;
+  recommended_resolution: string;
+  owner_decision_required: boolean;
+}
+
+export interface SequencedAction {
+  sequence_order: number;
+  stage: "FIRST_ACTION" | "SUPPORTING_ACTION" | "DEPENDENT_ACTION" | "STRATEGIC_INITIATIVE";
+  recommendation_id: string;
+  title: string;
+  category: string;
+  priority: string;
+  timeframe_label: string;
+  why_this_order: string;
+  unlocks_recommendation_ids: string[];
+  status: string;
+}
+
+export interface PortfolioObsoleteItem {
+  recommendation_id: string;
+  title: string;
+  reason_obsolete: string;
+  previous_status: string;
+}
+
+export interface RecommendationPortfolioResponse {
+  business_id: number;
+  business_name: string;
+  generated_at: string;
+  portfolio_health_score: number;
+  total_active_count: number;
+  critical_risks: SmartRecommendationItem[];
+  quick_wins: SmartRecommendationItem[];
+  short_term_improvements: SmartRecommendationItem[];
+  strategic_initiatives: SmartRecommendationItem[];
+  dependencies: RecommendationDependency[];
+  conflicts: RecommendationConflict[];
+  execution_sequence: SequencedAction[];
+  obsolete_recommendations: PortfolioObsoleteItem[];
+  resource_summary: Record<string, any>;
+}

@@ -68,6 +68,7 @@ from app.services.recommendations.rule_registry import RecommendationRuleRegistr
 from app.services.recommendations.scenario_engine import ScenarioSimulationEngine
 from app.repositories.personalization_repository import PersonalizationRepository
 from app.services.recommendations.personalization_engine import PersonalizationEngine
+from app.services.recommendations.portfolio_engine import RecommendationPortfolioEngine
 from app.schemas.personalization import (
     BusinessConstraintType,
     BusinessGoalType,
@@ -75,6 +76,7 @@ from app.schemas.personalization import (
     PersonalizationSettingsUpdate,
     RecommendationPersonalizationProfile,
 )
+from app.schemas.portfolio import RecommendationPortfolioResponse
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +93,7 @@ class SmartRecommendationEngine:
         self.feedback_repo = RecommendationFeedbackRepository(db)
         self.personalization_repo = PersonalizationRepository(db)
         self.personalization_engine = PersonalizationEngine()
+        self.portfolio_engine = RecommendationPortfolioEngine()
         self.quality_engine = RecommendationQualityEngine()
         self.multi_signal_engine = MultiSignalEngine()
         self.root_cause_engine = RootCauseEngine()
@@ -430,6 +433,20 @@ class SmartRecommendationEngine:
         rec_response = self.generate_recommendations(business=business)
         return self.growth_strategy_engine.generate_strategy(
             ctx=ctx, recommendations=rec_response.recommendations
+        )
+
+    def get_recommendation_portfolio(
+        self, business: Business
+    ) -> RecommendationPortfolioResponse:
+        """Construct a coherent, optimized recommendation portfolio with dependencies and conflicts."""
+        ctx = self.context_service.build_context(business)
+        rec_response = self.generate_recommendations(business=business, status_filter="all")
+        persisted_states = self.lifecycle_repo.get_states_for_business(business.id)
+        return self.portfolio_engine.build_portfolio(
+            business=business,
+            recommendations=rec_response.recommendations,
+            ctx=ctx,
+            persisted_states=persisted_states,
         )
 
     def simulate_scenario(

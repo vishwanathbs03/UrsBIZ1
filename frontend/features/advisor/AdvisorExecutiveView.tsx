@@ -49,6 +49,7 @@ import { MultiSignalInsightsPanel } from "@/features/advisor/MultiSignalInsights
 import { GrowthStrategyRoadmap } from "@/features/advisor/GrowthStrategyRoadmap";
 import { ScenarioSimulationModal } from "@/features/advisor/ScenarioSimulationModal";
 import { ConversationalAdvisorDrawer } from "@/features/advisor/ConversationalAdvisorDrawer";
+import { RecommendationPortfolioView } from "@/features/advisor/RecommendationPortfolioView";
 import { useAdvancedRecommendations } from "@/features/advisor/use-advanced-recommendations";
 import type {
   AdvisorAction,
@@ -73,7 +74,7 @@ function band(score: number): "Strong" | "Stable" | "Building" {
 export function AdvisorExecutiveView() {
   const { state, refresh, isFetching } = useAdvisorData();
   const aggregateState = useAdvisorAggregateData();
-  const { overview, strategy } = useAdvancedRecommendations();
+  const { overview, strategy, portfolio, isLoadingPortfolio } = useAdvancedRecommendations();
   const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
 
   if (state.status === "loading") {
@@ -308,6 +309,12 @@ export function AdvisorExecutiveView() {
 
         {/* Phase 5: Interactive Conversational AI Business Advisory */}
         <ConversationalAdvisorDrawer />
+
+        {/* Phase 5: Recommendation Portfolio Optimization, Dependencies & Conflict Resolution */}
+        <RecommendationPortfolioView
+          portfolio={portfolio || null}
+          isLoading={isLoadingPortfolio}
+        />
 
         {/* Context-Aware Smart Recommendations (Phase 5) */}
         <SmartRecommendationsSection />

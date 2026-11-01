@@ -11,6 +11,7 @@ import type {
   RecommendationExplainResponse,
   RecommendationFeedbackCreate,
   RecommendationFeedbackResponse,
+  RecommendationPortfolioResponse,
   RecommendationStatus,
   ScenarioSimulationRequest,
   ScenarioSimulationResponse,
@@ -99,6 +100,12 @@ export const smartRecommendationsService = {
     return apiClient.post<RecommendationAskResponse>(
       "/api/v1/recommendations/ask",
       payload
+    );
+  },
+
+  getPortfolio: async (): Promise<RecommendationPortfolioResponse> => {
+    return apiClient.get<RecommendationPortfolioResponse>(
+      "/api/v1/recommendations/portfolio"
     );
   },
 };
