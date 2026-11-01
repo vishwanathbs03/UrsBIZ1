@@ -59,6 +59,8 @@ The **Participant Tracking Sheet** is the central operational record used by the
 
 *\*Note on MSME-PILOT-001 Quality Score Audit Correction: Cumulative valid percentage audited to $126 / 129 = 97.67\% \approx 97.7\%$. Previously recorded as 98.7% due to unweighted batch averaging ($(97.5\% + 100.0\%) / 2 = 98.75\%$). Historical record preserved; corrected pooled metric applied.*
 
+*\*Standard Duplicate Handling Definition: Duplicate rows are identified and preserved for audit with a duplicate flag, but excluded from analytical calculations. Participant 1 gross revenue is ₹285,350 (analytical ₹281,930); Participant 2 gross revenue is ₹794,800 (analytical ₹766,300); Cohort gross revenue is ₹1,080,150 (analytical ₹1,048,230).*
+
 ---
 
 ## 4. Participant Milestone Checklist
