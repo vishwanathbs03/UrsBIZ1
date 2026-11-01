@@ -49,7 +49,7 @@ flowchart TD
 - **Milestone Exit**: 3 to 5 fully executed consent agreements filed.
 
 ### Week 1: Platform Onboarding & First Ingestion
-- **Deliverables**: Complete `03_BUSINESS_ONBOARDING_CHECKLIST.md`, ingest first sales dataset using `sales_upload_template.csv` or native export, administer `09_WEEKLY_FEEDBACK_QUESTIONNAIRE.md` (Week 1).
+- **Deliverables**: Complete `03_BUSINESS_ONBOARDING_CHECKLIST.md`, ingest first sales dataset using `sales_upload_template.csv` or native export guided by `11_ACCOUNTING_SOFTWARE_EXPORT_GUIDE.md`, administer `09_WEEKLY_FEEDBACK_QUESTIONNAIRE.md` (Week 1).
 - **Coordinator Responsibilities**: Guide owner through account registration, business profile setup, and initial spreadsheet upload. Troubleshoot any column mapping issues.
 - **Milestone Exit**: Each business profile created, baseline health score recorded, at least 1 valid sales dataset ingested.
 
