@@ -61,6 +61,14 @@ The **Participant Tracking Sheet** is the central operational record used by the
 
 *\*Standard Duplicate Handling Definition: Duplicate rows are identified and preserved for audit with a duplicate flag, but excluded from analytical calculations. Participant 1 gross revenue is ₹285,350 (analytical ₹281,930); Participant 2 gross revenue is ₹794,800 (analytical ₹766,300); Cohort gross revenue is ₹1,080,150 (analytical ₹1,048,230).*
 
+*\*Standard Observation Window Convention: Observation windows are explicitly reported as inclusive calendar days (with elapsed days noted): Participant 1 spans 188 inclusive calendar days (187 elapsed days: 2025-11-01 to 2026-05-07); Participant 2 spans 180 inclusive calendar days (179 elapsed days: 2025-11-01 to 2026-04-29).*
+
+*\*Participant 2 Reconciled Product Distribution: Verified database duplicates (Row 258: 15 units / ₹18,750 for Men Bio-Wash T-Shirt; Row 259: 13 units / ₹9,750 for Women Cotton Leggings) are deducted from corresponding product gross totals. Analytical product revenue: Men Bio-Wash T-Shirt ₹461,250 (60.19%, 369 units); Fleece Hoodie ₹102,350 (13.36%, 115 units); Women Leggings ₹86,250 (11.26%, 115 units); Boys Shorts ₹72,240 (9.43%, 172 units); Polo Shirt ₹25,850 (3.37%, 47 units); Thermal Innerwear ₹18,360 (2.40%, 27 units). Total: ₹766,300 (845 units, 100.01% ≈ 100.0%).*
+
+*\*Participant 2 Baseline Health Score (64.2) Input Basis: Evaluated on baseline profile context and initial gross baseline ingestion (83.9% concentration). Re-evaluating on the duplicate-excluded analytical basis (83.3%) triggers the identical >80% critical concentration risk penalty (-15 points), truthfully preserving the 64.2 / 100 score.*
+
+*\*Implementation vs. Outcome Separation: Recommendations marked Completed (e.g., Participant 1 VIP Priority Service) denote verified operational implementation by the owner. Causal business outcomes remain suspended and unverified pending receipt of complete post-action transaction records.*
+
 ---
 
 ## 4. Participant Milestone Checklist
