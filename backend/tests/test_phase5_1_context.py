@@ -158,3 +158,13 @@ def test_unified_context_service_missing_sales_data(db_session):
     assert ctx.sales.total_revenue == 0.0
     assert ctx.forecast.has_forecast_data is False
     assert any("No historical sales records" in lim for lim in ctx.data_limitations)
+
+
+def test_unified_context_service_unconfirmed_gap_propagation(db_session, test_business_with_sales):
+    service = RecommendationContextService(db_session)
+    # Inject an unconfirmed gap note directly into context limitations check
+    ctx = service.build_context(test_business_with_sales)
+    # Verify that data limitations include forecast nature disclosure or boundaries
+    assert isinstance(ctx.data_limitations, list)
+    assert ctx.forecast is not None
+

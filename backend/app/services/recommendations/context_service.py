@@ -320,13 +320,18 @@ class RecommendationContextService:
                 data_limitations.append(disclaimer)
 
         # Safe forecast data consumption check
+        has_unconfirmed = any(
+            any("unconfirmed" in str(lim).lower() for lim in (p.limitation_notes or []))
+            for p in product_forecasts
+        ) or any("unconfirmed" in str(lim).lower() for lim in data_limitations)
+
         _, fc_disclaimers, sanitized_forecasts = SafeForecastConsumer.audit_forecast_consumption(
             forecast_ctx=forecast_ctx,
             total_historical_periods=sales_ctx.total_transactions,
-            unconfirmed_gaps_present=False,
+            unconfirmed_gaps_present=has_unconfirmed,
         )
         for disc in fc_disclaimers:
-            if "Notice" in disc or "Warning" in disc:
+            if "Notice" in disc or "Warning" in disc or "Guard" in disc:
                 data_limitations.append(disc)
         forecast_ctx.product_forecasts = sanitized_forecasts
 
