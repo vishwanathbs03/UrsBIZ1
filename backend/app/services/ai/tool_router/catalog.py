@@ -35,13 +35,27 @@ from pydantic import BaseModel
 from app.services.ai.providers.evidence_registry import EvidenceKind
 
 from app.services.ai.tool_router.types import (
+    ActionBoardArgs,
+    BusinessComparisonArgs,
+    BusinessHealthArgs,
+    BusinessProfileArgs,
+    CalculateMetricsArgs,
     CompareRecommendationsArgs,
+    CustomerConcentrationArgs,
+    CustomerInsightsArgs,
+    DemandForecastArgs,
+    ExistingRecommendationsArgs,
+    FinancialIndicatorsArgs,
     ForecastArgs,
     GrowthArgs,
     KpiArgs,
+    ProductPerformanceArgs,
     RecommendationArgs,
     RoadmapArgs,
+    SalesSummaryArgs,
+    SalesTrendsArgs,
     ScenarioArgs,
+    SearchSchemesArgs,
 )
 
 
@@ -390,9 +404,147 @@ class ToolCatalog:
         return name in self.tools_for_intent(intent)
 
 
+# --------------------------------------------------------------------------- #
+# Phase 5 Open-Ended Business Intelligence Registry (13 Whitelisted Tools)
+# --------------------------------------------------------------------------- #
+
+OPEN_ENDED_TOOL_REGISTRY: dict[str, ToolSpec] = {
+    "get_business_profile": ToolSpec(
+        name="get_business_profile",
+        description="Returns legal identity, industry, location, stage, and employee count.",
+        arg_schema=BusinessProfileArgs,
+        engine_name="business_dna",
+        evidence_kind=EvidenceKind.DNA,
+        intents=_ALL_INTENTS,
+        rationale="Phase 5 Profile Intelligence.",
+    ),
+    "get_business_health": ToolSpec(
+        name="get_business_health",
+        description="Returns overall health score (0-100), grade, dimension scores, and missing fields.",
+        arg_schema=BusinessHealthArgs,
+        engine_name="health_score",
+        evidence_kind=EvidenceKind.SCORE,
+        intents=_ALL_INTENTS,
+        rationale="Phase 5 Health Score Intelligence.",
+    ),
+    "get_sales_summary": ToolSpec(
+        name="get_sales_summary",
+        description="Returns total revenue, order count, unique products/customers, and ledger date range.",
+        arg_schema=SalesSummaryArgs,
+        engine_name="sales_summary",
+        evidence_kind=EvidenceKind.INSIGHT,
+        intents=_ALL_INTENTS,
+        rationale="Phase 3 Verified Sales Ledger Summary.",
+    ),
+    "get_sales_trends": ToolSpec(
+        name="get_sales_trends",
+        description="Returns historical sales trends, direction (increasing/declining), and monthly velocity.",
+        arg_schema=SalesTrendsArgs,
+        engine_name="sales_trends",
+        evidence_kind=EvidenceKind.INSIGHT,
+        intents=_ALL_INTENTS,
+        rationale="Phase 3 Sales Trend Intelligence.",
+    ),
+    "get_product_performance": ToolSpec(
+        name="get_product_performance",
+        description="Returns top products ranked by revenue contribution and fast-moving volume.",
+        arg_schema=ProductPerformanceArgs,
+        engine_name="product_performance",
+        evidence_kind=EvidenceKind.INSIGHT,
+        intents=_ALL_INTENTS,
+        rationale="Phase 3 Product Portfolio Analytics.",
+    ),
+    "get_customer_insights": ToolSpec(
+        name="get_customer_insights",
+        description="Returns customer retention, repeat purchase rate %, average order value, and inactive accounts.",
+        arg_schema=CustomerInsightsArgs,
+        engine_name="customer_insights",
+        evidence_kind=EvidenceKind.INSIGHT,
+        intents=_ALL_INTENTS,
+        rationale="Phase 3 Customer Analytics.",
+    ),
+    "get_customer_concentration": ToolSpec(
+        name="get_customer_concentration",
+        description="Returns top client revenue share %, top 3 client cumulative share %, and concentration risk.",
+        arg_schema=CustomerConcentrationArgs,
+        engine_name="customer_concentration",
+        evidence_kind=EvidenceKind.RULE,
+        intents=_ALL_INTENTS,
+        rationale="Phase 3 Customer Concentration Diagnostics.",
+    ),
+    "get_financial_indicators": ToolSpec(
+        name="get_financial_indicators",
+        description="Returns reported revenue, currency, and discloses untracked metrics (expenses, taxes).",
+        arg_schema=FinancialIndicatorsArgs,
+        engine_name="financial_indicators",
+        evidence_kind=EvidenceKind.SCORE,
+        intents=_ALL_INTENTS,
+        rationale="Phase 5 Financial Grounding & Data Boundaries.",
+    ),
+    "get_demand_forecast": ToolSpec(
+        name="get_demand_forecast",
+        description="Returns Phase 4 predictive demand forecast: horizon, projected units, model, and reliability.",
+        arg_schema=DemandForecastArgs,
+        engine_name="demand_forecast",
+        evidence_kind=EvidenceKind.FORECAST,
+        intents=_ALL_INTENTS,
+        rationale="Phase 4 Demand Forecasting Intelligence.",
+    ),
+    "get_existing_recommendations": ToolSpec(
+        name="get_existing_recommendations",
+        description="Returns active business recommendations with categories, priority scores, and lifecycle state.",
+        arg_schema=ExistingRecommendationsArgs,
+        engine_name="existing_recommendations",
+        evidence_kind=EvidenceKind.RECOMMENDATION,
+        intents=_ALL_INTENTS,
+        rationale="Phase 5 Recommendation Lifecycle & State.",
+    ),
+    "search_official_schemes": ToolSpec(
+        name="search_official_schemes",
+        description="Searches official government schemes (PMEGP, CGTMSE, MUDRA, ZED) matching the business profile.",
+        arg_schema=SearchSchemesArgs,
+        engine_name="search_official_schemes",
+        evidence_kind=EvidenceKind.SCHEME,
+        intents=_ALL_INTENTS,
+        rationale="Official Statutory Schemes Catalog.",
+    ),
+    "run_business_comparison": ToolSpec(
+        name="run_business_comparison",
+        description="Compares business performance across products, customers, or stated vs recorded revenue.",
+        arg_schema=BusinessComparisonArgs,
+        engine_name="business_comparison",
+        evidence_kind=EvidenceKind.INSIGHT,
+        intents=_ALL_INTENTS,
+        rationale="Phase 5 Comparative Analysis Combiner.",
+    ),
+    "calculate_business_metrics": ToolSpec(
+        name="calculate_business_metrics",
+        description="Computes deterministic business metrics (repeat rate, AOV, concentration, annualized revenue).",
+        arg_schema=CalculateMetricsArgs,
+        engine_name="calculate_metrics",
+        evidence_kind=EvidenceKind.SCORE,
+        intents=_ALL_INTENTS,
+        rationale="Deterministic Business Metrics Calculator.",
+    ),
+}
+
+
+class OpenEndedBiToolCatalog(ToolCatalog):
+    """Phase 5 Open-Ended Business Intelligence Tool Catalog (13 Whitelisted Tools)."""
+
+    def __init__(self, specs: dict[str, ToolSpec] | None = None) -> None:
+        super().__init__(specs=specs if specs is not None else OPEN_ENDED_TOOL_REGISTRY)
+
+    def is_allowed_for_intent(self, name: str, intent: str) -> bool:
+        # Open-ended business queries can invoke any registered tool
+        return name in self._specs
+
+
 __all__ = [
     "ToolSpec",
     "ToolCatalog",
+    "OpenEndedBiToolCatalog",
     "TOOL_REGISTRY",
+    "OPEN_ENDED_TOOL_REGISTRY",
     "INTENT_COMPATIBILITY",
 ]

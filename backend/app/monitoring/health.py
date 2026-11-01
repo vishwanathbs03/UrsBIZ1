@@ -127,16 +127,18 @@ def _probe_knowledge() -> tuple[bool, str]:
 
 
 def _probe_ai() -> tuple[bool, str]:
-    """Probe the AI decision service.
+    """Probe the AI decision service and Gemini circuit breaker status (Phase 5).
 
-    The service is a deterministic composition; "ready" means the
-    class imports cleanly and a no-arg constructor succeeds. We do
-    NOT call the engine because that depends on a real business
-    profile existing for the user — coupling readiness to business
-    state is exactly what the spec forbids.
+    Distinguishes operational AI readiness from transient provider outages.
     """
     try:
-        AIDecisionService  # noqa: B018 — import-only check
+        from app.services.ai.resilient_client import get_gemini_circuit_breaker
+        cb = get_gemini_circuit_breaker()
+        if cb.state == "OPEN":
+            AI_READY.set(0)
+            return False, "circuit_breaker_open: provider temporarily unreachable"
+
+        AIDecisionService  # noqa: B018 — import check
         AI_READY.set(1)
         return True, "ok"
     except Exception as exc:  # noqa: BLE001
@@ -262,8 +264,10 @@ def _build_full_health() -> dict[str, Any]:
 
     metrics_summary = _aggregate_prometheus_metrics()
 
+    status_str = "ok" if (db_ok and mig_ok and ai_ok) else ("degraded" if (db_ok and mig_ok) else "down")
+
     return {
-        "status": "ok" if (db_ok and mig_ok) else "degraded",
+        "status": status_str,
         "api": {"ok": True, "detail": "alive"},
         "database": {"ok": db_ok, "detail": db_detail},
         "ai": {"ok": ai_ok, "detail": ai_detail},
@@ -317,12 +321,15 @@ def health_ready(response: Response) -> dict[str, Any]:
     ai_ok, ai_detail = _probe_ai()
     mig_ok, mig_status, mig_revision, mig_missing = _probe_migrations()
 
-    ready = db_ok and kn_ok and ai_ok and mig_ok
+    # Phase 5 Resilience: Core readiness requires DB, schema, and knowledge.
+    # A Gemini outage makes AI degraded but does NOT take down the core application.
+    core_ready = db_ok and kn_ok and mig_ok
     response.status_code = (
-        status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE
+        status.HTTP_200_OK if core_ready else status.HTTP_503_SERVICE_UNAVAILABLE
     )
     return {
-        "ready": ready,
+        "ready": core_ready,
+        "degraded": not ai_ok,
         "database": db_ok,
         "knowledge": kn_ok,
         "ai": ai_ok,

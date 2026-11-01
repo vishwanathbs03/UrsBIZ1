@@ -13,7 +13,7 @@
  */
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertOctagon,
@@ -43,6 +43,16 @@ import {
   useAdvisorData,
 } from "@/features/advisor/use-advisor-data";
 import { AdvisorView as DetailedAdvisorView } from "@/features/advisor/AdvisorView";
+import { SmartRecommendationsSection } from "@/features/advisor/SmartRecommendationsSection";
+import { NextBestActionHero } from "@/features/advisor/NextBestActionHero";
+import { MultiSignalInsightsPanel } from "@/features/advisor/MultiSignalInsightsPanel";
+import { GrowthStrategyRoadmap } from "@/features/advisor/GrowthStrategyRoadmap";
+import { ScenarioSimulationModal } from "@/features/advisor/ScenarioSimulationModal";
+import { ConversationalAdvisorDrawer } from "@/features/advisor/ConversationalAdvisorDrawer";
+import { RecommendationPortfolioView } from "@/features/advisor/RecommendationPortfolioView";
+import { RecommendationOutcomeTrackingView } from "@/features/advisor/RecommendationOutcomeTrackingView";
+import { BusinessSignalsFeedView } from "@/features/advisor/BusinessSignalsFeedView";
+import { useAdvancedRecommendations } from "@/features/advisor/use-advanced-recommendations";
 import type {
   AdvisorAction,
   AdvisorAggregateReport,
@@ -66,6 +76,15 @@ function band(score: number): "Strong" | "Stable" | "Building" {
 export function AdvisorExecutiveView() {
   const { state, refresh, isFetching } = useAdvisorData();
   const aggregateState = useAdvisorAggregateData();
+  const {
+    overview,
+    strategy,
+    portfolio,
+    isLoadingPortfolio,
+    effectiveness,
+    isLoadingEffectiveness,
+  } = useAdvancedRecommendations();
+  const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
 
   if (state.status === "loading") {
     return (
@@ -154,6 +173,15 @@ export function AdvisorExecutiveView() {
             </Button>
           </div>
         </DashboardCard>
+
+        {/* Phase 5 Architecture: Next Best Business Action Hero */}
+        {overview?.next_best_action?.top_priority_action && (
+          <NextBestActionHero
+            action={overview.next_best_action.top_priority_action}
+            evidenceSummary={overview.evidence_summary}
+            onOpenScenarios={() => setIsScenarioModalOpen(true)}
+          />
+        )}
 
         {/* Top three priorities */}
         <ExecutiveInsightCard
@@ -273,6 +301,47 @@ export function AdvisorExecutiveView() {
             />
           </div>
         </ExecutiveInsightCard>
+
+        {/* Phase 5 Architecture: Multi-Signal Reasoning & Diagnostics */}
+        {overview && (
+          <MultiSignalInsightsPanel
+            insights={overview.multi_signal_insights || []}
+            rootCauses={overview.root_cause_analyses || []}
+            opportunities={overview.opportunities || []}
+          />
+        )}
+
+        {/* Phase 5 Architecture: Personalized 3-Horizon Growth Strategy */}
+        {strategy && (
+          <GrowthStrategyRoadmap strategy={strategy} />
+        )}
+
+        {/* Phase 5: Interactive Conversational AI Business Advisory */}
+        <ConversationalAdvisorDrawer />
+
+        {/* Phase 5: Recommendation Portfolio Optimization, Dependencies & Conflict Resolution */}
+        <RecommendationPortfolioView
+          portfolio={portfolio || null}
+          isLoading={isLoadingPortfolio}
+        />
+
+        {/* Phase 5: Closed-Loop Recommendation Learning & Outcome Intelligence */}
+        <RecommendationOutcomeTrackingView
+          effectiveness={effectiveness || null}
+          isLoading={isLoadingEffectiveness}
+        />
+
+        {/* Phase 5: Proactive AI Business Monitoring & Event Intelligence Feed */}
+        <BusinessSignalsFeedView />
+
+        {/* Context-Aware Smart Recommendations (Phase 5) */}
+        <SmartRecommendationsSection />
+
+        {/* What-If Scenario Simulation Modal */}
+        <ScenarioSimulationModal
+          isOpen={isScenarioModalOpen}
+          onClose={() => setIsScenarioModalOpen(false)}
+        />
 
         {/* Detailed analysis (preserved) */}
         <DetailedAdvisorAccordion />

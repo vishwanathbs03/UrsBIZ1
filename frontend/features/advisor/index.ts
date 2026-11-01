@@ -9,6 +9,15 @@ export { RiskCards } from "./RiskCards";
 export { GrowthTips } from "./GrowthTips";
 export { FundingCard } from "./FundingCard";
 export { ComplianceCard } from "./ComplianceCard";
+export { SmartRecommendationsSection } from "./SmartRecommendationsSection";
+export { SmartRecommendationCard } from "./SmartRecommendationCard";
+export { NextBestActionHero } from "./NextBestActionHero";
+export { MultiSignalInsightsPanel } from "./MultiSignalInsightsPanel";
+export { GrowthStrategyRoadmap } from "./GrowthStrategyRoadmap";
+export { ScenarioSimulationModal } from "./ScenarioSimulationModal";
+export { ConversationalAdvisorDrawer } from "./ConversationalAdvisorDrawer";
+export { useSmartRecommendations } from "./use-smart-recommendations";
+export { useAdvancedRecommendations } from "./use-advanced-recommendations";
 export {
   useAdvisorData,
   useAdvisorQuery,

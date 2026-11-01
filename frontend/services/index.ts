@@ -20,6 +20,7 @@ export { dnaService } from "./dna-service";
 export { rulesService } from "./rules-service";
 export { decisionService } from "./decision-service";
 export { recommendationsService } from "./recommendations-service";
+export { smartRecommendationsService } from "./smart-recommendations-service";
 export { roadmapService } from "./roadmap-service";
 export { twinService } from "./twin-service";
 export {

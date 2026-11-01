@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from app.models.business_goal import BusinessGoal
     from app.models.business_challenge import BusinessChallenge
     from app.models.sales import SalesTransaction, SalesUpload
+    from app.models.personalization import BusinessPersonalizationSettings
 
 
 class Business(Base):
@@ -90,6 +91,10 @@ class Business(Base):
     )
     sales_transactions: Mapped[list["SalesTransaction"]] = relationship(
         back_populates="business", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    personalization_settings: Mapped["BusinessPersonalizationSettings | None"] = relationship(
+        back_populates="business", cascade="all, delete-orphan", lazy="selectin", uselist=False
     )
 
     def __repr__(self) -> str:  # pragma: no cover

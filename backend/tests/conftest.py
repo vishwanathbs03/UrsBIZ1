@@ -135,3 +135,35 @@ def pytest_configure(config: pytest.Config) -> None:
     clean schema the moment the module's ``create_all`` runs.
     """
     _wipe_persistent_db_files()
+
+
+@pytest.fixture(autouse=True)
+def _ensure_alembic_version():
+    """Ensure whatever engine is active in the test has alembic_version stamped at head revision."""
+    from sqlalchemy import text
+    from app.utils.database import EXPECTED_HEAD_REVISION, engine, Base
+    import app.models  # noqa: F401 - ensure all models registered on Base
+
+    try:
+        Base.metadata.create_all(bind=engine)
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS alembic_version "
+                    "(version_num VARCHAR(32) NOT NULL PRIMARY KEY)"
+                )
+            )
+            rows = conn.execute(text("SELECT version_num FROM alembic_version")).fetchall()
+            if not rows:
+                conn.execute(
+                    text("INSERT INTO alembic_version (version_num) VALUES (:v)"),
+                    {"v": EXPECTED_HEAD_REVISION},
+                )
+            else:
+                conn.execute(
+                    text("UPDATE alembic_version SET version_num = :v"),
+                    {"v": EXPECTED_HEAD_REVISION},
+                )
+    except Exception:
+        pass
+    yield
