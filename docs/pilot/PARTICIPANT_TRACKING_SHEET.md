@@ -52,7 +52,7 @@ The **Participant Tracking Sheet** is the central operational record used by the
 | Participant ID | Sector / Tier | Consent Date | Onboarded? | Ingested Rows | Quality % | W1 Check | W2 Check | W3 Check | Exit Survey | Status | Coordinator |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | `MSME-PILOT-001` | Packaged Foods / Micro | 2026-11-01 | [x] Yes | 126 | 97.7%* | [x] 2026-05-07 | [x] 2026-05-14 | [Scheduled] | [Scheduled] | Active | Lead Pilot Coordinator |
-| `MSME-PILOT-002` | Apparel & Textiles / Small | 2026-05-08 | [x] Yes | 133 | 97.1% | [Scheduled] | [Scheduled] | [Scheduled] | [Scheduled] | Active | Lead Pilot Coordinator |
+| `MSME-PILOT-002` | Apparel & Textiles / Small | 2026-05-08 | [x] Yes | 133 | 97.1% | [x] 2026-05-14 | [Scheduled] | [Scheduled] | [Scheduled] | Active | Lead Pilot Coordinator |
 | `MSME-PILOT-003` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
 | `MSME-PILOT-004` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
 | `MSME-PILOT-005` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
