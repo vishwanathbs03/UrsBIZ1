@@ -469,12 +469,12 @@ class AutonomousOpportunityScanner:
 
         return OpportunityHypothesis(
             id=hyp_id,
-            title=f"Capacity & Procurement Focus for Surging Product: '{top_f.product_name}'",
+            title=f"Capacity Planning & Demand Growth Review for Surging Product: '{top_f.product_name}'",
             category="Product Performance",
             business_problem_or_opportunity=(
                 f"Multi-period statistical forecasting identifies a strong growth trajectory ({delta_str}) for "
                 f"'{top_f.product_name}' over the next {top_f.forecast_horizon_periods} periods. Aligning operational "
-                "procurement and sales prioritization here captures rising market demand before bottlenecks occur."
+                "capacity planning and sales prioritization here captures rising market demand before bottlenecks occur."
             ),
             quality_status=OpportunityQualityStatus.VERIFIED_OPPORTUNITY,
             supporting_signals=[

@@ -274,17 +274,18 @@ class ConversationalRecommendationAdvisor:
                 top_p = ctx.forecast.product_forecasts[0]
                 recs.append(
                     SituationalRecommendation(
-                        title=f"Align Raw Material Procurement for '{top_p.product_name}'",
+                        title=f"Planning Review for Projected Demand Growth: '{top_p.product_name}'",
                         category="Product Performance",
                         priority="High",
                         situational_rationale=(
-                            f"Phase 4 forecast indicates {top_p.demand_trend} demand ({top_p.forecasted_units_total:,.0f} units). "
-                            "Staged supplier ordering prevents stockout delays without speculative capital lockup."
+                            f"Phase 4 forecast indicates {top_p.demand_trend} demand ({top_p.forecasted_units_total:,.0f} projected units). "
+                            "Proactive planning aligns production schedules to anticipated run-rate. "
+                            "Note: UrsBiz does not observe physical warehouse inventory or supplier lead times."
                         ),
                         action_steps=[
-                            f"Verify current supplier lead times for '{top_p.product_name}' components",
-                            "Stage orders in 2-week rolling batches aligned with demand velocity",
-                            "Avoid bulk speculation until confirmed purchase orders arrive",
+                            f"Review production scheduling and capacity for '{top_p.product_name}'",
+                            "Verify supplier lead times and raw component availability",
+                            "Conduct internal stock count to assess physical on-hand inventory",
                         ],
                         timeframe="14-21 days",
                         cost_of_delay="Unpreparedness leads to cancelled buyer orders; over-ordering locks up working capital.",

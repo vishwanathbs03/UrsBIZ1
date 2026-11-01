@@ -1267,17 +1267,18 @@ class OpenEndedBusinessIntelligenceEngine:
                 top_f = df["product_forecasts"][0]
                 recs.append(
                     SituationalRecommendation(
-                        title=f"Align Supplier Raw Material Procurement for '{top_f['product_name']}'",
+                        title=f"Planning Review for Forward Demand: '{top_f['product_name']}'",
                         category="Product Performance",
                         priority="High",
                         situational_rationale=(
-                            f"Demand forecast indicates {top_f['demand_trend']} demand ({top_f['forecasted_units_total']:,.0f} units). "
-                            "Staging supplier orders in 2-week rolling batches prevents stockouts without locking up working capital."
+                            f"Demand forecast indicates {top_f['demand_trend']} demand ({top_f['forecasted_units_total']:,.0f} projected units). "
+                            "Proactive forward review aligns operations without speculative inventory commitments. "
+                            "Note: UrsBiz does not observe physical warehouse inventory or supply balances."
                         ),
                         action_steps=[
                             f"Confirm component availability and supplier lead times for '{top_f['product_name']}'",
-                            "Set procurement delivery schedules aligned with weekly sales velocity",
-                            "Avoid unconfirmed bulk raw material speculative buying",
+                            "Review production schedule and capacity against projected demand run-rate",
+                            "Audit physical on-hand inventory before placing forward commitments",
                         ],
                         timeframe="14-21 days",
                         cost_of_delay="Unpreparedness leads to buyer order cancellations, while excessive advance buying locks up working capital.",

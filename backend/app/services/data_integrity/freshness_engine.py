@@ -76,6 +76,60 @@ DEFAULT_FRESHNESS_POLICIES: dict[ModuleDomain, SourceFreshnessRule] = {
     ),
 }
 
+# Reconciled Operational Freshness Policies (Phase 5 Final Engineering Verification):
+# Explicit thresholds: Sales: 7d fresh / 30d stale; Forecast: 14d fresh / 45d stale;
+# Profile: 90d fresh / 180d stale; Recommendation evidence: 30d fresh / 90d stale.
+STRICT_FRESHNESS_POLICIES: dict[ModuleDomain, SourceFreshnessRule] = {
+    ModuleDomain.SALES: SourceFreshnessRule(
+        module=ModuleDomain.SALES,
+        fresh_threshold_days=7,
+        stale_threshold_days=30,
+        description="High-velocity sales transactions: fresh within 7 days, stale if >30 days.",
+    ),
+    ModuleDomain.CUSTOMERS: SourceFreshnessRule(
+        module=ModuleDomain.CUSTOMERS,
+        fresh_threshold_days=30,
+        stale_threshold_days=90,
+        description="Customer purchase frequency and churn monitoring.",
+    ),
+    ModuleDomain.PRODUCTS: SourceFreshnessRule(
+        module=ModuleDomain.PRODUCTS,
+        fresh_threshold_days=30,
+        stale_threshold_days=90,
+        description="Product sales velocity and portfolio distribution.",
+    ),
+    ModuleDomain.BUSINESS_PROFILE: SourceFreshnessRule(
+        module=ModuleDomain.BUSINESS_PROFILE,
+        fresh_threshold_days=90,
+        stale_threshold_days=180,
+        description="Quarterly business profile, GSTIN, and digital readiness audit.",
+    ),
+    ModuleDomain.FINANCIAL_INDICATORS: SourceFreshnessRule(
+        module=ModuleDomain.FINANCIAL_INDICATORS,
+        fresh_threshold_days=60,
+        stale_threshold_days=120,
+        description="Bi-monthly financial metrics and working capital ledger.",
+    ),
+    ModuleDomain.DEMAND_FORECAST: SourceFreshnessRule(
+        module=ModuleDomain.DEMAND_FORECAST,
+        fresh_threshold_days=14,
+        stale_threshold_days=45,
+        description="Bi-weekly Phase 4 statistical demand forecast re-estimation.",
+    ),
+    ModuleDomain.GOVERNMENT_SCHEMES: SourceFreshnessRule(
+        module=ModuleDomain.GOVERNMENT_SCHEMES,
+        fresh_threshold_days=60,
+        stale_threshold_days=180,
+        description="Quarterly government scheme eligibility and portal verification.",
+    ),
+    ModuleDomain.HEALTH_SCORE: SourceFreshnessRule(
+        module=ModuleDomain.HEALTH_SCORE,
+        fresh_threshold_days=30,
+        stale_threshold_days=90,
+        description="Monthly health score and operational completeness evaluation.",
+    ),
+}
+
 
 class DataFreshnessEngine:
     """Evaluates business data freshness against domain-specific policies."""

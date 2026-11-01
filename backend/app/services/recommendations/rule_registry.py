@@ -1103,4 +1103,23 @@ class RecommendationRuleRegistry:
                 "prerequisites_and_tradeoffs": ["Requires IEC registration, GST LUT filing, and international shipping partner."],
             })
 
+        # Freshness Enforcement (Phase 5 Data Integrity):
+        # Stale sales data must NEVER silently support high-confidence recommendations.
+        is_sales_stale = any(
+            "Temporal Caution" in lim or "stale" in lim.lower() or "expired" in lim.lower()
+            for lim in ctx.data_limitations
+        )
+        if is_sales_stale:
+            for cand in candidates:
+                sources = cand.get("source_modules", [])
+                if "Sales Intelligence" in sources or "Customer Insights" in sources:
+                    cand["confidence"] = min(65.0, float(cand.get("confidence", 70.0)))
+                    cand["evidence_strength"] = min(45.0, float(cand.get("evidence_strength", 50.0)))
+                    cand["data_quality"] = "Stale / Aging"
+                    limits = cand.get("limitations", [])
+                    stale_notice = "Temporal Caution: Sales data is aging (>30 days old); priority and confidence are downgraded until updated sales records are ingested."
+                    if stale_notice not in limits:
+                        limits.append(stale_notice)
+                    cand["limitations"] = limits
+
         return candidates

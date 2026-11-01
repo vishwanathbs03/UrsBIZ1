@@ -212,7 +212,7 @@ def test_dynamic_opportunity_discovery_multi_dimensions():
 
     # Verify key dynamic dimensions triggered:
     assert any("Pricing & Tiering" in t for t in titles)  # SKU volume vs revenue gap
-    assert any("Capacity & Procurement Focus" in t for t in titles)  # Surging forecast demand
+    assert any("Capacity & Procurement Focus" in t or "Capacity Planning" in t for t in titles)  # Surging forecast demand
     assert any("Pre-Churn Account Reactivation" in t for t in titles)  # Lapsing buyers
     assert any("Standing Orders" in t for t in titles)  # Repeat buyer loyalty
     assert any("Mid-Market Client Acquisition" in t for t in titles)  # Concentration de-risking

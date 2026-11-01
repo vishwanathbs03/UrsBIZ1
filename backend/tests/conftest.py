@@ -141,9 +141,11 @@ def pytest_configure(config: pytest.Config) -> None:
 def _ensure_alembic_version():
     """Ensure whatever engine is active in the test has alembic_version stamped at head revision."""
     from sqlalchemy import text
-    from app.utils.database import EXPECTED_HEAD_REVISION, engine
+    from app.utils.database import EXPECTED_HEAD_REVISION, engine, Base
+    import app.models  # noqa: F401 - ensure all models registered on Base
 
     try:
+        Base.metadata.create_all(bind=engine)
         with engine.begin() as conn:
             conn.execute(
                 text(
@@ -155,6 +157,11 @@ def _ensure_alembic_version():
             if not rows:
                 conn.execute(
                     text("INSERT INTO alembic_version (version_num) VALUES (:v)"),
+                    {"v": EXPECTED_HEAD_REVISION},
+                )
+            else:
+                conn.execute(
+                    text("UPDATE alembic_version SET version_num = :v"),
                     {"v": EXPECTED_HEAD_REVISION},
                 )
     except Exception:

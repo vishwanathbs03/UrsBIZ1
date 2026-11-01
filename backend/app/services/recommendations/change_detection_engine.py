@@ -318,11 +318,12 @@ class ChangeDetectionEngine:
                         "projected_trend": pf.demand_trend,
                         "trend_delta_pct": pf.trend_delta_pct,
                         "reliability": pf.reliability,
+                        "inventory_disclosure": "UrsBiz does not track warehouse inventory balances, safety stock, or lead times; alerts reflect forward demand run-rates only.",
                     },
-                    "title": f"Positive Demand Forecast Trend: {prod_name} ({pf.demand_trend})",
+                    "title": f"Demand Growth Alert: {prod_name} ({pf.demand_trend})",
                     "what_changed": f"Statistical forecast indicates an upward demand trajectory for {prod_name}.",
                     "why_it_matters": "Anticipating demand increases enables advance production scheduling without overextending capital.",
-                    "suggested_action": "Align raw material supplier lead times to projected order volumes.",
+                    "suggested_action": "Review forward planning and scheduling for projected demand; note that inventory balances are not tracked.",
                     "confidence": 0.85,
                 })
             elif "decline" in trend or "downward" in trend:
@@ -338,11 +339,12 @@ class ChangeDetectionEngine:
                         "projected_trend": pf.demand_trend,
                         "trend_delta_pct": pf.trend_delta_pct,
                         "reliability": pf.reliability,
+                        "inventory_disclosure": "UrsBiz does not track warehouse inventory balances, safety stock, or lead times; alerts reflect forward demand run-rates only.",
                     },
                     "title": f"Projected Demand Contraction: {prod_name} ({pf.demand_trend})",
                     "what_changed": f"Statistical projection anticipates downward demand for {prod_name}.",
                     "why_it_matters": "Lower forward demand requires lean operating expenses and tight working capital controls.",
-                    "suggested_action": "Review procurement commitments and avoid excess raw material accumulation.",
+                    "suggested_action": "Review operational planning commitments and align forward schedules with projected run-rate.",
                     "confidence": 0.85,
                 })
 
@@ -439,7 +441,7 @@ class ChangeDetectionEngine:
                     latest_dt = latest_dt.replace(tzinfo=timezone.utc)
                 now_utc = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
                 days_old = (now_utc - latest_dt).days
-                if days_old >= 45:
+                if days_old >= 30:
                     events.append({
                         "event_type": MonitoringEventType.RECOMMENDATION_EVIDENCE_STALE.value,
                         "source": "provenance_engine",
