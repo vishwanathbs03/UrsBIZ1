@@ -66,13 +66,17 @@ The **Participant Tracking Sheet** is the central operational record used by the
 
 *\*Standard Observation Window Convention: Observation windows are explicitly reported as inclusive calendar days (with elapsed days noted): Participant 1 spans 196 inclusive calendar days (195 elapsed days: 2025-11-01 to 2026-05-15); Participant 2 spans 196 inclusive calendar days (195 elapsed days: 2025-11-01 to 2026-05-15).*
 
-*\*Completed 14-Day Outcome Evaluation (Participant 1): Formal 14-day symmetric window for Green Valley Priority Service (Action date: 2026-05-02). Pre-window (Apr 18 – May 1): ₹860.00 (2 orders, 6 units). Post-window (May 2 – May 15): ₹18,000.00 (5 orders, 55 units). Net delta: +₹17,140.00. Causal status: Correlation observed; demand coincided with routine seasonal restocking and high fulfillment responsiveness.*
+*\*Completed 14-Day Outcome Evaluation (Participant 1): Formal 14-day symmetric window for Green Valley Priority Service (Action date: 2026-05-02). Pre-window (Apr 18 – May 1): ₹860.00 (2 orders, 6 units). Post-window (May 2 – May 15): ₹18,000.00 (5 orders, 55 units). Net delta: +₹17,140.00. Causal status: Correlation observed. The priority protocol was reported as implemented and sales coincided with it; fulfillment performance remains unverified in the absence of logistics dispatch/delivery logs.*
 
-*\*Post-Onboarding Sales Movement (Participant 2): May 1–15 incremental export yielded 12 valid transactions totaling ₹92,040.00 analytical revenue. Chennai Garment Mart reorders: ₹42,500; Coimbatore Wholesalers: ₹35,000; Salem Fashion Hub (new B2B account outreach trial): ₹6,250. Top-2 concentration: 83.39% analytical share.*
+*\*Time-Window Separation & Post-Onboarding Movement (Participant 2): Onboarded May 8, 2026. May 1–15 sales file (12 orders, ₹92,040.00 analytical) partitioned into: (1) Pre-onboarding May 1–7: 5 orders, 49 units, ₹46,290.00 (routine baseline sales prior to onboarding); (2) Genuine post-onboarding May 8–15: 7 orders, 46 units, ₹45,750.00 (Chennai Garment Mart: ₹23,750; Coimbatore Wholesalers: ₹12,500; Salem Fashion Hub trial account: ₹6,250; Showroom: ₹3,250). Post-onboarding window is preliminary (8 days); top-2 customer concentration remains acute at 83.39% analytical share.*
 
-*\*Health-Score Provenance Note: Evaluated on baseline profile context and initial gross baseline ingestion. Concentration penalties (-15 pts) apply identically across gross and duplicate-excluded bases (>80% exposure tier), preserving baseline scores of 68.5 (P1) and 64.2 (P2).*
+*\*Health-Score Provenance Note: Evaluated as Original Baseline Scores established on baseline profile context and initial gross baseline ingestion. Concentration penalties (-15 pts) apply identically across gross (83.89%) and duplicate-excluded (83.29%) bases (>80% exposure tier), preserving baseline scores of 68.5 (P1) and 64.2 (P2).*
 
-*\*24-Hour Engineering KPI Clarification: Measures defect resolution time by the engineering team from bug report to verified test merge on main (MTTR ≤ 18h across DEF-001 to DEF-004). Does not measure MSME participant turnaround time.*
+*\*24-Hour Engineering KPI Clarification: Measures defect resolution time by the software engineering team from bug report to verified test merge on main (DEF-001 to DEF-004: MTTR = 17.0h, Median = 17.25h, 100% compliant with <24h SLA; external audit pending). Does not measure MSME participant turnaround time.*
+
+*\*Population Generalizability Disclaimer: The 97.6% pooled data ingestion fidelity (280 / 287 rows) is derived from a controlled 2-participant pilot and cannot be generalized to the broader MSME population without coordinator assistance.*
+
+*\*Participant 3 Governance: Candidate screening and preliminary conversations permitted; formal onboarding and data ingestion paused pending longitudinal evidence from P1 and P2.*
 
 ---
 
