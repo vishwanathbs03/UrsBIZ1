@@ -129,7 +129,11 @@ def validate_and_process_sales_data(
                     row_index=row_num,
                     issue_type="invalid_quantity",
                     severity="error",
-                    message="Quantity must be a positive number greater than 0.",
+                    message=(
+                        "Negative quantity detected: Sales quantity must be positive (> 0). Product returns, exchanges, or customer refunds should be recorded via separate credit notes rather than negative sales lines."
+                        if (qty is not None and qty < 0)
+                        else "Quantity must be a positive number greater than 0."
+                    ),
                     field="quantity",
                     value=str(raw_qty),
                 )

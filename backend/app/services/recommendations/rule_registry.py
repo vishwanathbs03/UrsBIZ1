@@ -214,10 +214,10 @@ class RecommendationRuleRegistry:
                 "title": f"Introduce Volume Pricing Tiers to Lift Average Order Value (₹{aov:,.2f})",
                 "category": RecommendationCategory.REVENUE_GROWTH,
                 "description": (
-                    f"Your current Average Order Value (AOV) across repeat customers is ₹{aov:,.2f}. "
+                    f"Your current Average Order Value (AOV) across all recorded orders is ₹{aov:,.2f} (measured across {sales.total_transactions} orders from {cust.total_customers} accounts). "
                     "Introducing structured 2x and 3x volume brackets with modest percentage incentives encourages commercial buyers to consolidate orders."
                 ),
-                "business_context": f"Active customer base of {cust.total_customers} with {cust.repeat_customers} repeat buyers.",
+                "business_context": f"Calculated across all {sales.total_transactions} combined transactions ({cust.total_customers} customer accounts).",
                 "evidence": [
                     f"Baseline Average Order Value: ₹{aov:,.2f}.",
                     f"Repeat customer count: {cust.repeat_customers} accounts ({cust.repeat_rate_pct}% repeat rate).",
@@ -610,7 +610,7 @@ class RecommendationRuleRegistry:
                     "category": RecommendationCategory.DEMAND_PLANNING,
                     "description": (
                         f"Demand for '{lead_decliner.product_name}' is trending downward with {p_units} units "
-                        f"projected across the next {p_horizon} periods. Assess market, pricing, and competitive factors behind the contraction."
+                        f"projected across the next {p_horizon} periods. Verify whether the recent volume dip stems from true customer demand contraction or temporary supply/production bottlenecks."
                     ),
                     "business_context": f"Identified via backtesting with {p_rel} reliability grade.",
                     "evidence": [
@@ -620,7 +620,7 @@ class RecommendationRuleRegistry:
                     ],
                     "reasoning": "Understanding contraction drivers early helps adjust marketing focus and prevent unnecessary production commitments.",
                     "recommended_actions": [
-                        f"Assess market and competitive factors behind demand contraction for '{lead_decliner.product_name}'.",
+                        f"Verify whether the sales dip in '{lead_decliner.product_name}' was driven by market demand or temporary supplier/production bottlenecks.",
                         "Review pricing elasticity and customer feedback regarding this SKU.",
                     ],
                     "expected_benefit": "Avoidance of surplus procurement and strategic reallocation of sales attention.",
@@ -982,6 +982,19 @@ class RecommendationRuleRegistry:
         # ---------------------------------------------------------------------
         # Rule 9.1: Criteria Match
         all_schemes = schemes.recommended_schemes + schemes.eligible_schemes
+        # Filter out schemes where the business already holds an active certification (e.g. active Udyam, GST, ZED)
+        held_certs = [c.lower() for c in (getattr(profile, "certifications", []) or [])]
+        filtered_schemes = []
+        for s in all_schemes:
+            s_name_lower = s.name.lower()
+            is_already_held = any(
+                (word in s_name_lower and word in c)
+                for c in held_certs
+                for word in ["udyam", "gst", "zed", "iec", "iso"]
+            )
+            if not is_already_held:
+                filtered_schemes.append(s)
+        all_schemes = filtered_schemes
         if all_schemes:
             lead_scheme = all_schemes[0]
             candidates.append({

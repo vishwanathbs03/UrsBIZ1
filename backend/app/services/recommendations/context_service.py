@@ -97,6 +97,7 @@ class RecommendationContextService:
             website_url=web_url,
             has_ecommerce=has_ecom,
             has_export_experience=has_exp,
+            certifications=[c.name for c in (business.certifications or []) if c.name],
         )
 
         # ---------------------------------------------------------------------

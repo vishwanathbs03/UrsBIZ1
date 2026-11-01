@@ -41,6 +41,7 @@ class BusinessProfileContext(BaseModel):
     website_url: Optional[str] = None
     has_ecommerce: bool = False
     has_export_experience: bool = False
+    certifications: list[str] = Field(default_factory=list)
 
 
 class HealthScoreContext(BaseModel):
