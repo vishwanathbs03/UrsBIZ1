@@ -5,6 +5,7 @@ import { smartRecommendationsService } from "@/services/smart-recommendations-se
 import type {
   AdvancedRecommendationsOverviewResponse,
   PersonalizedGrowthStrategy,
+  RecommendationEffectivenessResponse,
   RecommendationPortfolioResponse,
 } from "@/types/smart-recommendations";
 
@@ -27,6 +28,12 @@ export function useAdvancedRecommendations() {
     staleTime: 60000,
   });
 
+  const effectivenessQuery = useQuery<RecommendationEffectivenessResponse>({
+    queryKey: ["recommendations-effectiveness"],
+    queryFn: () => smartRecommendationsService.getEffectiveness(),
+    staleTime: 60000,
+  });
+
   return {
     overview: overviewQuery.data,
     isLoadingOverview: overviewQuery.isLoading,
@@ -37,10 +44,14 @@ export function useAdvancedRecommendations() {
     portfolio: portfolioQuery.data,
     isLoadingPortfolio: portfolioQuery.isLoading,
     isErrorPortfolio: portfolioQuery.isError,
+    effectiveness: effectivenessQuery.data,
+    isLoadingEffectiveness: effectivenessQuery.isLoading,
+    isErrorEffectiveness: effectivenessQuery.isError,
     refetchAll: () => {
       overviewQuery.refetch();
       strategyQuery.refetch();
       portfolioQuery.refetch();
+      effectivenessQuery.refetch();
     },
   };
 }

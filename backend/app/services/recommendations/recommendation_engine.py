@@ -77,6 +77,24 @@ from app.schemas.personalization import (
     RecommendationPersonalizationProfile,
 )
 from app.schemas.portfolio import RecommendationPortfolioResponse
+from app.repositories.recommendation_outcome_repository import (
+    RecommendationOutcomeRepository,
+)
+from app.services.recommendations.outcome_measurement_engine import (
+    BeforeAfterMeasurementEngine,
+)
+from app.services.recommendations.outcome_learning_engine import (
+    RecommendationOutcomeLearningEngine,
+)
+from app.schemas.recommendation_outcomes import (
+    BeforeAfterMeasurementResponse,
+    CompleteHistoryResponse,
+    OutcomeRecordingRequest,
+    OutcomeTrackingResponse,
+    RecommendationAuditEventItem,
+    RecommendationEffectivenessResponse,
+    RecommendationHistoryResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +112,9 @@ class SmartRecommendationEngine:
         self.personalization_repo = PersonalizationRepository(db)
         self.personalization_engine = PersonalizationEngine()
         self.portfolio_engine = RecommendationPortfolioEngine()
+        self.outcome_repo = RecommendationOutcomeRepository(db)
+        self.measurement_engine = BeforeAfterMeasurementEngine(db)
+        self.outcome_learning_engine = RecommendationOutcomeLearningEngine(db)
         self.quality_engine = RecommendationQualityEngine()
         self.multi_signal_engine = MultiSignalEngine()
         self.root_cause_engine = RootCauseEngine()
@@ -305,6 +326,10 @@ class SmartRecommendationEngine:
         if not status_filter or status_filter.lower() != "all":
             # Suppress items dismissed by user feedback
             filtered_items = [i for i in filtered_items if i.id not in suppressed_ids]
+            # Apply closed-loop learning & repeated suppression with critical risk protection
+            filtered_items = self.outcome_learning_engine.apply_learning_to_recommendations(
+                filtered_items, business.id
+            )
 
         if category_filter and category_filter != "all":
             filtered_items = [
@@ -584,3 +609,232 @@ class SmartRecommendationEngine:
         """Answer natural language business questions using cross-signal intelligence, calculations, and boundaries."""
         ctx = self.context_service.build_context(business)
         return self.conversational_advisor.answer_question(ctx=ctx, req=req)
+
+    # ----------------------------------------------------------------------- #
+    # Closed-Loop Outcome Tracking & Business Measurement                     #
+    # ----------------------------------------------------------------------- #
+
+    def record_outcome(
+        self,
+        business: Business,
+        recommendation_id: str,
+        req: OutcomeRecordingRequest,
+    ) -> OutcomeTrackingResponse:
+        """Record implementation outcome, evaluate empirical before/after metrics, and append audit event."""
+        started_dt: Optional[datetime] = None
+        if req.started_at:
+            try:
+                started_dt = datetime.fromisoformat(req.started_at)
+            except Exception:
+                pass
+
+        completed_dt: Optional[datetime] = None
+        if req.completed_at:
+            try:
+                completed_dt = datetime.fromisoformat(req.completed_at)
+            except Exception:
+                pass
+
+        # 1. Persist outcome
+        outcome = self.outcome_repo.record_outcome(
+            business_id=business.id,
+            recommendation_id=recommendation_id,
+            is_started=req.is_started,
+            is_completed=req.is_completed,
+            is_abandoned=req.is_abandoned,
+            started_at=started_dt,
+            completed_at=completed_dt,
+            actual_effort=req.actual_effort,
+            owner_rating=req.owner_rating,
+            qualitative_feedback=req.qualitative_feedback,
+            perceived_utility=req.perceived_utility,
+            non_completion_reason=req.non_completion_reason,
+            still_relevant=req.still_relevant,
+            notes=req.notes,
+        )
+
+        # 2. Before-and-after business measurement
+        measurement: Optional[BeforeAfterMeasurementResponse] = None
+        if outcome.is_completed and outcome.completed_at:
+            measurement = self.measurement_engine.measure_outcome(
+                business_id=business.id,
+                recommendation_id=recommendation_id,
+                recommendation_title=recommendation_id.replace("_", " ").title(),
+                completed_at=outcome.completed_at,
+                window_days=30,
+            )
+            # Update measured outcome summary
+            rev_metric = next((m for m in measurement.metrics if m.metric_name == "Total Revenue"), None)
+            summary_txt = rev_metric.observation_statement if rev_metric else "Empirical before-and-after metrics calculated."
+            outcome.measured_outcome_summary = summary_txt
+            self.db.commit()
+
+        # 3. Append immutable audit event
+        event_type = "OUTCOME_RECORDED"
+        if req.is_completed:
+            event_type = "COMPLETED"
+        elif req.is_abandoned:
+            event_type = "DISMISSED"
+        elif req.is_started:
+            event_type = "IN_PROGRESS"
+
+        self.outcome_repo.record_audit_event(
+            business_id=business.id,
+            recommendation_id=recommendation_id,
+            title=recommendation_id.replace("_", " ").title(),
+            category="Recommendation Implementation",
+            priority="Medium",
+            priority_score=70,
+            event_type=event_type,
+            event_notes=req.notes or req.qualitative_feedback or f"Outcome status: {event_type}",
+            metrics_snapshot={"actual_effort": req.actual_effort, "rating": req.owner_rating},
+        )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        return OutcomeTrackingResponse(
+            id=outcome.id,
+            business_id=outcome.business_id,
+            recommendation_id=outcome.recommendation_id,
+            is_started=outcome.is_started,
+            is_completed=outcome.is_completed,
+            is_abandoned=outcome.is_abandoned,
+            started_at=outcome.started_at.isoformat() if outcome.started_at else None,
+            completed_at=outcome.completed_at.isoformat() if outcome.completed_at else None,
+            actual_effort=outcome.actual_effort,
+            owner_rating=outcome.owner_rating,
+            qualitative_feedback=outcome.qualitative_feedback,
+            perceived_utility=outcome.perceived_utility,
+            non_completion_reason=outcome.non_completion_reason,
+            still_relevant=outcome.still_relevant,
+            measured_outcome_summary=outcome.measured_outcome_summary,
+            measurement=measurement,
+            created_at=outcome.created_at.isoformat() if outcome.created_at else now_iso,
+            updated_at=outcome.updated_at.isoformat() if outcome.updated_at else now_iso,
+        )
+
+    def get_outcome(
+        self,
+        business: Business,
+        recommendation_id: str,
+        window_days: int = 30,
+    ) -> OutcomeTrackingResponse:
+        """Fetch outcome record and calculate empirical before/after measurement."""
+        outcome = self.outcome_repo.get_outcome(business.id, recommendation_id)
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        if outcome is None:
+            measurement = self.measurement_engine.measure_outcome(
+                business_id=business.id,
+                recommendation_id=recommendation_id,
+                recommendation_title=recommendation_id.replace("_", " ").title(),
+                completed_at=None,
+                window_days=window_days,
+            )
+            return OutcomeTrackingResponse(
+                id=0,
+                business_id=business.id,
+                recommendation_id=recommendation_id,
+                is_started=False,
+                is_completed=False,
+                is_abandoned=False,
+                still_relevant=True,
+                measurement=measurement,
+                created_at=now_iso,
+                updated_at=now_iso,
+            )
+
+        measurement = None
+        if outcome.is_completed and outcome.completed_at:
+            measurement = self.measurement_engine.measure_outcome(
+                business_id=business.id,
+                recommendation_id=recommendation_id,
+                recommendation_title=recommendation_id.replace("_", " ").title(),
+                completed_at=outcome.completed_at,
+                window_days=window_days,
+            )
+
+        return OutcomeTrackingResponse(
+            id=outcome.id,
+            business_id=outcome.business_id,
+            recommendation_id=outcome.recommendation_id,
+            is_started=outcome.is_started,
+            is_completed=outcome.is_completed,
+            is_abandoned=outcome.is_abandoned,
+            started_at=outcome.started_at.isoformat() if outcome.started_at else None,
+            completed_at=outcome.completed_at.isoformat() if outcome.completed_at else None,
+            actual_effort=outcome.actual_effort,
+            owner_rating=outcome.owner_rating,
+            qualitative_feedback=outcome.qualitative_feedback,
+            perceived_utility=outcome.perceived_utility,
+            non_completion_reason=outcome.non_completion_reason,
+            still_relevant=outcome.still_relevant,
+            measured_outcome_summary=outcome.measured_outcome_summary,
+            measurement=measurement,
+            created_at=outcome.created_at.isoformat() if outcome.created_at else now_iso,
+            updated_at=outcome.updated_at.isoformat() if outcome.updated_at else now_iso,
+        )
+
+    def get_effectiveness_analytics(
+        self, business: Business
+    ) -> RecommendationEffectivenessResponse:
+        """Compute portfolio-wide and category-level recommendation effectiveness with small-sample safeguards."""
+        return self.outcome_learning_engine.compute_effectiveness_intelligence(business.id)
+
+    def get_recommendation_history(
+        self, business: Business, recommendation_id: str
+    ) -> RecommendationHistoryResponse:
+        """Retrieve complete immutable version and decision audit history for a recommendation."""
+        records = self.outcome_repo.get_history_for_recommendation(business.id, recommendation_id)
+        current_v = max((r.version for r in records), default=1)
+        items = [
+            RecommendationAuditEventItem(
+                id=r.id,
+                recommendation_id=r.recommendation_id,
+                version=r.version,
+                title=r.title,
+                category=r.category,
+                priority=r.priority,
+                priority_score=r.priority_score,
+                evidence_version=r.evidence_version,
+                evidence_summary=r.evidence_summary,
+                event_type=r.event_type,
+                event_notes=r.event_notes,
+                metrics_snapshot=r.metrics_snapshot,
+                created_at=r.created_at.isoformat() if r.created_at else "",
+            )
+            for r in records
+        ]
+        return RecommendationHistoryResponse(
+            recommendation_id=recommendation_id,
+            current_version=current_v,
+            events=items,
+        )
+
+    def get_complete_history(
+        self, business: Business, limit: int = 100
+    ) -> CompleteHistoryResponse:
+        """Retrieve recent immutable version and decision audit history across all recommendations."""
+        records = self.outcome_repo.get_complete_history(business.id, limit=limit)
+        items = [
+            RecommendationAuditEventItem(
+                id=r.id,
+                recommendation_id=r.recommendation_id,
+                version=r.version,
+                title=r.title,
+                category=r.category,
+                priority=r.priority,
+                priority_score=r.priority_score,
+                evidence_version=r.evidence_version,
+                evidence_summary=r.evidence_summary,
+                event_type=r.event_type,
+                event_notes=r.event_notes,
+                metrics_snapshot=r.metrics_snapshot,
+                created_at=r.created_at.isoformat() if r.created_at else "",
+            )
+            for r in records
+        ]
+        return CompleteHistoryResponse(
+            business_id=business.id,
+            total_events=len(items),
+            events=items,
+        )

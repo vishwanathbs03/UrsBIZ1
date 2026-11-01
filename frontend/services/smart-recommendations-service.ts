@@ -5,12 +5,17 @@
 import { apiClient } from "@/services/api-client";
 import type {
   AdvancedRecommendationsOverviewResponse,
+  CompleteHistoryResponse,
+  OutcomeRecordingRequest,
+  OutcomeTrackingResponse,
   PersonalizedGrowthStrategy,
   RecommendationAskRequest,
   RecommendationAskResponse,
+  RecommendationEffectivenessResponse,
   RecommendationExplainResponse,
   RecommendationFeedbackCreate,
   RecommendationFeedbackResponse,
+  RecommendationHistoryResponse,
   RecommendationPortfolioResponse,
   RecommendationStatus,
   ScenarioSimulationRequest,
@@ -106,6 +111,47 @@ export const smartRecommendationsService = {
   getPortfolio: async (): Promise<RecommendationPortfolioResponse> => {
     return apiClient.get<RecommendationPortfolioResponse>(
       "/api/v1/recommendations/portfolio"
+    );
+  },
+
+  recordOutcome: async (
+    recommendationId: string,
+    payload: OutcomeRecordingRequest
+  ): Promise<OutcomeTrackingResponse> => {
+    return apiClient.post<OutcomeTrackingResponse>(
+      `/api/v1/recommendations/${encodeURIComponent(recommendationId)}/outcome`,
+      payload
+    );
+  },
+
+  getOutcome: async (
+    recommendationId: string,
+    windowDays: number = 30
+  ): Promise<OutcomeTrackingResponse> => {
+    return apiClient.get<OutcomeTrackingResponse>(
+      `/api/v1/recommendations/${encodeURIComponent(recommendationId)}/outcome?window_days=${windowDays}`
+    );
+  },
+
+  getEffectiveness: async (): Promise<RecommendationEffectivenessResponse> => {
+    return apiClient.get<RecommendationEffectivenessResponse>(
+      "/api/v1/recommendations/effectiveness/analytics"
+    );
+  },
+
+  getRecommendationHistory: async (
+    recommendationId: string
+  ): Promise<RecommendationHistoryResponse> => {
+    return apiClient.get<RecommendationHistoryResponse>(
+      `/api/v1/recommendations/${encodeURIComponent(recommendationId)}/history`
+    );
+  },
+
+  getCompleteHistory: async (
+    limit: number = 100
+  ): Promise<CompleteHistoryResponse> => {
+    return apiClient.get<CompleteHistoryResponse>(
+      `/api/v1/recommendations/history/all?limit=${limit}`
     );
   },
 };

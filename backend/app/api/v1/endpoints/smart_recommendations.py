@@ -46,6 +46,14 @@ from app.schemas.portfolio import (
     PortfolioSequenceUpdateRequest,
     RecommendationPortfolioResponse,
 )
+from app.schemas.recommendation_outcomes import (
+    BeforeAfterMeasurementResponse,
+    CompleteHistoryResponse,
+    OutcomeRecordingRequest,
+    OutcomeTrackingResponse,
+    RecommendationEffectivenessResponse,
+    RecommendationHistoryResponse,
+)
 from app.services.recommendations.explanation_service import explain_recommendation
 from app.services.recommendations.recommendation_engine import SmartRecommendationEngine
 from app.utils.database import get_db
@@ -217,6 +225,37 @@ def ask_recommendation_question(
     return engine.ask_recommendation_question(business=business, req=payload)
 
 
+@router.get(
+    "/effectiveness/analytics",
+    response_model=RecommendationEffectivenessResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get recommendation effectiveness intelligence with small-sample safeguards",
+)
+def get_recommendation_effectiveness(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RecommendationEffectivenessResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.get_effectiveness_analytics(business=business)
+
+
+@router.get(
+    "/history/all",
+    response_model=CompleteHistoryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get complete historical audit log of recommendation events and decisions",
+)
+def get_complete_recommendation_history(
+    limit: int = Query(default=100, ge=1, le=500),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CompleteHistoryResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.get_complete_history(business=business, limit=limit)
+
+
 @router.patch(
     "/{recommendation_id}/status",
     status_code=status.HTTP_200_OK,
@@ -277,3 +316,54 @@ def explain_smart_recommendation(
         business_name=business.legal_name,
         industry=business.industry or "General MSME",
     )
+
+
+@router.post(
+    "/{recommendation_id}/outcome",
+    response_model=OutcomeTrackingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Record implementation outcome, feedback, and before/after measurements",
+)
+def record_recommendation_outcome(
+    recommendation_id: str,
+    payload: OutcomeRecordingRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OutcomeTrackingResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.record_outcome(business=business, recommendation_id=recommendation_id, req=payload)
+
+
+@router.get(
+    "/{recommendation_id}/outcome",
+    response_model=OutcomeTrackingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get recommendation outcome tracking and empirical before/after measurements",
+)
+def get_recommendation_outcome(
+    recommendation_id: str,
+    window_days: int = Query(default=30, ge=7, le=90),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> OutcomeTrackingResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.get_outcome(business=business, recommendation_id=recommendation_id, window_days=window_days)
+
+
+@router.get(
+    "/{recommendation_id}/history",
+    response_model=RecommendationHistoryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get immutable audit version history for a specific recommendation",
+)
+def get_recommendation_version_history(
+    recommendation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RecommendationHistoryResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.get_recommendation_history(business=business, recommendation_id=recommendation_id)
+

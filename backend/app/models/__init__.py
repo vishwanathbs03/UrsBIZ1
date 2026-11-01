@@ -19,6 +19,8 @@ from app.models.personalization import BusinessPersonalizationSettings
 from app.models.product import Product
 from app.models.recommendation_feedback import RecommendationFeedback
 from app.models.recommendation_lifecycle import RecommendationLifecycleState
+from app.models.recommendation_outcome import RecommendationOutcome
+from app.models.recommendation_version_history import RecommendationVersionHistory
 from app.models.sales import SalesTransaction, SalesUpload
 from app.models.user import User
 
@@ -39,6 +41,8 @@ __all__ = [
     "SalesTransaction",
     "RecommendationLifecycleState",
     "RecommendationFeedback",
+    "RecommendationOutcome",
+    "RecommendationVersionHistory",
     "BusinessPersonalizationSettings",
     "BusinessDataProvenance",
     "BusinessDataQualityAudit",

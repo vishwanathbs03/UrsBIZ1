@@ -330,6 +330,54 @@ class RecommendationContextService:
                 data_limitations.append(disc)
         forecast_ctx.product_forecasts = sanitized_forecasts
 
+        # Closed-loop outcome and lifecycle history
+        completed_recs: list[dict[str, Any]] = []
+        outcome_history: list[dict[str, Any]] = []
+        dismissed_recs: list[dict[str, Any]] = []
+
+        try:
+            from sqlalchemy import select
+            from app.models.recommendation_lifecycle import RecommendationLifecycleState
+            from app.models.recommendation_outcome import RecommendationOutcome
+
+            lc_stmt = select(RecommendationLifecycleState).where(RecommendationLifecycleState.business_id == business.id)
+            lc_records = list(self.db.scalars(lc_stmt).all())
+
+            oc_stmt = select(RecommendationOutcome).where(RecommendationOutcome.business_id == business.id)
+            oc_records = list(self.db.scalars(oc_stmt).all())
+            oc_map = {o.recommendation_id: o for o in oc_records}
+
+            for lc in lc_records:
+                oc = oc_map.get(lc.recommendation_id)
+                rec_info = {
+                    "recommendation_id": lc.recommendation_id,
+                    "status": lc.status,
+                    "notes": lc.notes,
+                    "completed_at": oc.completed_at.isoformat() if (oc and oc.completed_at) else (lc.status_updated_at.isoformat() if lc.status == "Completed" else None),
+                    "owner_rating": oc.owner_rating if oc else None,
+                    "actual_effort": oc.actual_effort if oc else None,
+                    "measured_outcome_summary": oc.measured_outcome_summary if oc else None,
+                }
+                if lc.status == "Completed" or (oc and oc.is_completed):
+                    completed_recs.append(rec_info)
+                elif lc.status == "Dismissed" or (oc and oc.is_abandoned):
+                    dismissed_recs.append(rec_info)
+
+            for oc in oc_records:
+                outcome_history.append({
+                    "recommendation_id": oc.recommendation_id,
+                    "is_completed": oc.is_completed,
+                    "is_started": oc.is_started,
+                    "is_abandoned": oc.is_abandoned,
+                    "completed_at": oc.completed_at.isoformat() if oc.completed_at else None,
+                    "owner_rating": oc.owner_rating,
+                    "qualitative_feedback": oc.qualitative_feedback,
+                    "non_completion_reason": oc.non_completion_reason,
+                    "measured_outcome_summary": oc.measured_outcome_summary,
+                })
+        except Exception as exc:
+            logger.warning(f"Could not load recommendation outcome context: {exc}")
+
         # Preliminary context assembly for cross-module reconciliation
         raw_ctx = UnifiedRecommendationContext(
             business_id=business.id,
@@ -344,6 +392,9 @@ class RecommendationContextService:
             readiness=readiness_ctx,
             data_sources_present=data_sources_present,
             data_limitations=data_limitations,
+            completed_recommendations=completed_recs,
+            outcome_history=outcome_history,
+            dismissed_recommendations=dismissed_recs,
         )
 
         # Cross-module consistency reconciliation

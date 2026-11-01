@@ -156,3 +156,6 @@ class UnifiedRecommendationContext(BaseModel):
     readiness: OperationalReadinessContext
     data_sources_present: list[str] = Field(default_factory=list)
     data_limitations: list[str] = Field(default_factory=list)
+    completed_recommendations: list[dict[str, Any]] = Field(default_factory=list)
+    outcome_history: list[dict[str, Any]] = Field(default_factory=list)
+    dismissed_recommendations: list[dict[str, Any]] = Field(default_factory=list)

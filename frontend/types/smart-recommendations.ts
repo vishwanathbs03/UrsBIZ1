@@ -522,3 +522,131 @@ export interface RecommendationPortfolioResponse {
   obsolete_recommendations: PortfolioObsoleteItem[];
   resource_summary: Record<string, any>;
 }
+
+// --------------------------------------------------------------------------
+// Closed-Loop Outcome Tracking & Business Measurement (Phase 5)
+// --------------------------------------------------------------------------
+
+export interface OutcomeRecordingRequest {
+  is_started?: boolean | null;
+  is_completed?: boolean | null;
+  is_abandoned?: boolean | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  actual_effort?: string | null;
+  owner_rating?: number | null;
+  qualitative_feedback?: string | null;
+  perceived_utility?: string | null;
+  non_completion_reason?: string | null;
+  still_relevant?: boolean | null;
+  notes?: string | null;
+}
+
+export interface MetricComparison {
+  metric_name: string;
+  unit: string;
+  baseline_value: number;
+  post_value: number;
+  delta_absolute: number;
+  delta_percentage: number;
+  direction: "INCREASED" | "DECREASED" | "UNCHANGED";
+  observation_statement: string;
+}
+
+export interface BeforeAfterMeasurementResponse {
+  recommendation_id: string;
+  title: string;
+  completed_at?: string | null;
+  measurement_window_days: number;
+  window_status: "COMPLETED_WINDOW" | "PARTIAL_WINDOW_IN_PROGRESS" | "INSUFFICIENT_BASELINE_DATA";
+  elapsed_days_since_completion: number;
+  pre_period_start?: string | null;
+  pre_period_end?: string | null;
+  post_period_start?: string | null;
+  post_period_end?: string | null;
+  comparison_methodology: string;
+  data_gaps: string[];
+  metrics: MetricComparison[];
+  causal_disclaimer: string;
+  learning_quality_tier: string;
+}
+
+export interface OutcomeTrackingResponse {
+  id: number;
+  business_id: number;
+  recommendation_id: string;
+  is_started: boolean;
+  is_completed: boolean;
+  is_abandoned: boolean;
+  started_at?: string | null;
+  completed_at?: string | null;
+  actual_effort?: string | null;
+  owner_rating?: number | null;
+  qualitative_feedback?: string | null;
+  perceived_utility?: string | null;
+  non_completion_reason?: string | null;
+  still_relevant: boolean;
+  measured_outcome_summary?: string | null;
+  measurement?: BeforeAfterMeasurementResponse | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CategoryEffectivenessItem {
+  category: string;
+  total_suggested: number;
+  total_accepted: number;
+  total_completed: number;
+  total_abandoned: number;
+  acceptance_rate_pct: number;
+  completion_rate_pct: number;
+  average_rating?: number | null;
+  positive_outcomes_count: number;
+  statistical_reliability: "Reliable" | "Moderate" | "Insufficient Sample Size";
+  small_sample_warning?: string | null;
+}
+
+export interface RecommendationEffectivenessResponse {
+  business_id: number;
+  total_recommendations: number;
+  total_accepted: number;
+  total_completed: number;
+  total_dismissed: number;
+  total_abandoned: number;
+  overall_acceptance_rate_pct: number;
+  overall_completion_rate_pct: number;
+  abandonment_reasons_breakdown: Record<string, number>;
+  category_effectiveness: CategoryEffectivenessItem[];
+  top_performing_categories: string[];
+  insufficient_evidence_categories: string[];
+  small_sample_safeguard_applied: boolean;
+  methodology_notes: string[];
+}
+
+export interface RecommendationAuditEventItem {
+  id: number;
+  recommendation_id: string;
+  version: number;
+  title: string;
+  category: string;
+  priority: string;
+  priority_score: number;
+  evidence_version?: string | null;
+  evidence_summary?: string | null;
+  event_type: string;
+  event_notes?: string | null;
+  metrics_snapshot?: Record<string, any> | null;
+  created_at: string;
+}
+
+export interface RecommendationHistoryResponse {
+  recommendation_id: string;
+  current_version: number;
+  events: RecommendationAuditEventItem[];
+}
+
+export interface CompleteHistoryResponse {
+  business_id: number;
+  total_events: number;
+  events: RecommendationAuditEventItem[];
+}

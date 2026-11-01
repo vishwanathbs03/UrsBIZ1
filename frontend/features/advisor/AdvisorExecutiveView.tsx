@@ -50,6 +50,7 @@ import { GrowthStrategyRoadmap } from "@/features/advisor/GrowthStrategyRoadmap"
 import { ScenarioSimulationModal } from "@/features/advisor/ScenarioSimulationModal";
 import { ConversationalAdvisorDrawer } from "@/features/advisor/ConversationalAdvisorDrawer";
 import { RecommendationPortfolioView } from "@/features/advisor/RecommendationPortfolioView";
+import { RecommendationOutcomeTrackingView } from "@/features/advisor/RecommendationOutcomeTrackingView";
 import { useAdvancedRecommendations } from "@/features/advisor/use-advanced-recommendations";
 import type {
   AdvisorAction,
@@ -74,7 +75,14 @@ function band(score: number): "Strong" | "Stable" | "Building" {
 export function AdvisorExecutiveView() {
   const { state, refresh, isFetching } = useAdvisorData();
   const aggregateState = useAdvisorAggregateData();
-  const { overview, strategy, portfolio, isLoadingPortfolio } = useAdvancedRecommendations();
+  const {
+    overview,
+    strategy,
+    portfolio,
+    isLoadingPortfolio,
+    effectiveness,
+    isLoadingEffectiveness,
+  } = useAdvancedRecommendations();
   const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
 
   if (state.status === "loading") {
@@ -314,6 +322,12 @@ export function AdvisorExecutiveView() {
         <RecommendationPortfolioView
           portfolio={portfolio || null}
           isLoading={isLoadingPortfolio}
+        />
+
+        {/* Phase 5: Closed-Loop Recommendation Learning & Outcome Intelligence */}
+        <RecommendationOutcomeTrackingView
+          effectiveness={effectiveness || null}
+          isLoading={isLoadingEffectiveness}
         />
 
         {/* Context-Aware Smart Recommendations (Phase 5) */}

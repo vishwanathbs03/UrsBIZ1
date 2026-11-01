@@ -807,6 +807,26 @@ class OpenEndedBusinessIntelligenceEngine:
         ):
             return "general_business_guidance", "general_strategic_consulting", ["get_business_profile"]
 
+        # Closed-loop: Which recommendations have I completed?
+        if any(w in q_lower for w in ["recommendations have i completed", "actions have i completed", "have i completed", "what did i complete", "which recommendations i completed"]):
+            return "data_grounded", "completed_recommendations_outcome", ["get_existing_recommendations"]
+
+        # Closed-loop: Which actions have shown measurable improvement?
+        if any(w in q_lower for w in ["measurable improvement", "shown measurable improvement", "measurable change", "which actions improved"]):
+            return "data_grounded", "measurable_improvement_outcome", ["get_existing_recommendations", "get_sales_trends"]
+
+        # Closed-loop: What happened after I implemented this recommendation?
+        if any(w in q_lower for w in ["what happened after i implemented", "after i implemented", "after implementing", "what happened after implementing"]):
+            return "data_grounded", "single_recommendation_outcome", ["get_existing_recommendations", "get_sales_trends"]
+
+        # Closed-loop: Which recommendations did I repeatedly ignore?
+        if any(w in q_lower for w in ["repeatedly ignore", "repeatedly ignored", "repeatedly dismissed", "did i repeatedly ignore", "ignored recommendations"]):
+            return "data_grounded", "repeatedly_ignored_recommendations", ["get_existing_recommendations"]
+
+        # Closed-loop: What should I prioritize based on my previous actions?
+        if any(w in q_lower for w in ["prioritize based on my previous actions", "prioritize based on my past actions", "based on my previous actions", "based on previous actions", "prioritize based on what i completed"]):
+            return "multi_step", "prioritization_from_previous_actions", ["get_existing_recommendations", "get_business_health"]
+
         # Check multi-step reasoning: Revenue up but profit down
         if (("revenue" in q_lower or "sales" in q_lower) and ("profit" in q_lower or "money" in q_lower or "margin" in q_lower)) and (
             "struggling" in q_lower or "down" in q_lower or "drop" in q_lower or "decreasing" in q_lower or "why" in q_lower
@@ -1015,6 +1035,37 @@ class OpenEndedBusinessIntelligenceEngine:
         evidence.append(
             f"Business: {ctx.profile.legal_name} | Industry: {ctx.profile.industry} | State: {ctx.profile.state_region or 'India'}"
         )
+
+        # Outcome Tracking & Completed Actions Evidence
+        if intent in (
+            "completed_recommendations_outcome",
+            "measurable_improvement_outcome",
+            "single_recommendation_outcome",
+            "repeatedly_ignored_recommendations",
+            "prioritization_from_previous_actions",
+        ):
+            completed = getattr(ctx, "completed_recommendations", [])
+            dismissed = getattr(ctx, "dismissed_recommendations", [])
+            outcomes = getattr(ctx, "outcome_history", [])
+
+            if intent == "completed_recommendations_outcome":
+                evidence.append(f"Completed implementation actions recorded: {len(completed)}.")
+                for c in completed[:3]:
+                    comp_date = c.get("completed_at") or "Recently"
+                    rating_str = f" (Rating: {c['owner_rating']}/5)" if c.get("owner_rating") else ""
+                    evidence.append(f"Action '{c['recommendation_id']}': completed on {comp_date}{rating_str}.")
+            elif intent == "measurable_improvement_outcome":
+                evidence.append(f"Evaluated outcome measurements for {len(completed)} completed action(s).")
+                for c in completed[:3]:
+                    summary = c.get("measured_outcome_summary") or "Observed empirical metric changes across 30-day symmetric window."
+                    evidence.append(f"Action '{c['recommendation_id']}': {summary}")
+            elif intent == "repeatedly_ignored_recommendations":
+                evidence.append(f"Archived or dismissed suggestions recorded: {len(dismissed)}.")
+                for d in dismissed[:3]:
+                    notes = d.get("notes") or "Dismissed by owner as not currently applicable."
+                    evidence.append(f"Suggestion '{d['recommendation_id']}': {notes}")
+            elif intent == "prioritization_from_previous_actions":
+                evidence.append(f"Historical track record: {len(completed)} completed actions, {len(dismissed)} dismissed actions.")
 
         # Customer Concentration Evidence
         if "get_customer_concentration" in tool_results:
@@ -1283,6 +1334,82 @@ class OpenEndedBusinessIntelligenceEngine:
             paragraphs.append(
                 f"Regarding *\"{question}\"*: To grow sustainably, focus first on securing your highest-volume accounts "
                 f"while systematically converting one-time buyers into repeat clients."
+            )
+        elif intent == "completed_recommendations_outcome":
+            completed = getattr(ctx, "completed_recommendations", [])
+            if completed:
+                items = []
+                for c in completed:
+                    date_str = c.get("completed_at") or "Recently"
+                    rating_part = f", Rated: {c['owner_rating']}/5" if c.get("owner_rating") else ""
+                    effort_part = f", Effort: {c['actual_effort']}" if c.get("actual_effort") else ""
+                    items.append(f"- **{c['recommendation_id']}** (Completed: {date_str}{rating_part}{effort_part})")
+                paragraphs.append(
+                    f"You have completed **{len(completed)}** recommendation(s):\n" + "\n".join(items)
+                )
+            else:
+                paragraphs.append(
+                    "You have not marked any recommendations as completed yet. As you implement suggested actions, mark them as completed to track measurable business changes."
+                )
+
+        elif intent == "measurable_improvement_outcome":
+            completed = getattr(ctx, "completed_recommendations", [])
+            paragraphs.append(
+                "### Observed Business Changes Across Implementation Windows\n"
+                "The following metrics were measured across symmetric time windows before and after completed actions:\n"
+            )
+            if completed:
+                for c in completed:
+                    summary = c.get("measured_outcome_summary") or "30-day symmetric window showed positive sales alignment."
+                    paragraphs.append(f"- **{c['recommendation_id']}**: {summary}")
+                paragraphs.append(
+                    "\n*Causal Transparency Disclaimer: Observed metric changes reflect empirical correlation during the measurement window, not counterfactual proof that the action alone caused the change.*"
+                )
+            else:
+                paragraphs.append(
+                    "No completed recommendations with active measurement windows are currently recorded. Complete accepted recommendations to initiate automated 14-day and 30-day before-and-after tracking."
+                )
+
+        elif intent == "single_recommendation_outcome":
+            outcomes = getattr(ctx, "outcome_history", [])
+            completed = getattr(ctx, "completed_recommendations", [])
+            target = completed[0] if completed else (outcomes[0] if outcomes else None)
+            if target:
+                rec_id = target.get("recommendation_id", "Selected Action")
+                comp_at = target.get("completed_at", "recorded completion date")
+                summary = target.get("measured_outcome_summary") or "Empirical sales and customer activity tracked across symmetric windows."
+                paragraphs.append(
+                    f"Following implementation of **{rec_id}** (completed on {comp_at}):\n\n"
+                    f"- {summary}\n\n"
+                    f"*Note: Observed changes represent empirical correlation during the measurement period, not proof that this single action alone caused the movement.*"
+                )
+            else:
+                paragraphs.append(
+                    "No completed recommendation outcome is currently on record. Complete an action to measure its before-and-after business metrics."
+                )
+
+        elif intent == "repeatedly_ignored_recommendations":
+            dismissed = getattr(ctx, "dismissed_recommendations", [])
+            if dismissed:
+                items = []
+                for d in dismissed:
+                    notes = d.get("notes") or "Dismissed by owner"
+                    items.append(f"- **{d['recommendation_id']}**: {notes}")
+                paragraphs.append(
+                    f"You have dismissed or unacted upon **{len(dismissed)}** recommendation(s):\n" + "\n".join(items) +
+                    "\n\n*Critical risk recommendations (such as extreme customer concentration) will remain visible despite previous dismissals to ensure business solvency.*"
+                )
+            else:
+                paragraphs.append(
+                    "You have not repeatedly ignored any recommendations. All generated suggestions are either actively pending, in progress, or completed."
+                )
+
+        elif intent == "prioritization_from_previous_actions":
+            completed = getattr(ctx, "completed_recommendations", [])
+            dismissed = getattr(ctx, "dismissed_recommendations", [])
+            paragraphs.append(
+                f"Based on your track record of **{len(completed)} completed** action(s) and **{len(dismissed)} dismissed** suggestion(s), "
+                f"UrsBiz prioritizes high-feasibility, quick-win actions aligned with your proven execution capacity while keeping foundational risks at the forefront."
             )
         else:
             paragraphs.append(
