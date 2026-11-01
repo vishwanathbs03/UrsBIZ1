@@ -51,11 +51,13 @@ The **Participant Tracking Sheet** is the central operational record used by the
 
 | Participant ID | Sector / Tier | Consent Date | Onboarded? | Ingested Rows | Quality % | W1 Check | W2 Check | W3 Check | Exit Survey | Status | Coordinator |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `MSME-PILOT-001` | Packaged Foods / Micro | 2026-11-01 | [x] Yes | 126 | 98.7% | [x] 2026-05-07 | [Scheduled] | [Scheduled] | [Scheduled] | Active | Assigned Lead |
-| `MSME-PILOT-002` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
+| `MSME-PILOT-001` | Packaged Foods / Micro | 2026-11-01 | [x] Yes | 126 | 97.7%* | [x] 2026-05-07 | [x] 2026-05-14 | [Scheduled] | [Scheduled] | Active | Lead Pilot Coordinator |
+| `MSME-PILOT-002` | Apparel & Textiles / Small | 2026-05-08 | [x] Yes | 133 | 97.1% | [Scheduled] | [Scheduled] | [Scheduled] | [Scheduled] | Active | Lead Pilot Coordinator |
 | `MSME-PILOT-003` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
 | `MSME-PILOT-004` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
 | `MSME-PILOT-005` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
+
+*\*Note on MSME-PILOT-001 Quality Score Audit Correction: Cumulative valid percentage audited to $126 / 129 = 97.67\% \approx 97.7\%$. Previously recorded as 98.7% due to unweighted batch averaging ($(97.5\% + 100.0\%) / 2 = 98.75\%$). Historical record preserved; corrected pooled metric applied.*
 
 ---
 
