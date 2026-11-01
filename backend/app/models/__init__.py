@@ -8,6 +8,11 @@ from app.models.action_item import ActionItem
 from app.models.business import Business
 from app.models.business_challenge import BusinessChallenge
 from app.models.business_goal import BusinessGoal
+from app.models.business_monitoring import (
+    BusinessMonitoringPreferences,
+    BusinessSignalEvent,
+    RecommendationRefreshRecord,
+)
 from app.models.certification import Certification
 from app.models.chat import ChatMessage, ChatSession
 from app.models.data_provenance import BusinessDataProvenance, BusinessDataQualityAudit
@@ -47,4 +52,7 @@ __all__ = [
     "BusinessDataProvenance",
     "BusinessDataQualityAudit",
     "IdempotencyRecord",
+    "BusinessSignalEvent",
+    "BusinessMonitoringPreferences",
+    "RecommendationRefreshRecord",
 ]

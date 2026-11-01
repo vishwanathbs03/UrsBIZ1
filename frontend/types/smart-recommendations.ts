@@ -650,3 +650,84 @@ export interface CompleteHistoryResponse {
   total_events: number;
   events: RecommendationAuditEventItem[];
 }
+
+// --------------------------------------------------------------------------- //
+// Proactive AI Business Monitoring & Event Intelligence (Phase 5)             //
+// --------------------------------------------------------------------------- //
+
+export interface BusinessSignalItem {
+  event_id: string;
+  business_id: number;
+  event_type: string;
+  source: string;
+  relevant_entity?: string | null;
+  detected_at: string;
+  evidence: Record<string, any>;
+  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFORMATIONAL";
+  priority_score: number;
+  data_period: string;
+  event_version: number;
+  title: string;
+  what_changed: string;
+  why_it_matters: string;
+  suggested_action: string;
+  confidence: number;
+  is_suppressed: boolean;
+  suppression_reason?: string | null;
+  escalation_level: number;
+  linked_recommendation_id?: string | null;
+  status: string;
+}
+
+export interface BusinessSignalsFeedResponse {
+  business_id: number;
+  total_signals: number;
+  active_signals_count: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_and_info_count: number;
+  signals: BusinessSignalItem[];
+  last_evaluated_at: string;
+}
+
+export interface RecommendationRefreshDetail {
+  recommendation_id: string;
+  refresh_reason: string;
+  old_priority_score: number;
+  new_priority_score: number;
+  old_status: string;
+  new_status: string;
+  explanation: string;
+  refreshed_at: string;
+}
+
+export interface MonitoringEvaluationResponse {
+  business_id: number;
+  evaluated_at: string;
+  new_events_detected: number;
+  suppressed_events: number;
+  refreshed_recommendations: number;
+  signals: BusinessSignalItem[];
+  recommendation_refreshes: RecommendationRefreshDetail[];
+}
+
+export interface MonitoringPreferencesSchema {
+  business_id: number;
+  monitored_metrics: string[];
+  areas_of_interest: string[];
+  alert_frequency: string;
+  preferred_notification_types: string[];
+  min_severity: string;
+  cooldown_days: number;
+  updated_at?: string | null;
+}
+
+export interface MonitoringPreferencesUpdate {
+  monitored_metrics?: string[];
+  areas_of_interest?: string[];
+  alert_frequency?: string;
+  preferred_notification_types?: string[];
+  min_severity?: string;
+  cooldown_days?: number;
+}

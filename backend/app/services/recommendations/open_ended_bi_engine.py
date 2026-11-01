@@ -827,6 +827,30 @@ class OpenEndedBusinessIntelligenceEngine:
         if any(w in q_lower for w in ["prioritize based on my previous actions", "prioritize based on my past actions", "based on my previous actions", "based on previous actions", "prioritize based on what i completed"]):
             return "multi_step", "prioritization_from_previous_actions", ["get_existing_recommendations", "get_business_health"]
 
+        # Proactive Monitoring: What changed in my business this week?
+        if any(w in q_lower for w in ["what changed in my business this week", "what changed this week", "what changed in my business", "what changed recently", "recent business changes"]):
+            return "data_grounded", "proactive_business_changes", ["get_sales_trends", "get_customer_insights"]
+
+        # Proactive Monitoring: Are there any new risks?
+        if any(w in q_lower for w in ["are there any new risks", "any new risks", "emerging risks", "new risks", "are there any risks"]):
+            return "data_grounded", "proactive_emerging_risks", ["get_customer_concentration", "get_business_health"]
+
+        # Proactive Monitoring: Have any new growth opportunities appeared?
+        if any(w in q_lower for w in ["have any new growth opportunities appeared", "new growth opportunities", "any growth opportunities", "new opportunities appeared", "growth opportunities appeared"]):
+            return "data_grounded", "proactive_growth_opportunities", ["get_sales_trends", "get_product_performance"]
+
+        # Proactive Monitoring: Why did this recommendation become more urgent?
+        if any(w in q_lower for w in ["why did this recommendation become more urgent", "why did this recommendation become urgent", "why is this recommendation urgent", "recommendation become more urgent", "become more urgent"]):
+            return "data_grounded", "proactive_recommendation_urgency", ["get_existing_recommendations"]
+
+        # Proactive Monitoring: Which business signals should I pay attention to?
+        if any(w in q_lower for w in ["which business signals should i pay attention to", "which signals should i pay attention to", "business signals should i pay attention to", "what signals should i watch"]):
+            return "data_grounded", "proactive_top_signals", ["get_customer_concentration", "get_sales_trends"]
+
+        # Proactive Monitoring: What has improved since my last review?
+        if any(w in q_lower for w in ["what has improved since my last review", "what has improved", "what improved since my last review", "what improved", "any improvements"]):
+            return "data_grounded", "proactive_improvements_check", ["get_sales_trends", "get_business_health"]
+
         # Check multi-step reasoning: Revenue up but profit down
         if (("revenue" in q_lower or "sales" in q_lower) and ("profit" in q_lower or "money" in q_lower or "margin" in q_lower)) and (
             "struggling" in q_lower or "down" in q_lower or "drop" in q_lower or "decreasing" in q_lower or "why" in q_lower
@@ -1411,6 +1435,102 @@ class OpenEndedBusinessIntelligenceEngine:
                 f"Based on your track record of **{len(completed)} completed** action(s) and **{len(dismissed)} dismissed** suggestion(s), "
                 f"UrsBiz prioritizes high-feasibility, quick-win actions aligned with your proven execution capacity while keeping foundational risks at the forefront."
             )
+
+        elif intent == "proactive_business_changes":
+            rev = ctx.sales.total_revenue or 0.0
+            txs = ctx.sales.total_transactions or 0
+            custs = ctx.customers.total_customers or 0
+            top_client_name = "None"
+            top_share = 0.0
+            if ctx.customers.top_customers_by_revenue and rev > 0:
+                c_rev = float(ctx.customers.top_customers_by_revenue[0].get("revenue") or ctx.customers.top_customers_by_revenue[0].get("total_revenue") or 0.0)
+                top_share = (c_rev / rev) * 100.0
+                top_client_name = ctx.customers.top_customers_by_revenue[0].get("customer_name") or "Primary Client"
+
+            paragraphs.append(
+                f"### Business Shift Summary\n"
+                f"Across verified sales and customer activity:\n"
+                f"- **Total Sales Volume**: ₹{rev:,.2f} recorded across {txs} transactions.\n"
+                f"- **Active Customer Base**: {custs} account(s), with **{top_client_name}** contributing {top_share:.1f}%.\n"
+                f"- **Operational Health Grade**: {ctx.health.grade} (Score: {ctx.health.overall_score}/100).\n"
+                f"Review the proactive signals feed below for immediate tactical actions."
+            )
+
+        elif intent == "proactive_emerging_risks":
+            risks_found = []
+            rev = ctx.sales.total_revenue or 0.0
+            if ctx.customers.top_customers_by_revenue and rev > 0:
+                c_rev = float(ctx.customers.top_customers_by_revenue[0].get("revenue") or ctx.customers.top_customers_by_revenue[0].get("total_revenue") or 0.0)
+                share = (c_rev / rev) * 100.0
+                c_name = ctx.customers.top_customers_by_revenue[0].get("customer_name") or "Primary Client"
+                if share >= 40.0:
+                    risks_found.append(f"**High Client Concentration**: {c_name} accounts for {share:.1f}% of revenue.")
+            if not ctx.profile.has_website and not ctx.profile.has_ecommerce:
+                risks_found.append("**Digital Channel Gap**: Business lacks active website or e-commerce presence.")
+            if ctx.health.overall_score and ctx.health.overall_score < 60:
+                risks_found.append(f"**Operational Health Vulnerability**: Current score is {ctx.health.overall_score}/100.")
+            if risks_found:
+                paragraphs.append(
+                    f"### Emerging Business Risks Detected\n"
+                    + "\n".join(f"- {r}" for r in risks_found)
+                    + "\n\n*Action Required:* Address customer concentration first by expanding outward sales into adjacent buyers."
+                )
+            else:
+                paragraphs.append("No critical or high-severity emerging risks are currently detected in your business metrics.")
+
+        elif intent == "proactive_growth_opportunities":
+            opps_found = []
+            if (ctx.customers.repeat_rate_pct or 0.0) >= 30.0:
+                opps_found.append(f"**Repeat Buyer Base**: {ctx.customers.repeat_rate_pct:.1f}% repeat purchase rate presents expansion opportunities.")
+            if ctx.forecast.has_forecast_data and ctx.forecast.product_forecasts:
+                upward = [pf.product_name for pf in ctx.forecast.product_forecasts if "growth" in pf.demand_trend.lower() or "upward" in pf.demand_trend.lower()]
+                if upward:
+                    opps_found.append(f"**Upward Demand Trajectory**: Statistical forecasting projects sustained forward volume for {', '.join(upward)}.")
+            if opps_found:
+                paragraphs.append(
+                    f"### Proactive Growth Levers\n"
+                    + "\n".join(f"- {o}" for o in opps_found)
+                )
+            else:
+                paragraphs.append("Growth trajectory is steady. Strengthen relationship with existing clients to uncover order expansion opportunities.")
+
+        elif intent == "proactive_recommendation_urgency":
+            paragraphs.append(
+                "Recommendation urgency is determined deterministically by combining business impact, "
+                "evidence strength, customer concentration thresholds, and operational health scores. "
+                "When conditions such as client concentration deepen or sales velocity drops, "
+                "the engine automatically elevates priority to safeguard business solvency."
+            )
+
+        elif intent == "proactive_top_signals":
+            rev = ctx.sales.total_revenue or 0.0
+            top_s = 0.0
+            if ctx.customers.top_customers_by_revenue and rev > 0:
+                c_rev = float(ctx.customers.top_customers_by_revenue[0].get("revenue") or ctx.customers.top_customers_by_revenue[0].get("total_revenue") or 0.0)
+                top_s = (c_rev / rev) * 100.0
+            paragraphs.append(
+                "### Key Business Signals to Monitor\n"
+                f"1. **Customer Concentration Ratio**: Current top account represents {top_s:.1f}% of total sales.\n"
+                f"2. **Sales Stability**: ₹{rev:,.2f} total revenue recorded across active upload windows.\n"
+                f"3. **Readiness Index**: Health Grade {ctx.health.grade} ({ctx.health.overall_score}/100).\n"
+                "Focus on mitigating revenue concentration before expanding product lines."
+            )
+
+        elif intent == "proactive_improvements_check":
+            improvements = []
+            if (ctx.customers.repeat_rate_pct or 0.0) >= 40.0:
+                improvements.append(f"Strong customer loyalty with {ctx.customers.repeat_rate_pct:.1f}% repeat purchasing.")
+            if (ctx.health.overall_score or 0) >= 70:
+                improvements.append(f"Solid composite business health score of {ctx.health.overall_score}/100 (Grade {ctx.health.grade}).")
+            if getattr(ctx, "completed_recommendations", []):
+                improvements.append(f"Successfully implemented {len(ctx.completed_recommendations)} business improvement action(s).")
+            if improvements:
+                paragraphs.append(
+                    f"### Verified Business Improvements\n"
+                    + "\n".join(f"- {imp}" for imp in improvements)
+                )
+            else:
+                paragraphs.append("Baseline metrics established. Execute high-priority recommendations to drive verified improvements.")
         else:
             paragraphs.append(
                 f"Here is what your verified business data indicates regarding *\"{question}\"*:"

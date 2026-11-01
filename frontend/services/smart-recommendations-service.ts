@@ -5,7 +5,11 @@
 import { apiClient } from "@/services/api-client";
 import type {
   AdvancedRecommendationsOverviewResponse,
+  BusinessSignalsFeedResponse,
   CompleteHistoryResponse,
+  MonitoringEvaluationResponse,
+  MonitoringPreferencesSchema,
+  MonitoringPreferencesUpdate,
   OutcomeRecordingRequest,
   OutcomeTrackingResponse,
   PersonalizedGrowthStrategy,
@@ -152,6 +156,48 @@ export const smartRecommendationsService = {
   ): Promise<CompleteHistoryResponse> => {
     return apiClient.get<CompleteHistoryResponse>(
       `/api/v1/recommendations/history/all?limit=${limit}`
+    );
+  },
+
+  // ------------------------------------------------------------------------- //
+  // Proactive Monitoring & Signals Feed (Phase 5)                             //
+  // ------------------------------------------------------------------------- //
+
+  getSignalsFeed: async (
+    minSeverity?: string
+  ): Promise<BusinessSignalsFeedResponse> => {
+    const q = minSeverity ? `?min_severity=${encodeURIComponent(minSeverity)}` : "";
+    return apiClient.get<BusinessSignalsFeedResponse>(
+      `/api/v1/recommendations/monitoring/signals${q}`
+    );
+  },
+
+  evaluateMonitoring: async (): Promise<MonitoringEvaluationResponse> => {
+    return apiClient.post<MonitoringEvaluationResponse>(
+      "/api/v1/recommendations/monitoring/evaluate",
+      {}
+    );
+  },
+
+  getMonitoringPreferences: async (): Promise<MonitoringPreferencesSchema> => {
+    return apiClient.get<MonitoringPreferencesSchema>(
+      "/api/v1/recommendations/monitoring/preferences"
+    );
+  },
+
+  updateMonitoringPreferences: async (
+    payload: MonitoringPreferencesUpdate
+  ): Promise<MonitoringPreferencesSchema> => {
+    return apiClient.put<MonitoringPreferencesSchema>(
+      "/api/v1/recommendations/monitoring/preferences",
+      payload
+    );
+  },
+
+  dismissSignal: async (eventId: string): Promise<{ status: string }> => {
+    return apiClient.post<{ status: string }>(
+      `/api/v1/recommendations/monitoring/signals/${encodeURIComponent(eventId)}/dismiss`,
+      {}
     );
   },
 };

@@ -95,6 +95,15 @@ from app.schemas.recommendation_outcomes import (
     RecommendationEffectivenessResponse,
     RecommendationHistoryResponse,
 )
+from app.schemas.business_monitoring import (
+    BusinessSignalsFeedResponse,
+    MonitoringEvaluationResponse,
+    MonitoringPreferencesSchema,
+    MonitoringPreferencesUpdate,
+)
+from app.services.recommendations.proactive_monitoring_service import (
+    ProactiveMonitoringService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +132,7 @@ class SmartRecommendationEngine:
         self.scenario_engine = ScenarioSimulationEngine()
         self.growth_strategy_engine = GrowthStrategyEngine()
         self.conversational_advisor = ConversationalRecommendationAdvisor()
+        self.monitoring_service = ProactiveMonitoringService(db)
 
     def generate_recommendations(
         self,
@@ -838,3 +848,31 @@ class SmartRecommendationEngine:
             total_events=len(items),
             events=items,
         )
+
+    # ----------------------------------------------------------------------- #
+    # Proactive AI Business Monitoring & Event Intelligence (Phase 5)         #
+    # ----------------------------------------------------------------------- #
+
+    def evaluate_monitoring(self, business: Business) -> MonitoringEvaluationResponse:
+        """Run incremental proactive monitoring scan to detect business changes."""
+        return self.monitoring_service.evaluate_business_changes(business)
+
+    def get_signals_feed(
+        self, business: Business, min_severity: Optional[str] = None
+    ) -> BusinessSignalsFeedResponse:
+        """Fetch proactive business signals and opportunities feed for owner dashboard."""
+        return self.monitoring_service.get_signals_feed(business, min_severity=min_severity)
+
+    def get_monitoring_preferences(self, business: Business) -> MonitoringPreferencesSchema:
+        """Retrieve business monitoring settings and preferences."""
+        return self.monitoring_service.get_monitoring_preferences(business)
+
+    def update_monitoring_preferences(
+        self, business: Business, payload: MonitoringPreferencesUpdate
+    ) -> MonitoringPreferencesSchema:
+        """Update owner monitoring preferences with critical safety preservation."""
+        return self.monitoring_service.update_monitoring_preferences(business, payload)
+
+    def dismiss_signal(self, business: Business, event_id: str) -> dict[str, Any]:
+        """Acknowledge or dismiss an individual signal."""
+        return self.monitoring_service.dismiss_signal(business, event_id)

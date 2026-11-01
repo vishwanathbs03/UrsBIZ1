@@ -54,6 +54,12 @@ from app.schemas.recommendation_outcomes import (
     RecommendationEffectivenessResponse,
     RecommendationHistoryResponse,
 )
+from app.schemas.business_monitoring import (
+    BusinessSignalsFeedResponse,
+    MonitoringEvaluationResponse,
+    MonitoringPreferencesSchema,
+    MonitoringPreferencesUpdate,
+)
 from app.services.recommendations.explanation_service import explain_recommendation
 from app.services.recommendations.recommendation_engine import SmartRecommendationEngine
 from app.utils.database import get_db
@@ -366,4 +372,86 @@ def get_recommendation_version_history(
     business = _get_active_business(current_user, db)
     engine = SmartRecommendationEngine(db)
     return engine.get_recommendation_history(business=business, recommendation_id=recommendation_id)
+
+
+# --------------------------------------------------------------------------- #
+# Proactive AI Business Monitoring & Event-Driven Intelligence (Phase 5)       #
+# --------------------------------------------------------------------------- #
+
+@router.get(
+    "/monitoring/signals",
+    response_model=BusinessSignalsFeedResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get proactive business signals, emerging risks, and opportunities feed",
+)
+def get_monitoring_signals(
+    min_severity: Optional[str] = Query(None, description="'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFORMATIONAL'"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BusinessSignalsFeedResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.get_signals_feed(business=business, min_severity=min_severity)
+
+
+@router.post(
+    "/monitoring/evaluate",
+    response_model=MonitoringEvaluationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Trigger incremental proactive change detection scan and recommendation refresh",
+)
+def evaluate_business_monitoring(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MonitoringEvaluationResponse:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.evaluate_monitoring(business=business)
+
+
+@router.get(
+    "/monitoring/preferences",
+    response_model=MonitoringPreferencesSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Get owner monitoring preferences and notification settings",
+)
+def get_monitoring_preferences(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MonitoringPreferencesSchema:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.get_monitoring_preferences(business=business)
+
+
+@router.put(
+    "/monitoring/preferences",
+    response_model=MonitoringPreferencesSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Update owner monitoring preferences with critical safety preservation",
+)
+def update_monitoring_preferences(
+    payload: MonitoringPreferencesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MonitoringPreferencesSchema:
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.update_monitoring_preferences(business=business, payload=payload)
+
+
+@router.post(
+    "/monitoring/signals/{event_id}/dismiss",
+    status_code=status.HTTP_200_OK,
+    summary="Acknowledge or dismiss a proactive business signal",
+)
+def dismiss_monitoring_signal(
+    event_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    business = _get_active_business(current_user, db)
+    engine = SmartRecommendationEngine(db)
+    return engine.dismiss_signal(business=business, event_id=event_id)
+
 

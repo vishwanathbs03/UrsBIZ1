@@ -51,6 +51,7 @@ import { ScenarioSimulationModal } from "@/features/advisor/ScenarioSimulationMo
 import { ConversationalAdvisorDrawer } from "@/features/advisor/ConversationalAdvisorDrawer";
 import { RecommendationPortfolioView } from "@/features/advisor/RecommendationPortfolioView";
 import { RecommendationOutcomeTrackingView } from "@/features/advisor/RecommendationOutcomeTrackingView";
+import { BusinessSignalsFeedView } from "@/features/advisor/BusinessSignalsFeedView";
 import { useAdvancedRecommendations } from "@/features/advisor/use-advanced-recommendations";
 import type {
   AdvisorAction,
@@ -329,6 +330,9 @@ export function AdvisorExecutiveView() {
           effectiveness={effectiveness || null}
           isLoading={isLoadingEffectiveness}
         />
+
+        {/* Phase 5: Proactive AI Business Monitoring & Event Intelligence Feed */}
+        <BusinessSignalsFeedView />
 
         {/* Context-Aware Smart Recommendations (Phase 5) */}
         <SmartRecommendationsSection />
