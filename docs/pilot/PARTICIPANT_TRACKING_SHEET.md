@@ -51,7 +51,7 @@ The **Participant Tracking Sheet** is the central operational record used by the
 
 | Participant ID | Sector / Tier | Consent Date | Onboarded? | Ingested Rows | Quality % | W1 Check | W2 Check | W3 Check | Exit Survey | Status | Coordinator |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `MSME-PILOT-001` | Packaged Foods / Micro | 2026-11-01 | [x] Yes | 118 | 97.5% | [Scheduled] | [Scheduled] | [Scheduled] | [Scheduled] | Active | Assigned Lead |
+| `MSME-PILOT-001` | Packaged Foods / Micro | 2026-11-01 | [x] Yes | 126 | 98.7% | [x] 2026-05-07 | [Scheduled] | [Scheduled] | [Scheduled] | Active | Assigned Lead |
 | `MSME-PILOT-002` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
 | `MSME-PILOT-003` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
 | `MSME-PILOT-004` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
