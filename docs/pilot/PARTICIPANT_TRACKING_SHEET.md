@@ -51,23 +51,28 @@ The **Participant Tracking Sheet** is the central operational record used by the
 
 | Participant ID | Sector / Tier | Consent Date | Onboarded? | Ingested Rows | Quality % | W1 Check | W2 Check | W3 Check | Exit Survey | Status | Coordinator |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `MSME-PILOT-001` | Packaged Foods / Micro | 2026-11-01 | [x] Yes | 126 | 97.7%* | [x] 2026-05-07 | [x] 2026-05-14 | [Scheduled] | [Scheduled] | Active | Lead Pilot Coordinator |
-| `MSME-PILOT-002` | Apparel & Textiles / Small | 2026-05-08 | [x] Yes | 133 | 97.1% | [x] 2026-05-14 | [Scheduled] | [Scheduled] | [Scheduled] | Active | Lead Pilot Coordinator |
-| `MSME-PILOT-003` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
-| `MSME-PILOT-004` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
-| `MSME-PILOT-005` | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Active | Assigned Lead |
+| MSME-PILOT-001 | Packaged Foods / Micro | 2026-11-01 | [x] Yes | 135 | 97.8%* | [x] 2026-05-07 | [x] 2026-05-14 | [x] 2026-05-15 | [Scheduled] | Active | Lead Pilot Coordinator |
+| MSME-PILOT-002 | Apparel & Textiles / Small | 2026-05-08 | [x] Yes | 145 | 97.3%* | [x] 2026-05-14 | [x] 2026-05-15 | [Scheduled] | [Scheduled] | Active | Lead Pilot Coordinator |
+| MSME-PILOT-003 | *Candidate Screening* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Pipeline | Assigned Lead |
+| MSME-PILOT-004 | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Pipeline | Assigned Lead |
+| MSME-PILOT-005 | *Pending* | — | [ ] No | — | — | [ ] | [ ] | [ ] | [ ] | Pipeline | Assigned Lead |
 
-*\*Note on MSME-PILOT-001 Quality Score Audit Correction: Cumulative valid percentage audited to $126 / 129 = 97.67\% \approx 97.7\%$. Previously recorded as 98.7% due to unweighted batch averaging ($(97.5\% + 100.0\%) / 2 = 98.75\%$). Historical record preserved; corrected pooled metric applied.*
+*\*Note on Cumulative Ingestion Quality & Dual-Basis Revenue (as of 2026-05-15 Cutoff):*
+- *Participant 1 (MSME-PILOT-001): 135 valid rows in DB / 138 submitted (97.8% quality; 3 rejected, 2 audit duplicates preserved). Gross revenue: ₹300,950.00 (1,173 units); Duplicate-excluded analytical revenue: ₹297,530.00 (1,154 units).*
+- *Participant 2 (MSME-PILOT-002): 145 valid rows in DB / 149 submitted (97.3% quality; 4 rejected, 2 audit duplicates preserved). Gross revenue: ₹886,840.00 (968 units); Duplicate-excluded analytical revenue: ₹858,340.00 (940 units).*
+- *Pooled Cohort Total: 280 valid rows in DB / 287 submitted (97.6% quality; 7 rejected, 4 audit duplicates preserved, 276 analytical transactions). Gross revenue: ₹1,187,790.00; Duplicate-excluded analytical revenue: ₹1,155,870.00.*
 
-*\*Standard Duplicate Handling Definition: Duplicate rows are identified and preserved for audit with a duplicate flag, but excluded from analytical calculations. Participant 1 gross revenue is ₹285,350 (analytical ₹281,930); Participant 2 gross revenue is ₹794,800 (analytical ₹766,300); Cohort gross revenue is ₹1,080,150 (analytical ₹1,048,230).*
+*\*Standard Duplicate Handling Definition: Duplicate rows are identified and preserved for audit with a duplicate flag, but excluded from analytical calculations.*
 
-*\*Standard Observation Window Convention: Observation windows are explicitly reported as inclusive calendar days (with elapsed days noted): Participant 1 spans 188 inclusive calendar days (187 elapsed days: 2025-11-01 to 2026-05-07); Participant 2 spans 180 inclusive calendar days (179 elapsed days: 2025-11-01 to 2026-04-29).*
+*\*Standard Observation Window Convention: Observation windows are explicitly reported as inclusive calendar days (with elapsed days noted): Participant 1 spans 196 inclusive calendar days (195 elapsed days: 2025-11-01 to 2026-05-15); Participant 2 spans 196 inclusive calendar days (195 elapsed days: 2025-11-01 to 2026-05-15).*
 
-*\*Participant 2 Reconciled Product Distribution: Verified database duplicates (Row 258: 15 units / ₹18,750 for Men Bio-Wash T-Shirt; Row 259: 13 units / ₹9,750 for Women Cotton Leggings) are deducted from corresponding product gross totals. Analytical product revenue: Men Bio-Wash T-Shirt ₹461,250 (60.19%, 369 units); Fleece Hoodie ₹102,350 (13.36%, 115 units); Women Leggings ₹86,250 (11.26%, 115 units); Boys Shorts ₹72,240 (9.43%, 172 units); Polo Shirt ₹25,850 (3.37%, 47 units); Thermal Innerwear ₹18,360 (2.40%, 27 units). Total: ₹766,300 (845 units, 100.01% ≈ 100.0%).*
+*\*Completed 14-Day Outcome Evaluation (Participant 1): Formal 14-day symmetric window for Green Valley Priority Service (Action date: 2026-05-02). Pre-window (Apr 18 – May 1): ₹860.00 (2 orders, 6 units). Post-window (May 2 – May 15): ₹18,000.00 (5 orders, 55 units). Net delta: +₹17,140.00. Causal status: Correlation observed; demand coincided with routine seasonal restocking and high fulfillment responsiveness.*
 
-*\*Participant 2 Baseline Health Score (64.2) Input Basis: Evaluated on baseline profile context and initial gross baseline ingestion (83.9% concentration). Re-evaluating on the duplicate-excluded analytical basis (83.3%) triggers the identical >80% critical concentration risk penalty (-15 points), truthfully preserving the 64.2 / 100 score.*
+*\*Post-Onboarding Sales Movement (Participant 2): May 1–15 incremental export yielded 12 valid transactions totaling ₹92,040.00 analytical revenue. Chennai Garment Mart reorders: ₹42,500; Coimbatore Wholesalers: ₹35,000; Salem Fashion Hub (new B2B account outreach trial): ₹6,250. Top-2 concentration: 83.39% analytical share.*
 
-*\*Implementation vs. Outcome Separation: Recommendations marked Completed (e.g., Participant 1 VIP Priority Service) denote verified operational implementation by the owner. Causal business outcomes remain suspended and unverified pending receipt of complete post-action transaction records.*
+*\*Health-Score Provenance Note: Evaluated on baseline profile context and initial gross baseline ingestion. Concentration penalties (-15 pts) apply identically across gross and duplicate-excluded bases (>80% exposure tier), preserving baseline scores of 68.5 (P1) and 64.2 (P2).*
+
+*\*24-Hour Engineering KPI Clarification: Measures defect resolution time by the engineering team from bug report to verified test merge on main (MTTR ≤ 18h across DEF-001 to DEF-004). Does not measure MSME participant turnaround time.*
 
 ---
 
