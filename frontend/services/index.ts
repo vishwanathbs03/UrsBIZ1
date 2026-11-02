@@ -76,3 +76,13 @@ export {
   type DataConfidenceCentreResponse,
   type DataQualityReportPayload,
 } from "./data-confidence-service";
+
+export {
+  metricsDictionaryService,
+  type MetricCategory,
+  type MetricVariable,
+  type CalculationStep,
+  type MetricDefinition,
+  type MetricExplorerResult,
+  type MetricDictionaryResponse,
+} from "./metrics-dictionary-service";
