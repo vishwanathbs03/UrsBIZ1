@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   Scale,
   Sliders,
+  ShieldCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -62,6 +63,7 @@ export const navGroups: NavGroup[] = [
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/predictive-analytics", label: "Forecasts", icon: TrendingUp },
       { href: "/insights", label: "Insights", icon: Lightbulb },
+      { href: "/data-confidence", label: "Data Confidence", icon: ShieldCheck, badge: "NEW", neonBadge: true },
     ],
   },
   {
@@ -112,6 +114,7 @@ export const mainNavLinks: NavLink[] = [
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/predictive-analytics", label: "Forecasts", icon: TrendingUp },
   { href: "/insights", label: "Insights", icon: Lightbulb },
+      { href: "/data-confidence", label: "Data Confidence", icon: ShieldCheck, badge: "NEW", neonBadge: true },
   { href: "/advisor", label: "AI Advisor", icon: Compass },
   { href: "/action-board", label: "Recommendations", icon: KanbanSquare },
       { href: "/decision-workbench", label: "Decision Workbench", icon: Scale, badge: "NEW", neonBadge: true },

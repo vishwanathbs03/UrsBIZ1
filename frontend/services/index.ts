@@ -65,3 +65,14 @@ export {
   type ScenarioListResponse,
   type ScenarioCompareResponse,
 } from "./what-if-scenario-service";
+
+export {
+  dataConfidenceService,
+  type IngestionReconciliationSummary,
+  type ObservationWindowSummary,
+  type InsightReadinessItem,
+  type DataAnomalySummary,
+  type DataImprovementAction,
+  type DataConfidenceCentreResponse,
+  type DataQualityReportPayload,
+} from "./data-confidence-service";
