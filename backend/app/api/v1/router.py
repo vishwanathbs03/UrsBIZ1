@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     chat,
     copilot,
     dashboard,
+    decision_workbench,
     dna,
     finance,
     forecasting,
@@ -51,6 +52,7 @@ api_router.include_router(analytics_sprint13.router)
 api_router.include_router(analytics_v1_router.router)
 api_router.include_router(business.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(decision_workbench.router)
 api_router.include_router(swot.router)
 api_router.include_router(readiness.router)
 api_router.include_router(opportunities.router)

@@ -37,3 +37,15 @@ export { businessService } from "./business-service";
 export { dashboardService } from "./dashboard-service";
 export { businessAnalyticsService } from "./business-analytics-service";
 export { schemesService } from "./schemes-service";
+export {
+  decisionWorkbenchService,
+  type DecisionOptionEvaluation,
+  type DecisionEvidenceItem,
+  type DecisionEstimatedImpact,
+  type DecisionEvaluateRequest,
+  type DecisionEvaluateResponse,
+  type DecisionCreateRequest,
+  type DecisionUpdateRequest,
+  type DecisionOut,
+  type DecisionListResponse,
+} from "./decision-workbench-service";
