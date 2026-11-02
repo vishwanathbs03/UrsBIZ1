@@ -29,6 +29,7 @@ from app.models.recommendation_outcome import RecommendationOutcome
 from app.models.recommendation_version_history import RecommendationVersionHistory
 from app.models.sales import SalesTransaction, SalesUpload
 from app.models.user import User
+from app.models.what_if_scenario import WhatIfScenario
 
 __all__ = [
     "User",
@@ -54,6 +55,7 @@ __all__ = [
     "BusinessDataQualityAudit",
     "IdempotencyRecord",
     "BusinessDecision",
+    "WhatIfScenario",
     "BusinessSignalEvent",
     "BusinessMonitoringPreferences",
     "RecommendationRefreshRecord",

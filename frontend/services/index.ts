@@ -49,3 +49,19 @@ export {
   type DecisionOut,
   type DecisionListResponse,
 } from "./decision-workbench-service";
+
+export {
+  whatIfScenarioService,
+  type ScenarioType,
+  type ScenarioParameterIn,
+  type AssumptionItem,
+  type ScenarioCaseResult,
+  type MitigationAction,
+  type SimulationResult,
+  type ScenarioSimulateRequest,
+  type ScenarioSaveRequest,
+  type ScenarioUpdateRequest,
+  type ScenarioOut,
+  type ScenarioListResponse,
+  type ScenarioCompareResponse,
+} from "./what-if-scenario-service";

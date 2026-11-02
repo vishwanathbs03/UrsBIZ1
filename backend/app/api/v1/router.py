@@ -42,6 +42,7 @@ from app.api.v1.endpoints import (
     smart_recommendations,
     swot,
     twin,
+    what_if_scenario,
 )
 
 api_router = APIRouter()
@@ -84,3 +85,4 @@ api_router.include_router(chat.router)
 api_router.include_router(advisor.router)
 api_router.include_router(sales.router)
 api_router.include_router(forecasting.router)
+api_router.include_router(what_if_scenario.router)
