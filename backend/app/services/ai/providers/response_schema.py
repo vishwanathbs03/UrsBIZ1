@@ -774,13 +774,13 @@ def cap_user_prompt(text: str) -> tuple[str, bool]:
 
 _PROSE_RECOS_RE = re.compile(
     r"(?:recommended next actions|recommendations)\s*\n"
-    r"((?:.+\n?)+?)(?=\n\s*\n\s*(?:30-day plan|assumptions|limitations|$))",
-    re.IGNORECASE,
+    r"(.*?)(?=\n\s*\n\s*(?:30-day plan|assumptions|limitations|$))",
+    re.IGNORECASE | re.DOTALL,
 )
 _PROSE_PLAN_RE = re.compile(
     r"30-day plan\s*\n"
-    r"((?:.+\n?)+?)(?=\n\s*\n\s*(?:assumptions|limitations|$))",
-    re.IGNORECASE,
+    r"(.*?)(?=\n\s*\n\s*(?:assumptions|limitations|$))",
+    re.IGNORECASE | re.DOTALL,
 )
 _PROSE_LIST_RE = re.compile(r"^\s*(?:\d+\.|[-*])\s+(.+?)\s*$")
 _PROSE_PLAN_LINE_RE = re.compile(
@@ -791,12 +791,12 @@ _PROSE_RECO_LINE_RE = re.compile(
     r"^\s*(?:\d+\.|[-*])\s*\[([a-z0-9_]+)\]\s*([^—:\n]+?)\s*—\s*(.+?)\s*$",
 )
 _PROSE_ASSUMP_RE = re.compile(
-    r"assumptions\s*\n((?:.+\n?)+?)(?=\n\s*\n\s*(?:limitations|$))",
-    re.IGNORECASE,
+    r"assumptions\s*\n(.*?)(?=\n\s*\n\s*(?:limitations|$))",
+    re.IGNORECASE | re.DOTALL,
 )
 _PROSE_LIMITS_RE = re.compile(
-    r"limitations\s*\n((?:.+\n?)+?)(?=\n\s*\n\s*(?:model confidence|$))",
-    re.IGNORECASE,
+    r"limitations\s*\n(.*?)(?=\n\s*\n\s*(?:model confidence|$))",
+    re.IGNORECASE | re.DOTALL,
 )
 _PROSE_CONF_RE = re.compile(
     r"model confidence[:\s]+(\d+)\s*/\s*100", re.IGNORECASE,
