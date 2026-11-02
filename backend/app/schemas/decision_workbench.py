@@ -106,7 +106,7 @@ class DecisionCreateRequest(BaseModel):
     selected_option_id: Optional[str] = Field(default=None, max_length=60)
     selected_option_title: Optional[str] = Field(default=None, max_length=200)
     decision_rationale: Optional[str] = Field(default=None, max_length=2000)
-    status: Literal["Draft", "Evaluating", "Decided", "Implemented", "Reviewed"] = "Draft"
+    status: Literal["Draft", "Evaluating", "Decided", "Implemented", "Reviewed", "Cancelled"] = "Draft"
 
 
 class DecisionUpdateRequest(BaseModel):
@@ -115,13 +115,14 @@ class DecisionUpdateRequest(BaseModel):
 
     title: Optional[str] = Field(default=None, max_length=200)
     objective: Optional[str] = Field(default=None, max_length=1000)
-    status: Optional[Literal["Draft", "Evaluating", "Decided", "Implemented", "Reviewed"]] = None
+    status: Optional[Literal["Draft", "Evaluating", "Decided", "Implemented", "Reviewed", "Cancelled"]] = None
     selected_option_id: Optional[str] = Field(default=None, max_length=60)
     selected_option_title: Optional[str] = Field(default=None, max_length=200)
     decision_rationale: Optional[str] = Field(default=None, max_length=2000)
     review_status: Optional[Literal["Pending", "Outcome_Observed", "Abandoned"]] = None
     review_notes: Optional[str] = Field(default=None, max_length=2000)
     outcome_id: Optional[int] = None
+    cancellation_reason: Optional[str] = Field(default=None, max_length=2000)
 
 
 class DecisionOut(BaseModel):
@@ -144,6 +145,10 @@ class DecisionOut(BaseModel):
     review_status: str
     review_notes: Optional[str] = None
     outcome_id: Optional[int] = None
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
+    deleted_by_id: Optional[int] = None
+    cancellation_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

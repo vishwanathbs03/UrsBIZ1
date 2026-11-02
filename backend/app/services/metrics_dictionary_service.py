@@ -498,6 +498,10 @@ class MetricsDictionaryService:
             return self._explore_revenue_basis(biz, defn, txs, duplicate_txs)
         elif metric_key == "gross_margin":
             return self._explore_gross_margin(biz, defn, valid_txs)
+        elif metric_key == "cash_runway":
+            return self._explore_cash_runway(biz, defn)
+        elif metric_key == "days_sales_outstanding":
+            return self._explore_dso(biz, defn)
         elif metric_key == "digital_twin_health_score":
             return self._explore_health_score(biz, defn)
         else:
@@ -863,37 +867,34 @@ class MetricsDictionaryService:
         valid_txs: list[SalesTransaction],
     ) -> MetricExplorerResult:
         has_sales = len(valid_txs) > 0
-        total_rev = sum(float(t.total_amount) for t in valid_txs) if has_sales else (biz.annual_revenue or 1_200_000.0)
+        total_rev = sum(float(t.total_amount) for t in valid_txs) if has_sales else (biz.annual_revenue or 0.0)
 
-        # Standard MSME industry benchmark 35% margin
-        margin_pct = 35.0
-        cogs = round(total_rev * (1.0 - margin_pct / 100.0), 2)
-        gross_profit = round(total_rev - cogs, 2)
-
+        # In UrsBiz, sales transactions record unit_price, quantity, and total_amount, but do NOT record COGS or cost price.
+        # Products table also lacks cost price. Therefore, live COGS data is absent in the database.
         steps = [
             CalculationStep(
                 step_number=1,
-                step_title="Identify Baseline Revenue",
-                description=f"Verified base revenue of ₹{total_rev:,.0f}.",
-                formula_snippet="Rev = sum(valid_sales)",
-                input_values={"revenue": round(total_rev, 2)},
-                output_value=f"₹{total_rev:,.2f}",
+                step_title="Inspect Direct Cost (COGS) Ingestion",
+                description="Scanned ingested sales records and product catalog for Cost of Goods Sold data. No unit cost or COGS records found in database.",
+                formula_snippet="COGS = Sum(unit_cost * quantity)",
+                input_values={"revenue": round(total_rev, 2), "cogs_records_found": 0},
+                output_value="COGS Data Missing",
             ),
             CalculationStep(
                 step_number=2,
-                step_title="Apply Direct Cost Benchmark (COGS)",
-                description=f"Applied {biz.industry or 'general'} benchmark COGS ratio of 65% (₹{cogs:,.0f}).",
-                formula_snippet="COGS = Rev * (1 - Gross Margin %)",
-                input_values={"COGS": cogs},
-                output_value=f"₹{cogs:,.2f}",
+                step_title="Evaluate Deterministic Availability",
+                description="Gross Margin % = ((Revenue - COGS) / Revenue) * 100 cannot be calculated deterministically without empirical cost data. The system refrains from fabricating a mock gross margin.",
+                formula_snippet="Gross Margin % = ((Rev - COGS) / Rev) * 100",
+                input_values={"revenue": round(total_rev, 2)},
+                output_value="Unavailable",
             ),
             CalculationStep(
                 step_number=3,
-                step_title="Calculate Gross Profit & Margin Ratio",
-                description=f"(₹{gross_profit:,.0f} Gross Profit ÷ ₹{total_rev:,.0f} Revenue) × 100 = {margin_pct}%.",
-                formula_snippet="Gross Margin % = ((Rev - COGS) / Rev) * 100",
-                input_values={"Gross_Profit": gross_profit, "Revenue": total_rev},
-                output_value=f"{margin_pct}%",
+                step_title="Actionable Remediation",
+                description="Upload an itemized product cost ledger or define unit purchase costs in the product catalog to unlock authoritative gross margin tracking.",
+                formula_snippet="Remediation: Ingest product purchase costs",
+                input_values={},
+                output_value="Awaiting Cost Ledger",
             ),
         ]
 
@@ -902,15 +903,111 @@ class MetricsDictionaryService:
             title=defn.title,
             category=defn.category,
             business_id=biz.id,
-            current_value=margin_pct,
-            formatted_current_value=f"{margin_pct}%",
+            current_value=None,
+            formatted_current_value="Unavailable (COGS data missing)",
             unit=defn.unit,
             formula=defn.formula,
-            has_live_data=has_sales,
-            data_classification="Benchmark Assumption",
-            data_freshness="Fresh",
+            has_live_data=False,
+            data_classification="Calculated Metric",
+            data_freshness="Unavailable",
             steps=steps,
-            provenance_note=f"Calculated with industry benchmark COGS for {biz.legal_name}.",
+            provenance_note=f"COGS is not recorded in sales uploads for {biz.legal_name}. Upload product cost ledger to calculate.",
+        )
+
+    def _explore_cash_runway(
+        self,
+        biz: Business,
+        defn: MetricDefinition,
+    ) -> MetricExplorerResult:
+        steps = [
+            CalculationStep(
+                step_number=1,
+                step_title="Inspect Bank Cash Ledger & Expense Records",
+                description="Queried business financial accounts for liquid cash balances and recurring monthly operating expenses. No integrated bank feed or expense ledger found.",
+                formula_snippet="Runway = Cash Balance / Net Monthly Burn",
+                input_values={"cash_balance_records": 0, "expense_ledger_records": 0},
+                output_value="Cash & Burn Data Missing",
+            ),
+            CalculationStep(
+                step_number=2,
+                step_title="Evaluate Deterministic Availability",
+                description="Cash runway cannot be calculated without an authoritative cash balance and net burn rate. The system refuses to display synthetic runway numbers.",
+                formula_snippet="Cash Runway (Months) = Cash / Monthly Burn",
+                input_values={},
+                output_value="Unavailable",
+            ),
+            CalculationStep(
+                step_number=3,
+                step_title="Actionable Remediation",
+                description="Connect bank account statements or enter monthly fixed overhead in financial settings to calculate verified runway.",
+                formula_snippet="Remediation: Link bank account or declare monthly burn",
+                input_values={},
+                output_value="Awaiting Financial Data",
+            ),
+        ]
+
+        return MetricExplorerResult(
+            metric_key=defn.key,
+            title=defn.title,
+            category=defn.category,
+            business_id=biz.id,
+            current_value=None,
+            formatted_current_value="Unavailable (Cash & Burn Data Missing)",
+            unit=defn.unit,
+            formula=defn.formula,
+            has_live_data=False,
+            data_classification="Calculated Metric",
+            data_freshness="Unavailable",
+            steps=steps,
+            provenance_note=f"Cash balance and expense records are not configured for {biz.legal_name}.",
+        )
+
+    def _explore_dso(
+        self,
+        biz: Business,
+        defn: MetricDefinition,
+    ) -> MetricExplorerResult:
+        steps = [
+            CalculationStep(
+                step_number=1,
+                step_title="Inspect Accounts Receivable / Trade Debtor Ledger",
+                description="Checked for outstanding invoice balances and credit sales terms. Debtor ledger is not linked.",
+                formula_snippet="DSO = (Accounts Receivable / Total Credit Sales) * 365",
+                input_values={"ar_records_found": 0},
+                output_value="Trade Receivables Ledger Missing",
+            ),
+            CalculationStep(
+                step_number=2,
+                step_title="Evaluate Deterministic Availability",
+                description="DSO requires debtor ledger records separating cash sales from credit terms. Standard benchmark of 35 days can be used in What-If scenarios as an assumption, but is not an observed metric.",
+                formula_snippet="DSO = (AR / Credit_Sales) * Days",
+                input_values={},
+                output_value="Unavailable",
+            ),
+            CalculationStep(
+                step_number=3,
+                step_title="Actionable Remediation",
+                description="Upload aged debtor / accounts receivable report to enable live DSO calculation.",
+                formula_snippet="Remediation: Upload aged debtor report",
+                input_values={},
+                output_value="Awaiting AR Ledger",
+            ),
+        ]
+
+        return MetricExplorerResult(
+            metric_key=defn.key,
+            title=defn.title,
+            category=defn.category,
+            business_id=biz.id,
+            current_value=None,
+            formatted_current_value="Unavailable (Debtor Ledger Missing)",
+            unit=defn.unit,
+            formula=defn.formula,
+            has_live_data=False,
+            data_classification="Calculated Metric",
+            data_freshness="Unavailable",
+            steps=steps,
+            provenance_note=f"Debtor ledger is not integrated for {biz.legal_name}.",
         )
 
     def _explore_health_score(

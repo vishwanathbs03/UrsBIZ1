@@ -61,6 +61,18 @@ class ScenarioParameterIn(BaseModel):
         le=180,
         description="Change in Days Sales Outstanding / collection delay (e.g. +30 for 30-day delay)",
     )
+    credit_sales_ratio: float = Field(
+        default=0.70,
+        ge=0.0,
+        le=1.0,
+        description="Portion of sales on credit terms (0.0 to 1.0, default 0.70). Non-credit sales are instant cash/UPI/card.",
+    )
+    price_elasticity_coefficient: float | None = Field(
+        default=None,
+        ge=-10.0,
+        le=0.0,
+        description="Price elasticity of demand (typically negative, e.g. -1.2). If None, calculated from volume & price parameters.",
+    )
     lost_customer_id: str | None = Field(
         default=None,
         description="Identifier of a specific customer at risk of churning",

@@ -82,10 +82,11 @@ def create_decision(
 def list_decisions(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    include_archived: bool = False,
 ) -> DecisionListResponse:
     business = _get_active_business(current_user, db)
     service = BusinessDecisionService(db)
-    return service.list_decisions(business=business, user=current_user)
+    return service.list_decisions(business=business, user=current_user, include_archived=include_archived)
 
 
 @router.get(
@@ -98,10 +99,16 @@ def get_decision(
     decision_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    include_archived: bool = False,
 ) -> DecisionOut:
     business = _get_active_business(current_user, db)
     service = BusinessDecisionService(db)
-    decision = service.get_decision(decision_id=decision_id, business=business, user=current_user)
+    decision = service.get_decision(
+        decision_id=decision_id,
+        business=business,
+        user=current_user,
+        include_archived=include_archived,
+    )
     if not decision:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -141,19 +148,27 @@ def update_decision(
 @router.delete(
     "/{decision_id}",
     status_code=status.HTTP_200_OK,
-    summary="Delete a decision record",
+    summary="Cancel / soft-delete a decision record to preserve audit history",
 )
 def delete_decision(
     decision_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    cancellation_reason: str | None = None,
+    hard_delete: bool = False,
 ) -> dict[str, Any]:
     business = _get_active_business(current_user, db)
     service = BusinessDecisionService(db)
-    success = service.delete_decision(decision_id=decision_id, business=business, user=current_user)
+    success = service.delete_decision(
+        decision_id=decision_id,
+        business=business,
+        user=current_user,
+        cancellation_reason=cancellation_reason,
+        hard_delete=hard_delete,
+    )
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Decision {decision_id} not found for active business",
         )
-    return {"deleted": True, "id": decision_id}
+    return {"deleted": True, "id": decision_id, "soft_deleted": not hard_delete}

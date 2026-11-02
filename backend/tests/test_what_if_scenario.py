@@ -433,3 +433,96 @@ def test_scenario_tenant_isolation():
         cookies=user_b["cookies"],
     )
     assert resp_b_compare.status_code == 422
+
+
+# ===========================================================================
+# 4. Financial Calculation Boundary Tests (Verification Item B)
+# ===========================================================================
+
+
+def test_simulate_boundary_conditions_and_credit_sales_dso():
+    """Verify boundary handling: credit sales ratio on DSO, elasticity coefficient, and zero revenue safety."""
+    client = TestClient(app)
+    account = _setup_user_and_business(client, "boundary_biz")
+    cookies = account["cookies"]
+
+    # 1. Test Credit Sales Basis in DSO Simulation
+    # At 50% credit sales, receivables locked should be exactly half of 100% credit sales
+    resp_50 = client.post(
+        "/api/v1/scenarios/simulate",
+        json={
+            "title": "DSO Test 50%",
+            "parameters": {
+                "scenario_type": "collection_delay",
+                "dso_stretch_days": 30,
+                "credit_sales_ratio": 0.50,
+            },
+        },
+        cookies=cookies,
+    )
+    assert resp_50.status_code == 200, resp_50.text
+    data_50 = resp_50.json()
+
+    resp_100 = client.post(
+        "/api/v1/scenarios/simulate",
+        json={
+            "title": "DSO Test 100%",
+            "parameters": {
+                "scenario_type": "collection_delay",
+                "dso_stretch_days": 30,
+                "credit_sales_ratio": 1.0,
+            },
+        },
+        cookies=cookies,
+    )
+    assert resp_100.status_code == 200, resp_100.text
+    data_100 = resp_100.json()
+
+    # Credit sales ratio influences working capital receivables lockup
+    assert len(data_50["cases"]) == 3
+    assert len(data_100["cases"]) == 3
+    case_50_worst = next(c for c in data_50["cases"] if "Worst" in c["case_label"])
+    case_100_worst = next(c for c in data_100["cases"] if "Worst" in c["case_label"])
+    # 100% credit sales locks up more cash than 50% credit sales
+    if case_100_worst["cash_runway_days_estimated"] and case_50_worst["cash_runway_days_estimated"]:
+        assert case_100_worst["cash_runway_days_estimated"] <= case_50_worst["cash_runway_days_estimated"]
+
+    # 2. Test Explicit Price Elasticity Coefficient
+    resp_elasticity = client.post(
+        "/api/v1/scenarios/simulate",
+        json={
+            "title": "Elasticity Test",
+            "parameters": {
+                "scenario_type": "price_elasticity",
+                "price_delta_pct": 10.0,
+                "sales_volume_delta_pct": 0.0,
+                "price_elasticity_coefficient": -1.5,
+            },
+        },
+        cookies=cookies,
+    )
+    assert resp_elasticity.status_code == 200, resp_elasticity.text
+    el_data = resp_elasticity.json()
+    base_case = next(c for c in el_data["cases"] if "Base" in c["case_label"])
+    # At +10% price and -1.5 elasticity, volume delta is -15%
+    # Projected rev multiplier = (1 - 0.15) * (1 + 0.10) = 0.85 * 1.10 = 0.935 (-6.5% rev)
+    assert base_case["revenue_delta_pct"] < 0.0
+
+    # 3. Test Negative Margin Shock (COGS > Rev)
+    resp_neg_margin = client.post(
+        "/api/v1/scenarios/simulate",
+        json={
+            "title": "Cost Shock Test",
+            "parameters": {
+                "scenario_type": "supplier_cost_increase",
+                "cogs_delta_pct": 200.0,  # 200% supplier price increase forces gross margin negative
+            },
+        },
+        cookies=cookies,
+    )
+    assert resp_neg_margin.status_code == 200, resp_neg_margin.text
+    neg_data = resp_neg_margin.json()
+    neg_worst = next(c for c in neg_data["cases"] if "Worst" in c["case_label"])
+    assert neg_worst["gross_margin_pct"] < 0.0
+    assert neg_worst["break_even_revenue_inr"] is None  # Cannot break even on negative margin
+

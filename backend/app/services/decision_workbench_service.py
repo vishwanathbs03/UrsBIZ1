@@ -124,14 +124,19 @@ class BusinessDecisionService:
         self,
         business: Business,
         user: User,
+        include_archived: bool = False,
     ) -> DecisionListResponse:
-        """List all decisions for the active business."""
+        """List all decisions for the active business, filtering out soft-deleted decisions unless requested."""
+        filters = [
+            BusinessDecision.business_id == business.id,
+            BusinessDecision.owner_id == user.id,
+        ]
+        if not include_archived:
+            filters.append(BusinessDecision.is_deleted.is_(False))
+
         stmt = (
             select(BusinessDecision)
-            .where(
-                BusinessDecision.business_id == business.id,
-                BusinessDecision.owner_id == user.id,
-            )
+            .where(*filters)
             .order_by(BusinessDecision.id.desc())
         )
         records = list(self.db.scalars(stmt).all())
@@ -145,13 +150,18 @@ class BusinessDecisionService:
         decision_id: int,
         business: Business,
         user: User,
+        include_archived: bool = False,
     ) -> Optional[DecisionOut]:
         """Fetch a single decision record enforcing tenant isolation."""
-        stmt = select(BusinessDecision).where(
+        filters = [
             BusinessDecision.id == decision_id,
             BusinessDecision.business_id == business.id,
             BusinessDecision.owner_id == user.id,
-        )
+        ]
+        if not include_archived:
+            filters.append(BusinessDecision.is_deleted.is_(False))
+
+        stmt = select(BusinessDecision).where(*filters)
         record = self.db.scalar(stmt)
         if not record:
             return None
@@ -182,6 +192,10 @@ class BusinessDecisionService:
             record.status = req.status
             if req.status in ("Decided", "Implemented") and not record.decided_at:
                 record.decided_at = datetime.now(timezone.utc)
+            if req.status == "Cancelled":
+                record.is_deleted = True
+                record.deleted_at = datetime.now(timezone.utc)
+                record.deleted_by_id = user.id
         if req.selected_option_id is not None:
             record.selected_option_id = req.selected_option_id
         if req.selected_option_title is not None:
@@ -194,6 +208,8 @@ class BusinessDecisionService:
             record.review_notes = req.review_notes
         if req.outcome_id is not None:
             record.outcome_id = req.outcome_id
+        if req.cancellation_reason is not None:
+            record.cancellation_reason = req.cancellation_reason
 
         self.db.commit()
         self.db.refresh(record)
@@ -204,8 +220,10 @@ class BusinessDecisionService:
         decision_id: int,
         business: Business,
         user: User,
+        cancellation_reason: Optional[str] = None,
+        hard_delete: bool = False,
     ) -> bool:
-        """Delete a decision record with tenant verification."""
+        """Soft-deletes/cancels a decision record to preserve audit history by default."""
         stmt = select(BusinessDecision).where(
             BusinessDecision.id == decision_id,
             BusinessDecision.business_id == business.id,
@@ -214,7 +232,15 @@ class BusinessDecisionService:
         record = self.db.scalar(stmt)
         if not record:
             return False
-        self.db.delete(record)
+        if hard_delete:
+            self.db.delete(record)
+        else:
+            record.is_deleted = True
+            record.deleted_at = datetime.now(timezone.utc)
+            record.deleted_by_id = user.id
+            record.status = "Cancelled"
+            if cancellation_reason:
+                record.cancellation_reason = cancellation_reason
         self.db.commit()
         return True
 
@@ -329,6 +355,20 @@ class BusinessDecisionService:
         # -------------------------------------------------------------------
         if decision_type == "offer_discount":
             recommended_id = "opt_targeted_discount"
+            # Extract custom parameters or defaults
+            custom_discount_pct = float(custom_params.get("discount_pct", 5.0))
+            custom_margin_pct = float(custom_params.get("gross_margin_pct", 30.0))
+
+            margin_boundary_risks: list[str] = []
+            if custom_margin_pct <= 0:
+                margin_boundary_risks.append(
+                    "CRITICAL DEFICIT: Gross margin is zero or negative (<=0%). Any discount causes severe operating loss with zero breakeven potential."
+                )
+            elif custom_discount_pct >= custom_margin_pct:
+                margin_boundary_risks.append(
+                    f"MARGIN SQUEEZE: Proposed discount ({custom_discount_pct}%) meets or exceeds available gross margin ({custom_margin_pct}%). Unit volume cannot compensate for negative per-unit contribution."
+                )
+
             # Option 1: Status Quo
             options.append(DecisionOptionEvaluation(
                 option_id="opt_status_quo",
@@ -382,7 +422,7 @@ class BusinessDecisionService:
                 ],
                 potential_risks=[
                     "Margin squeeze if customers merely delay orders to bundle rather than ordering incrementally",
-                ],
+                ] + margin_boundary_risks,
                 estimated_impact=DecisionEstimatedImpact(
                     has_calculation_inputs=has_sales,
                     revenue_delta_inr=proj_rev_5 if has_sales else None,
@@ -415,7 +455,7 @@ class BusinessDecisionService:
                 potential_risks=[
                     "Severe gross margin erosion (requires +20% volume just to break even on profit)",
                     "Conditions buyers to wait for discounts rather than purchasing at full price",
-                ],
+                ] + margin_boundary_risks,
                 estimated_impact=DecisionEstimatedImpact(
                     has_calculation_inputs=has_sales,
                     revenue_delta_inr=proj_rev_15 if has_sales else None,
@@ -776,6 +816,10 @@ class BusinessDecisionService:
             review_status=record.review_status or "Pending",
             review_notes=record.review_notes,
             outcome_id=record.outcome_id,
+            is_deleted=getattr(record, "is_deleted", False),
+            deleted_at=getattr(record, "deleted_at", None),
+            deleted_by_id=getattr(record, "deleted_by_id", None),
+            cancellation_reason=getattr(record, "cancellation_reason", None),
             created_at=record.created_at,
             updated_at=record.updated_at,
         )

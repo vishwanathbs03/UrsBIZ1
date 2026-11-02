@@ -311,3 +311,58 @@ def test_explore_metric_tenant_isolation():
     assert resp_a.json()["business_id"] == user_a["business"]["id"]
     assert resp_b.json()["business_id"] == user_b["business"]["id"]
     assert resp_a.json()["business_id"] != resp_b.json()["business_id"]
+
+
+# ===========================================================================
+# 4. Metric Availability & Missing Ledger Transparency (Verification Item E)
+# ===========================================================================
+
+
+def test_explore_metric_gross_margin_unavailable_without_cogs():
+    """Verify gross margin returns explicit Unavailable when COGS is not recorded (Audit Item E)."""
+    client = TestClient(app)
+    user = _setup_user_and_business(client, "dict_no_cogs")
+
+    resp = client.get("/api/v1/metrics/gross_margin/explore", cookies=user["cookies"])
+    assert resp.status_code == 200, resp.text
+    explorer = resp.json()
+
+    assert explorer["has_live_data"] is False
+    assert explorer["current_value"] is None
+    assert "Unavailable" in explorer["formatted_current_value"]
+    assert "COGS" in explorer["formatted_current_value"]
+    assert explorer["data_freshness"] == "Unavailable"
+    assert "COGS Data Missing" in explorer["steps"][0]["output_value"]
+
+
+def test_explore_metric_cash_runway_unavailable_without_cash_ledger():
+    """Verify cash runway returns explicit Unavailable when bank/expense ledger is missing (Audit Item E)."""
+    client = TestClient(app)
+    user = _setup_user_and_business(client, "dict_no_runway")
+
+    resp = client.get("/api/v1/metrics/cash_runway/explore", cookies=user["cookies"])
+    assert resp.status_code == 200, resp.text
+    explorer = resp.json()
+
+    assert explorer["has_live_data"] is False
+    assert explorer["current_value"] is None
+    assert "Unavailable" in explorer["formatted_current_value"]
+    assert "Cash & Burn Data Missing" in explorer["formatted_current_value"]
+    assert explorer["data_freshness"] == "Unavailable"
+
+
+def test_explore_metric_dso_unavailable_without_debtor_ledger():
+    """Verify DSO returns explicit Unavailable when trade debtor ledger is absent (Audit Item E)."""
+    client = TestClient(app)
+    user = _setup_user_and_business(client, "dict_no_dso")
+
+    resp = client.get("/api/v1/metrics/days_sales_outstanding/explore", cookies=user["cookies"])
+    assert resp.status_code == 200, resp.text
+    explorer = resp.json()
+
+    assert explorer["has_live_data"] is False
+    assert explorer["current_value"] is None
+    assert "Unavailable" in explorer["formatted_current_value"]
+    assert "Debtor Ledger Missing" in explorer["formatted_current_value"]
+    assert explorer["data_freshness"] == "Unavailable"
+

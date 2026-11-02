@@ -326,3 +326,100 @@ def test_decision_tenant_isolation():
     assert list_b.status_code == 200
     b_ids = [d["id"] for d in list_b.json()["items"]]
     assert decision_a_id not in b_ids, "User A's decision leaked in User B's list!"
+
+
+# ===========================================================================
+# 4. Boundary Tests & Audit History (Verification Items B & D)
+# ===========================================================================
+
+
+def test_evaluate_discount_negative_or_exceeded_gross_margin():
+    """Verify boundary conditions: discount >= margin or negative margin triggers explicit risk disclosures."""
+    client = TestClient(app)
+    account = _setup_user_and_business(client, "margin_boundaries")
+    cookies = account["cookies"]
+
+    # 1. Discount exceeding margin: 25% discount on 20% margin
+    resp_exceeded = client.post(
+        "/api/v1/decisions/evaluate",
+        json={
+            "decision_type": "offer_discount",
+            "objective": "Test aggressive 25% discount",
+            "custom_parameters": {"discount_pct": 25.0, "gross_margin_pct": 20.0},
+        },
+        cookies=cookies,
+    )
+    assert resp_exceeded.status_code == 200
+    data_exceeded = resp_exceeded.json()
+    opt2_risks = data_exceeded["options"][1]["potential_risks"]
+    assert any("meets or exceeds available gross margin" in r for r in opt2_risks)
+
+    # 2. Negative margin: -5% gross margin
+    resp_negative = client.post(
+        "/api/v1/decisions/evaluate",
+        json={
+            "decision_type": "offer_discount",
+            "objective": "Test discount under negative margin",
+            "custom_parameters": {"discount_pct": 5.0, "gross_margin_pct": -5.0},
+        },
+        cookies=cookies,
+    )
+    assert resp_negative.status_code == 200
+    data_negative = resp_negative.json()
+    opt2_neg_risks = data_negative["options"][1]["potential_risks"]
+    assert any("Gross margin is zero or negative" in r for r in opt2_neg_risks)
+
+
+def test_decision_soft_delete_audit_trail():
+    """Verify decision cancellation/soft deletion preserves complete audit trail (Audit Item D)."""
+    client = TestClient(app)
+    account = _setup_user_and_business(client, "audit_trail")
+    cookies = account["cookies"]
+
+    # 1. Create a decision
+    create_payload = {
+        "decision_type": "reduce_expenses",
+        "title": "Vendor Renegotiation Q4",
+        "objective": "Lower raw material costs by 8%",
+        "status": "Draft",
+    }
+    create_resp = client.post("/api/v1/decisions", json=create_payload, cookies=cookies)
+    assert create_resp.status_code == 201
+    decision_id = create_resp.json()["id"]
+
+    # 2. Soft-delete with cancellation reason
+    del_resp = client.delete(
+        f"/api/v1/decisions/{decision_id}?cancellation_reason=Vendor agreed to tier rebate",
+        cookies=cookies,
+    )
+    assert del_resp.status_code == 200
+    del_data = del_resp.json()
+    assert del_data["deleted"] is True
+    assert del_data["soft_deleted"] is True
+
+    # 3. Standard GET returns 404 (hidden from active view)
+    get_resp = client.get(f"/api/v1/decisions/{decision_id}", cookies=cookies)
+    assert get_resp.status_code == 404
+
+    # 4. Standard list excludes it
+    list_active = client.get("/api/v1/decisions", cookies=cookies)
+    assert list_active.status_code == 200
+    assert not any(d["id"] == decision_id for d in list_active.json()["items"])
+
+    # 5. List with include_archived=true preserves the auditable record
+    list_all = client.get("/api/v1/decisions?include_archived=true", cookies=cookies)
+    assert list_all.status_code == 200
+    archived_item = next((d for d in list_all.json()["items"] if d["id"] == decision_id), None)
+    assert archived_item is not None
+    assert archived_item["is_deleted"] is True
+    assert archived_item["status"] == "Cancelled"
+    assert archived_item["cancellation_reason"] == "Vendor agreed to tier rebate"
+    assert archived_item["deleted_at"] is not None
+    assert archived_item["deleted_by_id"] is not None
+
+    # 6. Direct GET with include_archived=true retrieves full history
+    get_archived = client.get(f"/api/v1/decisions/{decision_id}?include_archived=true", cookies=cookies)
+    assert get_archived.status_code == 200
+    assert get_archived.json()["id"] == decision_id
+    assert get_archived.json()["is_deleted"] is True
+

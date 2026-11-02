@@ -240,8 +240,12 @@ class WhatIfScenarioService:
         base_runway = baseline["baseline_runway_days"]
 
         # 1. Volume & Price Impact
-        vol_pct = params.sales_volume_delta_pct * severity_multiplier
         price_pct = params.price_delta_pct
+        if params.price_elasticity_coefficient is not None and params.price_delta_pct != 0.0 and params.sales_volume_delta_pct == 0.0:
+            # Model volume response from explicit price elasticity coefficient
+            vol_pct = params.price_delta_pct * params.price_elasticity_coefficient * severity_multiplier
+        else:
+            vol_pct = params.sales_volume_delta_pct * severity_multiplier
 
         # If customer churn scenario, deduct lost customer monthly revenue
         lost_cust_rev = 0.0
@@ -253,7 +257,7 @@ class WhatIfScenarioService:
             lost_cust_rev *= severity_multiplier
 
         vol_multiplier = max(0.0, 1.0 + (vol_pct / 100.0))
-        price_multiplier = max(0.1, 1.0 + (price_pct / 100.0))
+        price_multiplier = max(0.0, 1.0 + (price_pct / 100.0))
 
         projected_rev = max(0.0, (base_rev * vol_multiplier * price_multiplier) - lost_cust_rev)
         rev_delta = projected_rev - base_rev
@@ -261,7 +265,7 @@ class WhatIfScenarioService:
 
         # 2. COGS Impact (Supplier price increases)
         cogs_pct = params.cogs_delta_pct * severity_multiplier
-        cogs_multiplier = max(0.1, 1.0 + (cogs_pct / 100.0))
+        cogs_multiplier = max(0.0, 1.0 + (cogs_pct / 100.0))
         # COGS scales with physical volume sold + supplier price shock
         projected_cogs = max(0.0, base_cogs * vol_multiplier * cogs_multiplier)
 
@@ -283,9 +287,11 @@ class WhatIfScenarioService:
         op_profit_delta = projected_op_profit - base_op_profit
 
         # 4. Working Capital / Cash Runway Impact
-        # Delayed customer collections (DSO stretch) locks up receivables
+        # Delayed customer collections (DSO stretch) locks up receivables strictly on CREDIT sales
+        credit_ratio = max(0.0, min(1.0, getattr(params, "credit_sales_ratio", 0.70)))
         dso_stretch = int(params.dso_stretch_days * severity_multiplier)
-        receivables_locked = (projected_rev / 30.0) * dso_stretch if dso_stretch > 0 else 0.0
+        credit_projected_rev = projected_rev * credit_ratio
+        receivables_locked = (credit_projected_rev / 30.0) * dso_stretch if dso_stretch > 0 else 0.0
 
         # Effective monthly cash burn
         effective_monthly_burn = max(0.0, -projected_op_profit) + (receivables_locked / 3.0)

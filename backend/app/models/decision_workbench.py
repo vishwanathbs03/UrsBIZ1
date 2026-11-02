@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
@@ -97,6 +98,15 @@ class BusinessDecision(Base):
         nullable=True,
     )
 
+    # Soft Delete & Audit History
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -110,7 +120,8 @@ class BusinessDecision(Base):
     )
 
     business: Mapped["Business"] = relationship()
-    owner: Mapped["User"] = relationship()
+    owner: Mapped["User"] = relationship(foreign_keys=[owner_id])
+    deleted_by: Mapped[Optional["User"]] = relationship(foreign_keys=[deleted_by_id])
     outcome: Mapped[Optional["RecommendationOutcome"]] = relationship()
 
     def __repr__(self) -> str:
