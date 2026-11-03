@@ -559,13 +559,13 @@ class MetricsDictionaryService:
                 CalculationStep(
                     step_number=1,
                     step_title="Sales Data Ingestion Check",
-                    description="No sales transactions found in database. Ingest sales files to compute AOV.",
-                    formula_snippet="AOV = 0 / 0",
+                    description="No confirmed sales transactions found for this period. Ingest sales files to compute AOV.",
+                    formula_snippet="AOV = (Total Duplicate-Excluded Revenue) / (Total Valid Order Count)",
                     input_values={"valid_order_count": 0},
-                    output_value="Insufficient Data",
+                    output_value="Unavailable — no orders in the selected period",
                 )
             ]
-            formatted_val = "N/A (No sales data)"
+            formatted_val = "Unavailable — no orders in the selected period"
             cur_val = None
 
         return MetricExplorerResult(
@@ -710,14 +710,14 @@ class MetricsDictionaryService:
                 CalculationStep(
                     step_number=1,
                     step_title="Customer Loyalty Data Check",
-                    description="No customer accounts on file. Repeat rate defaults to 0% until sales records are uploaded.",
-                    formula_snippet="Repeat Rate = 0%",
-                    input_values={},
-                    output_value="0.0%",
+                    description="No customer accounts or order records on file. Ingest sales files with customer identifiers to compute repeat customer rate.",
+                    formula_snippet="Repeat Rate % = (N_repeat / N_total_cust) * 100",
+                    input_values={"total_customers": 0, "repeat_customers": 0},
+                    output_value="Unavailable — no customer transaction history",
                 )
             ]
-            formatted_val = "0.0%"
-            cur_val = 0.0
+            formatted_val = "Unavailable — no customer transaction history"
+            cur_val = None
 
         return MetricExplorerResult(
             metric_key=defn.key,

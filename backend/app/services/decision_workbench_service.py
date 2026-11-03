@@ -221,9 +221,8 @@ class BusinessDecisionService:
         business: Business,
         user: User,
         cancellation_reason: Optional[str] = None,
-        hard_delete: bool = False,
     ) -> bool:
-        """Soft-deletes/cancels a decision record to preserve audit history by default."""
+        """Soft-deletes/cancels a decision record to strictly preserve audit history."""
         stmt = select(BusinessDecision).where(
             BusinessDecision.id == decision_id,
             BusinessDecision.business_id == business.id,
@@ -232,15 +231,12 @@ class BusinessDecisionService:
         record = self.db.scalar(stmt)
         if not record:
             return False
-        if hard_delete:
-            self.db.delete(record)
-        else:
-            record.is_deleted = True
-            record.deleted_at = datetime.now(timezone.utc)
-            record.deleted_by_id = user.id
-            record.status = "Cancelled"
-            if cancellation_reason:
-                record.cancellation_reason = cancellation_reason
+        record.is_deleted = True
+        record.deleted_at = datetime.now(timezone.utc)
+        record.deleted_by_id = user.id
+        record.status = "Cancelled"
+        if cancellation_reason:
+            record.cancellation_reason = cancellation_reason
         self.db.commit()
         return True
 

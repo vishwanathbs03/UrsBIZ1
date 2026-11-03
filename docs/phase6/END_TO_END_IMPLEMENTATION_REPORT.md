@@ -256,7 +256,7 @@ In draft reports, the six product amounts summed to the gross figure of ₹794,8
 Participant 1's post-recommendation evaluation window was completed through May 15, 2026. The symmetric comparison before vs after recommendation adoption proves tangible commercial movement:
 - **Pre-Recommendation Window (14 days):** 2 orders, 6 units, ₹860 spend.
 - **Post-Recommendation Window (14 days):** 5 orders, 55 units, ₹18,000 spend.
-- **Observed Lift:** \(+₹17,140\) revenue increase (\(+2,093\%\)), with 49 additional physical units moved.
+- **Observed Lift:** \(+₹17,140\) revenue increase (\(+1,993\%\) net lift; post-window revenue was \(2,093\%\) of baseline), with 49 additional physical units moved.
 
 ---
 

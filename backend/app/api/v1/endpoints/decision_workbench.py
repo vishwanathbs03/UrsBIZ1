@@ -155,7 +155,6 @@ def delete_decision(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     cancellation_reason: str | None = None,
-    hard_delete: bool = False,
 ) -> dict[str, Any]:
     business = _get_active_business(current_user, db)
     service = BusinessDecisionService(db)
@@ -164,11 +163,10 @@ def delete_decision(
         business=business,
         user=current_user,
         cancellation_reason=cancellation_reason,
-        hard_delete=hard_delete,
     )
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Decision {decision_id} not found for active business",
         )
-    return {"deleted": True, "id": decision_id, "soft_deleted": not hard_delete}
+    return {"deleted": True, "id": decision_id, "soft_deleted": True}

@@ -195,6 +195,29 @@ class WhatIfScenarioService:
                 f"Missing: Live bank/cash balance. Benchmarked at 1.5 months OpEx (₹{cash_balance:,.0f}) — adjust in parameters if known."
             )
 
+        # 6. Credit Sales Ratio Assumption for Receivables Lockup
+        if "credit_sales_ratio" in overrides:
+            credit_ratio_val = float(overrides["credit_sales_ratio"]) * 100.0
+            credit_ratio_src = "User Override"
+            credit_ratio_note = "User-specified credit-versus-cash sales percentage."
+        else:
+            credit_ratio_val = 70.0
+            credit_ratio_src = "Planning Assumption (Editable)"
+            credit_ratio_note = "Assumes 70% of transactions are on credit terms; cash sales are unaffected by collection delay shocks. This is an editable planning assumption, not a measured ledger value."
+            disclosures.append(
+                "Planning Assumption: 70% credit sales ratio applied to receivables lockup modeling. Adjust in parameter overrides if your cash-vs-credit split differs."
+            )
+
+        assumptions.append(
+            AssumptionItem(
+                name="Credit Sales Ratio (Planning Assumption)",
+                value=round(credit_ratio_val, 1),
+                unit="%",
+                source=credit_ratio_src,  # type: ignore
+                note=credit_ratio_note,
+            )
+        )
+
         # Baseline runway in days
         if monthly_operating_profit < 0:
             baseline_runway_days = int((cash_balance / abs(monthly_operating_profit)) * 30)

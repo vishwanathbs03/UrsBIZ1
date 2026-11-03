@@ -293,8 +293,8 @@ def test_explore_metric_empty_sales():
 
     assert explorer["has_live_data"] is False
     assert explorer["current_value"] is None
-    assert "No sales data" in explorer["formatted_current_value"]
-    assert "Insufficient Data" in explorer["steps"][0]["output_value"]
+    assert "Unavailable — no orders in the selected period" in explorer["formatted_current_value"]
+    assert "Unavailable — no orders" in explorer["steps"][0]["output_value"]
 
 
 def test_explore_metric_tenant_isolation():

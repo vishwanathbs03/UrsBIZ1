@@ -96,7 +96,12 @@ class AssumptionItem(BaseModel):
     name: str
     value: float | str
     unit: str
-    source: Literal["Observed Fact", "Industry Benchmark", "User Override"]
+    source: Literal[
+        "Observed Fact",
+        "Industry Benchmark",
+        "User Override",
+        "Planning Assumption (Editable)",
+    ]
     note: str
 
 
