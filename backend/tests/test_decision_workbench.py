@@ -423,3 +423,50 @@ def test_decision_soft_delete_audit_trail():
     assert get_archived.json()["id"] == decision_id
     assert get_archived.json()["is_deleted"] is True
 
+
+def test_evaluate_additional_decision_types():
+    """Verify evaluation for expand_product_range, reduce_expenses, and test_sales_channel."""
+    client = TestClient(app)
+    account = _setup_user_and_business(client, "additional_decisions")
+    cookies = account["cookies"]
+
+    # 1. Expand Product Range
+    resp_expand = client.post(
+        "/api/v1/decisions/evaluate",
+        json={"decision_type": "expand_product_range", "objective": "Expand into adjacent accessories"},
+        cookies=cookies,
+    )
+    assert resp_expand.status_code == 200
+    data_expand = resp_expand.json()
+    opt_ids_expand = [o["option_id"] for o in data_expand["options"]]
+    assert "opt_status_quo_catalog" in opt_ids_expand
+    assert "opt_adjacent_expansion" in opt_ids_expand
+    assert "opt_broad_line_launch" in opt_ids_expand
+
+    # 2. Reduce Expenses
+    resp_reduce = client.post(
+        "/api/v1/decisions/evaluate",
+        json={"decision_type": "reduce_expenses", "objective": "Lower operating overhead"},
+        cookies=cookies,
+    )
+    assert resp_reduce.status_code == 200
+    data_reduce = resp_reduce.json()
+    opt_ids_reduce = [o["option_id"] for o in data_reduce["options"]]
+    assert "opt_status_quo_expenses" in opt_ids_reduce
+    assert "opt_targeted_renegotiation" in opt_ids_reduce
+    assert "opt_austerity_headcount_freeze" in opt_ids_reduce
+
+    # 3. Test Sales Channel
+    resp_channel = client.post(
+        "/api/v1/decisions/evaluate",
+        json={"decision_type": "test_sales_channel", "objective": "Test direct digital e-commerce"},
+        cookies=cookies,
+    )
+    assert resp_channel.status_code == 200
+    data_channel = resp_channel.json()
+    opt_ids_channel = [o["option_id"] for o in data_channel["options"]]
+    assert "opt_status_quo_channel" in opt_ids_channel
+    assert "opt_direct_digital_pilot" in opt_ids_channel
+    assert "opt_marketplace_listing" in opt_ids_channel
+
+

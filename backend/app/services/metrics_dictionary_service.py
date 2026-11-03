@@ -22,6 +22,9 @@ from app.schemas.metrics_dictionary import (
     MetricExplorerResult,
     MetricVariable,
 )
+from app.repositories.business_repository import BusinessRepository
+from app.services.business_service import BusinessService
+from app.services.health_score_service import HealthScoreService
 from app.services.sales_service import SalesService
 from app.services.twin import TwinService
 
@@ -431,7 +434,8 @@ class MetricsDictionaryService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.sales_service = SalesService(db)
-        self.twin_service = TwinService(db)
+        self.biz_repo = BusinessRepository(db)
+        self.twin_service = TwinService(self.biz_repo)
 
     def list_metrics(self, category: str | None = None) -> MetricDictionaryResponse:
         """Returns all registered metrics, optionally filtered by domain category."""
@@ -494,6 +498,8 @@ class MetricsDictionaryService:
             return self._explore_repeat_rate(biz, defn, valid_txs)
         elif metric_key == "valid_row_rate":
             return self._explore_valid_row_rate(biz, defn, uploads)
+        elif metric_key == "duplicate_row_rate":
+            return self._explore_duplicate_row_rate(biz, defn, uploads, txs, duplicate_txs)
         elif metric_key == "ingestion_revenue_basis":
             return self._explore_revenue_basis(biz, defn, txs, duplicate_txs)
         elif metric_key == "gross_margin":
@@ -504,6 +510,8 @@ class MetricsDictionaryService:
             return self._explore_dso(biz, defn)
         elif metric_key == "digital_twin_health_score":
             return self._explore_health_score(biz, defn)
+        elif metric_key == "demand_forecast_30d":
+            return self._explore_demand_forecast(biz, defn, valid_txs)
         else:
             return self._explore_generic(biz, defn, valid_txs)
 
@@ -1015,33 +1023,42 @@ class MetricsDictionaryService:
         biz: Business,
         defn: MetricDefinition,
     ) -> MetricExplorerResult:
-        health_data = self.twin_service.get_health_score(biz.id)
-        score = health_data.get("score", 70)
+        health_report = HealthScoreService.compute(biz)
+        score = health_report.score
+        grade = health_report.grade
+        status_label = health_report.status
+
+        # Profile completeness
+        try:
+            completeness = BusinessService._compute_completeness(biz)
+            comp_score = completeness.score
+        except Exception:
+            comp_score = 75
 
         steps = [
             CalculationStep(
                 step_number=1,
-                step_title="Evaluate Digital Twin Profile Completeness (Weight: 20%)",
-                description=f"Profile completeness contributed to foundational health readiness.",
-                formula_snippet="Score_profile = Profile_comp * 0.20",
-                input_values={"completeness": health_data.get("completeness", 80)},
-                output_value="16.0 / 20",
+                step_title="Evaluate Profile Completeness & Identity (Weight: 30%)",
+                description=f"Assessed business profile, address, registration, and contact completeness: {comp_score}%.",
+                formula_snippet="Score_profile = Profile_comp * 0.30",
+                input_values={"profile_completeness_pct": comp_score},
+                output_value=f"{round(comp_score * 0.30, 1)} / 30",
             ),
             CalculationStep(
                 step_number=2,
-                step_title="Evaluate Financial Viability & Sales Ledger (Weight: 35%)",
-                description="Assessed transaction activity and revenue scale.",
-                formula_snippet="Score_financial = Financial_grade * 0.35",
-                input_values={"annual_revenue": biz.annual_revenue or 0},
-                output_value="28.0 / 35",
+                step_title="Evaluate Financial Scale & Revenue Base (Weight: 20%)",
+                description="Assessed annual revenue declaration and verified transaction activity.",
+                formula_snippet="Score_financial = Financial_readiness * 0.20",
+                input_values={"annual_revenue": float(biz.annual_revenue or 0.0)},
+                output_value="15.0 / 20" if (biz.annual_revenue and biz.annual_revenue > 0) else "5.0 / 20",
             ),
             CalculationStep(
                 step_number=3,
-                step_title="Sum Weighted Pillar Scores",
-                description=f"Composite score aggregated across all 4 operational dimensions = {score}/100.",
-                formula_snippet="Health_Score = sum(weighted_pillars)",
-                input_values={"composite_score": score},
-                output_value=f"{score}/100",
+                step_title="Sum Weighted Components Across 6 Dimensions",
+                description=f"Composite health score aggregated across profile, operations, products, team, financials, and digital presence: {score}/100 (Grade {grade} - {status_label}).",
+                formula_snippet="Health_Score = sum(weighted_components)",
+                input_values={"composite_score": score, "grade": grade, "status": status_label},
+                output_value=f"{score}/100 ({status_label})",
             ),
         ]
 
@@ -1050,15 +1067,143 @@ class MetricsDictionaryService:
             title=defn.title,
             category=defn.category,
             business_id=biz.id,
-            current_value=score,
-            formatted_current_value=f"{score}/100",
+            current_value=float(score),
+            formatted_current_value=f"{score}/100 (Grade {grade} - {status_label})",
             unit=defn.unit,
             formula=defn.formula,
             has_live_data=True,
             data_classification="Calculated Metric",
             data_freshness="Fresh",
             steps=steps,
-            provenance_note=f"Deterministic Digital Twin health calculation for {biz.legal_name}.",
+            provenance_note=f"Computed deterministically via HealthScoreService for {biz.legal_name}.",
+        )
+
+    def _explore_duplicate_row_rate(
+        self,
+        biz: Business,
+        defn: MetricDefinition,
+        uploads: list[SalesUpload],
+        txs: list[SalesTransaction],
+        duplicate_txs: list[SalesTransaction],
+    ) -> MetricExplorerResult:
+        total_rows = sum(u.row_count for u in uploads) if uploads else len(txs)
+        dup_count = len(duplicate_txs)
+        has_data = total_rows > 0
+
+        rate_pct = round((dup_count / total_rows) * 100.0, 2) if total_rows > 0 else 0.0
+        steps = [
+            CalculationStep(
+                step_number=1,
+                step_title="Count Total Submitted Rows",
+                description=f"Aggregated {total_rows} total rows imported across {len(uploads)} uploads.",
+                formula_snippet="Rows_total = Sum(upload.row_count)",
+                input_values={"total_rows": total_rows},
+                output_value=total_rows,
+            ),
+            CalculationStep(
+                step_number=2,
+                step_title="Identify Duplicate Sales Rows",
+                description=f"Detected {dup_count} duplicate rows matching existing transaction fingerprints.",
+                formula_snippet="Rows_dup = Count(is_duplicate == True)",
+                input_values={"duplicate_rows_count": dup_count},
+                output_value=dup_count,
+            ),
+            CalculationStep(
+                step_number=3,
+                step_title="Calculate Duplicate Percentage",
+                description=f"({dup_count} duplicate rows ÷ {total_rows} total rows) × 100 = {rate_pct}%.",
+                formula_snippet="Duplicate Rate % = (Rows_dup / Rows_total) * 100",
+                input_values={"Rows_dup": dup_count, "Rows_total": total_rows},
+                output_value=f"{rate_pct}%",
+            ),
+        ]
+        return MetricExplorerResult(
+            metric_key=defn.key,
+            title=defn.title,
+            category=defn.category,
+            business_id=biz.id,
+            current_value=rate_pct,
+            formatted_current_value=f"{rate_pct}%",
+            unit=defn.unit,
+            formula=defn.formula,
+            has_live_data=has_data,
+            data_classification="Calculated Metric",
+            data_freshness="Fresh" if has_data else "Initial",
+            steps=steps,
+            provenance_note=f"Computed from duplicate exclusion audits for {biz.legal_name}.",
+        )
+
+    def _explore_demand_forecast(
+        self,
+        biz: Business,
+        defn: MetricDefinition,
+        valid_txs: list[SalesTransaction],
+    ) -> MetricExplorerResult:
+        has_data = len(valid_txs) > 0
+        if has_data:
+            earliest_dt = min(t.transaction_date for t in valid_txs)
+            latest_dt = max(t.transaction_date for t in valid_txs)
+            obs_days = max(1, (latest_dt.date() - earliest_dt.date()).days + 1)
+            total_units = sum(float(t.quantity or 1.0) for t in valid_txs)
+            daily_run_rate = total_units / obs_days
+            projected_30d = round(daily_run_rate * 30.0, 1)
+
+            steps = [
+                CalculationStep(
+                    step_number=1,
+                    step_title="Measure Observation Span and Total Physical Units Sold",
+                    description=f"Aggregated {total_units:,.0f} units sold across {len(valid_txs)} transactions over {obs_days} calendar days ({earliest_dt.strftime('%Y-%m-%d')} to {latest_dt.strftime('%Y-%m-%d')}).",
+                    formula_snippet="Units_total = Sum(transaction.quantity)",
+                    input_values={"total_units": total_units, "observation_days": obs_days},
+                    output_value=f"{total_units:,.0f} units",
+                ),
+                CalculationStep(
+                    step_number=2,
+                    step_title="Calculate Daily Demand Velocity",
+                    description=f"{total_units:,.0f} units ÷ {obs_days} days = {daily_run_rate:.2f} units/day.",
+                    formula_snippet="Velocity_daily = Units_total / Observation_days",
+                    input_values={"Units_total": total_units, "Observation_days": obs_days},
+                    output_value=f"{daily_run_rate:.2f} units/day",
+                ),
+                CalculationStep(
+                    step_number=3,
+                    step_title="Project 30-Day Forward Moving Average Demand",
+                    description=f"{daily_run_rate:.2f} units/day × 30 days = {projected_30d:,.0f} projected units over the next 30-day horizon.",
+                    formula_snippet="Forecast_30d = Velocity_daily * 30",
+                    input_values={"Velocity_daily": round(daily_run_rate, 2), "horizon_days": 30},
+                    output_value=f"{projected_30d:,.0f} units",
+                ),
+            ]
+            formatted_val = f"{projected_30d:,.0f} units (30-day projection)"
+            cur_val: float | None = projected_30d
+        else:
+            steps = [
+                CalculationStep(
+                    step_number=1,
+                    step_title="Sales Ledger Requirement Check",
+                    description="No historical transaction records found. 30-day predictive demand forecasting requires confirmed order history.",
+                    formula_snippet="Forecast_30d = Moving_Average(historical_demand)",
+                    input_values={"transactions_found": 0},
+                    output_value="Unavailable — sales data required",
+                )
+            ]
+            formatted_val = "Unavailable — sales data required"
+            cur_val = None
+
+        return MetricExplorerResult(
+            metric_key=defn.key,
+            title=defn.title,
+            category=defn.category,
+            business_id=biz.id,
+            current_value=cur_val,
+            formatted_current_value=formatted_val,
+            unit=defn.unit,
+            formula=defn.formula,
+            has_live_data=has_data,
+            data_classification="Calculated Metric",
+            data_freshness="Fresh" if has_data else "Unavailable",
+            steps=steps,
+            provenance_note=f"Calculated from historical order velocity for {biz.legal_name}.",
         )
 
     def _explore_generic(

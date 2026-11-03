@@ -366,3 +366,41 @@ def test_explore_metric_dso_unavailable_without_debtor_ledger():
     assert "Debtor Ledger Missing" in explorer["formatted_current_value"]
     assert explorer["data_freshness"] == "Unavailable"
 
+
+def test_explore_metric_digital_twin_health_score():
+    """Verify digital twin health score exploration returns 3 calculation steps with grade and status."""
+    client = TestClient(app)
+    user = _setup_user_and_business(client, "dict_health_test")
+
+    resp = client.get("/api/v1/metrics/digital_twin_health_score/explore", cookies=user["cookies"])
+    assert resp.status_code == 200, resp.text
+    explorer = resp.json()
+
+    assert explorer["has_live_data"] is True
+    assert explorer["current_value"] >= 0.0
+    assert "100" in explorer["formatted_current_value"] or "Grade" in explorer["formatted_current_value"]
+    assert len(explorer["steps"]) == 3
+    assert explorer["steps"][0]["step_title"].startswith("Evaluate Profile Completeness")
+    assert explorer["steps"][2]["step_title"].startswith("Sum Weighted Components")
+
+
+def test_explore_metric_duplicate_row_rate_and_demand_forecast():
+    """Verify duplicate row rate and 30-day demand forecast calculations return structured steps."""
+    client = TestClient(app)
+    user = _setup_user_and_business(client, "dict_dup_forecast")
+
+    # 1. Duplicate row rate
+    resp_dup = client.get("/api/v1/metrics/duplicate_row_rate/explore", cookies=user["cookies"])
+    assert resp_dup.status_code == 200, resp_dup.text
+    explorer_dup = resp_dup.json()
+    assert len(explorer_dup["steps"]) == 3
+    assert "Duplicate Rate %" in explorer_dup["steps"][2]["formula_snippet"]
+
+    # 2. Demand forecast
+    resp_fc = client.get("/api/v1/metrics/demand_forecast_30d/explore", cookies=user["cookies"])
+    assert resp_fc.status_code == 200, resp_fc.text
+    explorer_fc = resp_fc.json()
+    assert "Unavailable" in explorer_fc["formatted_current_value"]
+    assert len(explorer_fc["steps"]) >= 1
+
+

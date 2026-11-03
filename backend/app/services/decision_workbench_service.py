@@ -388,12 +388,32 @@ class BusinessDecisionService:
                 limitations=["Assumes stable macroeconomic and supplier conditions."],
                 recommended_additional_data=["Competitor pricing benchmarks in the same regional market."],
             ))
-            # Option 2: Targeted 5% Volume Discount
-            proj_rev_5 = round(rev * 0.065, 2) if rev > 0 else 0.0
+            # Option 2: Targeted Volume Discount
+            if custom_discount_pct != 5.0 and custom_margin_pct > custom_discount_pct:
+                breakeven_vol = (custom_discount_pct / (custom_margin_pct - custom_discount_pct)) * 100.0
+                expected_vol = round(breakeven_vol * 1.25, 1)
+                eff_disc = custom_discount_pct
+                proj_rev_pct = round(((1.0 + expected_vol / 100.0) * (1.0 - eff_disc / 100.0) - 1.0) * 100.0, 1)
+                proj_rev_target = round(rev * (proj_rev_pct / 100.0), 2) if rev > 0 else 0.0
+                margin_delta = round(-eff_disc * 0.25, 1)
+                calc_method = f"Dynamic Elasticity Model: +{expected_vol}% volume at {eff_disc:g}% discount on qualifying tier"
+                formula_str = f"Projected_Revenue = (Baseline_Revenue * {1.0 + expected_vol / 100.0:.3f}) * {1.0 - eff_disc / 100.0:.3f} - Baseline_Revenue"
+                opt2_title = f"Targeted {eff_disc:g}% Volume Discount (Min Order > 1.5x AOV)"
+                opt2_desc = f"Offer a {eff_disc:g}% volume discount conditional on orders exceeding ₹{round(aov * 1.5, 0):,}."
+            else:
+                expected_vol = 12.0
+                proj_rev_pct = 6.5
+                proj_rev_target = round(rev * 0.065, 2) if rev > 0 else 0.0
+                margin_delta = -1.2
+                calc_method = "Volume Elasticity Model: +12% volume at 5% discount on qualifying tier"
+                formula_str = "Projected_Revenue = (Baseline_Revenue * 1.12) * 0.95 - Baseline_Revenue"
+                opt2_title = "Targeted 5% Volume Discount (Min Order > 1.5x AOV)"
+                opt2_desc = f"Offer a 5% volume discount conditional on orders exceeding ₹{round(aov * 1.5, 0):,}."
+
             options.append(DecisionOptionEvaluation(
                 option_id="opt_targeted_discount",
-                title="Targeted 5% Volume Discount (Min Order > 1.5x AOV)",
-                description=f"Offer a 5% volume discount conditional on orders exceeding ₹{round(aov * 1.5, 0):,}.",
+                title=opt2_title,
+                description=opt2_desc,
                 supporting_evidence=[
                     ev_revenue,
                     ev_aov,
@@ -408,7 +428,7 @@ class BusinessDecisionService:
                 ],
                 assumptions=[
                     "Minimum order threshold drives order consolidation",
-                    "Unit gross margin can absorb a 5% concession in exchange for +12% order volume",
+                    f"Unit gross margin can absorb a {custom_discount_pct:g}% concession in exchange for +{expected_vol}% order volume",
                 ],
                 missing_information=missing_sales_warning + ["Unit cost of goods sold (COGS) to calculate exact dollar contribution"],
                 potential_benefits=[
@@ -421,12 +441,12 @@ class BusinessDecisionService:
                 ] + margin_boundary_risks,
                 estimated_impact=DecisionEstimatedImpact(
                     has_calculation_inputs=has_sales,
-                    revenue_delta_inr=proj_rev_5 if has_sales else None,
-                    revenue_delta_pct=6.5 if has_sales else None,
-                    margin_delta_pct=-1.2 if has_sales else None,
-                    volume_delta_pct=12.0 if has_sales else None,
-                    calculation_method="Volume Elasticity Model: +12% volume at 5% discount on qualifying tier",
-                    formula_applied="Projected_Revenue = (Baseline_Revenue * 1.12) * 0.95 - Baseline_Revenue",
+                    revenue_delta_inr=proj_rev_target if has_sales else None,
+                    revenue_delta_pct=proj_rev_pct if has_sales else None,
+                    margin_delta_pct=margin_delta if has_sales else None,
+                    volume_delta_pct=expected_vol if has_sales else None,
+                    calculation_method=calc_method,
+                    formula_applied=formula_str,
                 ),
                 confidence=75 if has_sales else 40,
                 limitations=["Assumes linear price elasticity among top purchasing accounts."],
@@ -670,7 +690,288 @@ class BusinessDecisionService:
             ))
 
         # -------------------------------------------------------------------
-        # 4. Fallback / Custom Decision Template
+        # 4. Expand Product Range
+        # -------------------------------------------------------------------
+        elif decision_type == "expand_product_range":
+            recommended_id = "opt_adjacent_expansion"
+            options.append(DecisionOptionEvaluation(
+                option_id="opt_status_quo_catalog",
+                title="Consolidate Around Core Catalog (No New SKUs)",
+                description=f"Focus inventory capital and sales outreach exclusively on high-performing lines like {top_product}.",
+                supporting_evidence=[ev_revenue, ev_aov],
+                assumptions=["Core products have continued demand runway without SKU fatigue", "Capital is best preserved in fast-turning inventory"],
+                missing_information=missing_sales_warning + ["Category-level market growth rates"],
+                potential_benefits=["Zero product obsolescence or slow-moving SKU holding costs", "Simplified manufacturing and fulfillment operations"],
+                potential_risks=["Competitors satisfy adjacent customer needs", "Missed opportunity to increase basket size per order"],
+                estimated_impact=DecisionEstimatedImpact(
+                    has_calculation_inputs=True,
+                    revenue_delta_inr=0.0,
+                    revenue_delta_pct=0.0,
+                    margin_delta_pct=0.0,
+                    volume_delta_pct=0.0,
+                    calculation_method="Core Focus Benchmark: Zero SKU variance",
+                    formula_applied="Revenue_delta = Baseline * 0.0",
+                ),
+                confidence=85 if has_sales else 45,
+                limitations=["Assumes stable demand for existing core lines."],
+                recommended_additional_data=["Customer requests for missing product lines."],
+            ))
+            proj_rev_adj = round(rev * 0.075, 2) if rev > 0 else 0.0
+            options.append(DecisionOptionEvaluation(
+                option_id="opt_adjacent_expansion",
+                title="Pilot 2-3 Complementary Adjacent SKUs",
+                description=f"Introduce complementary accessories or variants adjacent to {top_product}, marketed directly to established buyers.",
+                supporting_evidence=[
+                    ev_revenue,
+                    ev_aov,
+                    DecisionEvidenceItem(
+                        source="SalesIntelligenceService",
+                        metric="Top Inelastic Line",
+                        value=top_product,
+                        unit="",
+                        observation_period=period,
+                        data_classification="Observed Fact",
+                    ),
+                    DecisionEvidenceItem(
+                        source="SalesIntelligenceService",
+                        metric="Repeat Customer Rate",
+                        value=repeat_pct,
+                        unit="%",
+                        observation_period=period,
+                        data_classification="Calculated Metric",
+                    ),
+                ],
+                assumptions=[
+                    "Existing buyers have latent demand for complementary items",
+                    "Initial minimum batch size requires modest inventory working capital",
+                ],
+                missing_information=missing_sales_warning + ["Tooling or supplier MOQs for new variants"],
+                potential_benefits=[
+                    "Expands Average Order Value (AOV) by enabling basket bundling",
+                    "Low risk: validates demand through existing trusted relationships before bulk tooling",
+                    "High gross margin contribution from complementary accessory lines",
+                ],
+                potential_risks=["Potential distributor hesitation if complementary items require distinct storage"],
+                estimated_impact=DecisionEstimatedImpact(
+                    has_calculation_inputs=has_sales,
+                    revenue_delta_inr=proj_rev_adj if has_sales else None,
+                    revenue_delta_pct=7.5 if has_sales else None,
+                    margin_delta_pct=1.8 if has_sales else None,
+                    volume_delta_pct=8.0 if has_sales else None,
+                    payback_period_days=60,
+                    calculation_method="Basket Cross-Sell Model: 15% adoption among repeat accounts at 1.25x AOV",
+                    formula_applied="Projected_Revenue = Baseline * 1.075",
+                ),
+                confidence=75 if has_sales else 40,
+                limitations=["Dependent on repeat customer purchasing frequency."],
+                recommended_additional_data=["Supplier minimum order quantity (MOQ) and lead times."],
+            ))
+            proj_rev_broad = round(rev * 0.16, 2) if rev > 0 else 0.0
+            options.append(DecisionOptionEvaluation(
+                option_id="opt_broad_line_launch",
+                title="Full-Scale Category Diversification",
+                description="Launch an entirely new product family to penetrate new industrial and retail market segments.",
+                supporting_evidence=[ev_revenue, ev_aov],
+                assumptions=["Business has working capital and warehousing capacity to sustain multi-month inventory ramp"],
+                missing_information=missing_sales_warning + ["Comprehensive competitor landscape and regulatory compliance costs"],
+                potential_benefits=["Diversifies revenue away from single-category dependence", "Unlocks new customer demographics"],
+                potential_risks=[
+                    "High working capital lockup in unproven inventory",
+                    "Operational distraction from profitable core products",
+                ],
+                estimated_impact=DecisionEstimatedImpact(
+                    has_calculation_inputs=has_sales,
+                    revenue_delta_inr=proj_rev_broad if has_sales else None,
+                    revenue_delta_pct=16.0 if has_sales else None,
+                    margin_delta_pct=-2.0 if has_sales else None,
+                    volume_delta_pct=18.0 if has_sales else None,
+                    payback_period_days=180,
+                    calculation_method="Category Diversification Projection",
+                    formula_applied="Projected_Revenue = Baseline * 1.16",
+                ),
+                confidence=55 if has_sales else 30,
+                limitations=["High inventory carrying risk."],
+                recommended_additional_data=["Channel partner pre-orders and advance purchase commitments."],
+            ))
+
+        # -------------------------------------------------------------------
+        # 5. Reduce Expenses
+        # -------------------------------------------------------------------
+        elif decision_type == "reduce_expenses":
+            recommended_id = "opt_targeted_renegotiation"
+            options.append(DecisionOptionEvaluation(
+                option_id="opt_status_quo_expenses",
+                title="Maintain Current Operating Expenditure (Growth Bias)",
+                description="Preserve existing staffing, marketing, and operational spending to maintain commercial momentum.",
+                supporting_evidence=[ev_revenue, ev_aov],
+                assumptions=["Operating cash flow remains sufficient to service ongoing fixed overhead"],
+                missing_information=missing_sales_warning + ["Detailed monthly expense ledger"],
+                potential_benefits=["Maintains employee morale, marketing reach, and customer service standards"],
+                potential_risks=["Exhausts liquidity cushion if demand softens or supplier costs escalate"],
+                estimated_impact=DecisionEstimatedImpact(
+                    has_calculation_inputs=True,
+                    revenue_delta_inr=0.0,
+                    revenue_delta_pct=0.0,
+                    margin_delta_pct=0.0,
+                    volume_delta_pct=0.0,
+                    calculation_method="Baseline Operating Expenditure",
+                    formula_applied="OpEx_delta = 0",
+                ),
+                confidence=85 if has_sales else 45,
+                limitations=["Assumes stable revenue inflow."],
+                recommended_additional_data=["Itemized monthly fixed vs variable cost breakdown."],
+            ))
+            options.append(DecisionOptionEvaluation(
+                option_id="opt_targeted_renegotiation",
+                title="Targeted Vendor Renegotiation & Discretionary Capping (-8% OpEx)",
+                description="Consolidate supplier purchasing, eliminate redundant software subscriptions, and enforce strict approval on discretionary overhead.",
+                supporting_evidence=[ev_revenue, ev_aov],
+                assumptions=["Suppliers will offer volume rebates or price caps in exchange for consolidated orders", "Core operational capacity is unaffected"],
+                missing_information=missing_sales_warning + ["Contractual cancellation clauses with vendors"],
+                potential_benefits=[
+                    "Immediate monthly cash flow relief of ~8% OpEx without headcount reductions",
+                    "Extends cash runway by 30-45 days",
+                    "Eliminates operational waste without compromising customer delivery standards",
+                ],
+                potential_risks=["Minor administrative friction during vendor renegotiations"],
+                estimated_impact=DecisionEstimatedImpact(
+                    has_calculation_inputs=has_sales,
+                    revenue_delta_inr=0.0,
+                    revenue_delta_pct=0.0,
+                    margin_delta_pct=2.4 if has_sales else None,
+                    volume_delta_pct=0.0,
+                    calculation_method="Discretionary Containment Model: -8% OpEx flow-through",
+                    formula_applied="Operating_Profit_delta = Baseline_Revenue * 0.024",
+                ),
+                confidence=80 if has_sales else 45,
+                limitations=["Requires active management enforcement."],
+                recommended_additional_data=["Top 5 vendor payment history and contract renewal dates."],
+            ))
+            options.append(DecisionOptionEvaluation(
+                option_id="opt_austerity_headcount_freeze",
+                title="Comprehensive Austerity Freeze & Overhead Restructuring (-20% OpEx)",
+                description="Implement hiring freezes, renegotiate facility leases, and cut promotional campaigns by 50%.",
+                supporting_evidence=[ev_revenue, ev_aov],
+                assumptions=["Emergency cash conservation takes precedence over top-line expansion"],
+                missing_information=missing_sales_warning + ["Severance obligations and lease penalty terms"],
+                potential_benefits=["Maximizes emergency cash runway during acute revenue contraction"],
+                potential_risks=[
+                    "Depresses employee productivity and risks loss of key operational talent",
+                    "Severe cut to marketing will depress future sales pipeline within 60-90 days",
+                ],
+                estimated_impact=DecisionEstimatedImpact(
+                    has_calculation_inputs=has_sales,
+                    revenue_delta_inr=round(-rev * 0.05, 2) if has_sales else None,
+                    revenue_delta_pct=-5.0 if has_sales else None,
+                    margin_delta_pct=4.5 if has_sales else None,
+                    volume_delta_pct=-5.0 if has_sales else None,
+                    calculation_method="Austerity Contraction Model: -20% OpEx with 5% revenue trade-off",
+                    formula_applied="Projected_Revenue = Baseline * 0.95; OpEx_delta = -20%",
+                ),
+                confidence=65 if has_sales else 35,
+                limitations=["High operational disruption risk."],
+                recommended_additional_data=["Employee performance reviews and core vs non-core function audit."],
+            ))
+
+        # -------------------------------------------------------------------
+        # 6. Test New Sales Channel
+        # -------------------------------------------------------------------
+        elif decision_type == "test_sales_channel":
+            recommended_id = "opt_direct_digital_pilot"
+            options.append(DecisionOptionEvaluation(
+                option_id="opt_status_quo_channel",
+                title="Maintain Established Wholesale / Offline Distribution",
+                description="Preserve existing dealer networks and trade relationships without launching alternative channels.",
+                supporting_evidence=[ev_revenue, ev_aov],
+                assumptions=["Wholesale partners maintain steady order volume", "Existing distribution coverage is sufficient"],
+                missing_information=missing_sales_warning + ["Distributor sell-through rates"],
+                potential_benefits=["Zero channel conflict with existing wholesale partners", "Predictable bulk logistics"],
+                potential_risks=["Vulnerability to distributor payment delays and margin squeeze from middlemen"],
+                estimated_impact=DecisionEstimatedImpact(
+                    has_calculation_inputs=True,
+                    revenue_delta_inr=0.0,
+                    revenue_delta_pct=0.0,
+                    margin_delta_pct=0.0,
+                    volume_delta_pct=0.0,
+                    calculation_method="Baseline Channel Distribution",
+                    formula_applied="Revenue_delta = 0",
+                ),
+                confidence=85 if has_sales else 45,
+                limitations=["Channel margin is constrained by dealer commissions."],
+                recommended_additional_data=["Distributor inventory turnover reports."],
+            ))
+            proj_rev_d2c = round(rev * 0.06, 2) if rev > 0 else 0.0
+            options.append(DecisionOptionEvaluation(
+                option_id="opt_direct_digital_pilot",
+                title="Controlled Digital Direct-to-Buyer Pilot (Top High-Margin SKUs)",
+                description="Launch a direct digital order catalog (WhatsApp Business / Web Portal) for high-margin products with regional shipping.",
+                supporting_evidence=[
+                    ev_revenue,
+                    ev_aov,
+                    DecisionEvidenceItem(
+                        source="SalesIntelligenceService",
+                        metric="Top Inelastic Line",
+                        value=top_product,
+                        unit="",
+                        observation_period=period,
+                        data_classification="Observed Fact",
+                    ),
+                ],
+                assumptions=[
+                    "End buyers are willing to purchase directly online with UPI / advance payment",
+                    "Channel pricing is calibrated to avoid predatory undercutting of wholesale dealers",
+                ],
+                missing_information=missing_sales_warning + ["Last-mile courier logistics costs per parcel"],
+                potential_benefits=[
+                    "Eliminates 15–20% distributor commission, substantially expanding gross margin",
+                    "Generates immediate cash collection via digital payments (zero debtor stretch / 0 DSO)",
+                    "Builds direct relationships and first-party customer demand intelligence",
+                ],
+                potential_risks=["Minor friction if traditional wholesale partners perceive direct competition"],
+                estimated_impact=DecisionEstimatedImpact(
+                    has_calculation_inputs=has_sales,
+                    revenue_delta_inr=proj_rev_d2c if has_sales else None,
+                    revenue_delta_pct=6.0 if has_sales else None,
+                    margin_delta_pct=3.5 if has_sales else None,
+                    volume_delta_pct=4.0 if has_sales else None,
+                    payback_period_days=45,
+                    calculation_method="Digital Direct Model: 6% incremental revenue at +3.5% higher margin",
+                    formula_applied="Projected_Revenue = Baseline * 1.06",
+                ),
+                confidence=75 if has_sales else 40,
+                limitations=["Requires prompt order dispatch discipline."],
+                recommended_additional_data=["Courier aggregator shipping rates and packaging costs."],
+            ))
+            proj_rev_mkt = round(rev * 0.14, 2) if rev > 0 else 0.0
+            options.append(DecisionOptionEvaluation(
+                option_id="opt_marketplace_listing",
+                title="Multi-Platform B2B Marketplace & Regional Broker Network",
+                description="Onboard catalog across major B2B platforms (IndiaMART, TradeIndia, GeM) and engage commission-based regional sales agents.",
+                supporting_evidence=[ev_revenue, ev_aov],
+                assumptions=["Marketplace lead volume will convert at standard industrial conversion rates (3–5%)"],
+                missing_information=missing_sales_warning + ["Marketplace subscription fees and platform commission tiers"],
+                potential_benefits=["National geographic reach beyond regional borders", "High top-line volume growth potential"],
+                potential_risks=[
+                    "Intense price competition against low-cost commodity alternatives",
+                    "Platform listing fees and lead response overhead can dilute profit margins",
+                ],
+                estimated_impact=DecisionEstimatedImpact(
+                    has_calculation_inputs=has_sales,
+                    revenue_delta_inr=proj_rev_mkt if has_sales else None,
+                    revenue_delta_pct=14.0 if has_sales else None,
+                    margin_delta_pct=-1.5 if has_sales else None,
+                    volume_delta_pct=16.0 if has_sales else None,
+                    payback_period_days=120,
+                    calculation_method="Multi-Channel Expansion Model",
+                    formula_applied="Projected_Revenue = Baseline * 1.14",
+                ),
+                confidence=60 if has_sales else 35,
+                limitations=["Lead quality varies widely across portals."],
+                recommended_additional_data=["Platform commission schedules and lead conversion benchmarks."],
+            ))
+
+        # -------------------------------------------------------------------
+        # 7. Fallback / Custom Decision Template
         # -------------------------------------------------------------------
         else:
             recommended_id = "opt_measured_pilot"
