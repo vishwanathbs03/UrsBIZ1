@@ -126,6 +126,9 @@ class BusinessSignalItem(BaseModel):
     linked_recommendation_id: Optional[str] = None
     status: str = "NEW"
     resolved_at: Optional[str] = None
+    is_archived: bool = False
+    archived_at: Optional[str] = None
+    archive_reason: Optional[str] = None
 
 
 class BusinessSignalsFeedResponse(BaseModel):
@@ -225,9 +228,17 @@ class AlertAuditHistoryItem(BaseModel):
     business_id: int
     previous_status: str
     new_status: str
-    changed_by_user_id: int
+    changed_by_user_id: Optional[int] = None
     changed_at: str
     reason: Optional[str] = None
+
+
+class AlertArchiveRequest(BaseModel):
+    """Payload to archive or soft-delete an alert."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Optional[str] = Field(None, max_length=500, description="Reason for archiving alert")
 
 
 class AlertSummaryResponse(BaseModel):

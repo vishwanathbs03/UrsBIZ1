@@ -221,6 +221,7 @@ class ChangeDetectionEngine:
             < cutoff_30d
         ]
 
+        unconfirmed_gaps_count = 0
         if historical_txs:
             # Group historical into 7-day buckets starting from earliest tx
             start_date = min(
@@ -249,6 +250,8 @@ class ChangeDetectionEngine:
                 if b_txs:
                     b_rev = sum(float(t.total_amount or 0.0) for t in b_txs)
                     weekly_buckets.append(b_rev)
+                else:
+                    unconfirmed_gaps_count += 1
                 current_bucket_start = bucket_end
 
         # Minimum history for statistical 2-sigma: at least 6 confirmed observation buckets
@@ -281,6 +284,8 @@ class ChangeDetectionEngine:
                             "priority_score": 95 if is_critical else 85,
                             "data_period": "recent_30d_vs_6_bucket_baseline",
                             "evidence": {
+                                "detector_type": "HEURISTIC_SAMPLE_STATISTICS",
+                                "disclaimer": "Heuristic statistical anomaly estimate based on confirmed historical observation buckets — not a statistically calibrated guarantee or prediction.",
                                 "recent_30d_revenue": round(recent_revenue, 2),
                                 "recent_weekly_equivalent": round(recent_weekly_equiv, 2),
                                 "baseline_weekly_mean": round(mean_bucket_rev, 2),
@@ -288,6 +293,10 @@ class ChangeDetectionEngine:
                                 "z_score": round(z_score, 2),
                                 "two_sigma_threshold": round(two_sigma_threshold, 2),
                                 "historical_bucket_count": len(weekly_buckets),
+                                "unconfirmed_periods_excluded_count": unconfirmed_gaps_count,
+                                "unconfirmed_periods_rule": "Missing calendar periods without confirmed sales records were excluded rather than treated as zero revenue, preventing artificial variance inflation.",
+                                "comparability_ratio": round(30.0 / 7.0, 4),
+                                "comparability_disclosure": "Recent 30-day revenue is normalized to a 7-day weekly equivalent run-rate (R / 4.2857) to enable direct dimensional comparison against 7-day observation buckets.",
                             },
                             "title": f"Statistical Revenue Anomaly: {abs(round(z_score, 1))}σ Below Mean",
                             "what_changed": f"Recent weekly-equivalent run-rate (₹{recent_weekly_equiv:,.0f}) has plunged below the 2-standard-deviation threshold (₹{two_sigma_threshold:,.0f}).",
@@ -306,6 +315,11 @@ class ChangeDetectionEngine:
                 if change_pct <= -15.0:
                     is_critical = change_pct <= -30.0
                     sev = EventSeverity.CRITICAL.value if is_critical else EventSeverity.HIGH.value
+                    sparse_note = (
+                        f" (Note: Evaluated as period-over-period delta because fewer than 6 historical weekly observation buckets [{len(weekly_buckets)}] were confirmed)."
+                        if len(weekly_buckets) < 6
+                        else ""
+                    )
                     events.append(
                         {
                             "event_type": MonitoringEventType.REVENUE_DECLINE_DETECTED.value,
@@ -321,10 +335,17 @@ class ChangeDetectionEngine:
                                 "change_pct": round(change_pct, 1),
                                 "recent_tx_count": len(recent_txs),
                                 "prior_tx_count": len(prior_txs),
+                                "baseline_method": "PERIOD_OVER_PERIOD_DELTA",
+                                "sparse_history_disclosure": (
+                                    f"Evaluated as period-over-period delta because only {len(weekly_buckets)} confirmed historical weekly buckets exist (minimum 6 required for statistical 2-sigma estimation)."
+                                    if len(weekly_buckets) < 6
+                                    else "Evaluated alongside statistical bucket baseline."
+                                ),
+                                "unconfirmed_periods_excluded_count": unconfirmed_gaps_count,
                             },
                             "title": f"Revenue Decline of {abs(round(change_pct, 1))}% Detected",
                             "what_changed": f"30-day revenue decreased from ₹{prior_revenue:,.2f} to ₹{recent_revenue:,.2f} ({change_pct:.1f}%).",
-                            "why_it_matters": "A sustained drop in sales volume directly impairs cash flow and fixed cost coverage.",
+                            "why_it_matters": f"A sustained drop in sales volume directly impairs cash flow and fixed cost coverage.{sparse_note}",
                             "suggested_action": "Review top client reorder status and inspect pricing across top volume SKUs.",
                             "confidence": 0.95,
                         }
@@ -454,7 +475,7 @@ class ChangeDetectionEngine:
                         events.append(
                             {
                                 "event_type": MonitoringEventType.CUSTOMER_INACTIVITY_DETECTED.value,
-                                "event_nature": EventNature.CONFIRMED_EVENT.value,
+                                "event_nature": EventNature.WARNING.value,
                                 "source": "customer_inactivity_tracker",
                                 "relevant_entity": cname,
                                 "severity": sev,
@@ -600,7 +621,7 @@ class ChangeDetectionEngine:
                         events.append(
                             {
                                 "event_type": MonitoringEventType.PRODUCT_VELOCITY_DECELERATION.value,
-                                "event_nature": EventNature.CONFIRMED_EVENT.value,
+                                "event_nature": EventNature.WARNING.value,
                                 "source": "product_velocity_engine",
                                 "relevant_entity": pname,
                                 "severity": sev,

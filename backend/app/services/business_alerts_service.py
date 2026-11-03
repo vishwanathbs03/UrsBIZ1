@@ -40,10 +40,11 @@ logger = logging.getLogger(__name__)
 
 # Valid state machine transitions
 ALLOWED_TRANSITIONS: dict[str, list[str]] = {
-    "NEW": ["ACKNOWLEDGED", "DISMISSED"],
-    "ACKNOWLEDGED": ["RESOLVED", "DISMISSED"],
-    "RESOLVED": [],  # Terminal
-    "DISMISSED": [],  # Terminal
+    "NEW": ["ACKNOWLEDGED", "DISMISSED", "ARCHIVED"],
+    "ACKNOWLEDGED": ["RESOLVED", "DISMISSED", "ARCHIVED"],
+    "RESOLVED": ["ARCHIVED"],
+    "DISMISSED": ["ARCHIVED"],
+    "ARCHIVED": [],  # Terminal
 }
 
 
@@ -70,6 +71,7 @@ class BusinessAlertsService:
         alert_status: Optional[str] = None,
         event_nature: Optional[str] = None,
         include_suppressed: bool = False,
+        include_archived: bool = False,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[BusinessSignalItem], int]:
@@ -77,6 +79,9 @@ class BusinessAlertsService:
         stmt = select(BusinessSignalEvent).where(
             BusinessSignalEvent.business_id == business_id
         )
+
+        if not include_archived:
+            stmt = stmt.where(BusinessSignalEvent.is_archived.is_(False))
 
         if not include_suppressed:
             stmt = stmt.where(BusinessSignalEvent.is_suppressed.is_(False))
@@ -134,6 +139,7 @@ class BusinessAlertsService:
         stmt = select(BusinessSignalEvent).where(
             BusinessSignalEvent.business_id == business_id,
             BusinessSignalEvent.is_suppressed.is_(False),
+            BusinessSignalEvent.is_archived.is_(False),
         )
         records = self.db.scalars(stmt).all()
 
@@ -233,13 +239,48 @@ class BusinessAlertsService:
 
         return self._to_schema_item(event)
 
+    def archive_alert(
+        self,
+        business: Business,
+        event_id: str,
+        user_id: int,
+        reason: Optional[str] = None,
+    ) -> BusinessSignalItem:
+        """Soft-deletes/archives an alert while strictly preserving audit history."""
+        event = self.get_alert(business.id, event_id)
+        if event.is_archived:
+            return self._to_schema_item(event)
+
+        previous_status = event.status
+        now_dt = datetime.now(timezone.utc)
+        event.is_archived = True
+        event.archived_at = now_dt
+        event.archived_by_user_id = user_id
+        event.archive_reason = reason
+        event.status = "ARCHIVED"
+
+        # Append immutable audit entry
+        audit_entry = BusinessSignalEventAudit(
+            event_id=event.event_id,
+            business_id=business.id,
+            previous_status=previous_status,
+            new_status="ARCHIVED",
+            changed_by_user_id=user_id,
+            reason=reason or "Alert archived",
+        )
+        self.db.add(audit_entry)
+        self.db.commit()
+        self.db.refresh(event)
+
+        return self._to_schema_item(event)
+
     def get_alert_history(
         self, business_id: int, event_id: str
     ) -> list[AlertAuditHistoryItem]:
         """Retrieve complete immutable status transition history."""
-        # Ensure alert exists and belongs to business
-        self.get_alert(business_id, event_id)
-
+        # Query audit table directly by business_id and event_id.
+        # This guarantees audit history is retrievable even if the parent BusinessSignalEvent
+        # record has been deleted or archived.
         stmt = (
             select(BusinessSignalEventAudit)
             .where(
@@ -249,6 +290,10 @@ class BusinessAlertsService:
             .order_by(desc(BusinessSignalEventAudit.id))
         )
         audits = self.db.scalars(stmt).all()
+
+        if not audits:
+            # Check if event exists to return 404 if invalid
+            self.get_alert(business_id, event_id)
 
         return [
             AlertAuditHistoryItem(
@@ -391,4 +436,7 @@ class BusinessAlertsService:
             linked_recommendation_id=event.linked_recommendation_id,
             status=event.status,
             resolved_at=event.resolved_at.isoformat() if event.resolved_at else None,
+            is_archived=event.is_archived or False,
+            archived_at=event.archived_at.isoformat() if event.archived_at else None,
+            archive_reason=event.archive_reason,
         )

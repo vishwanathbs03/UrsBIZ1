@@ -413,7 +413,7 @@ def test_key_customer_inactivity_detected(db_session, biz_a):
     inactivity_events = [e for e in events if e.get("event_type") == "CUSTOMER_INACTIVITY_DETECTED"]
     assert len(inactivity_events) == 1
     event = inactivity_events[0]
-    assert event["event_nature"] == "CONFIRMED_EVENT"
+    assert event["event_nature"] == "WARNING"
     assert event["severity"] in ["HIGH", "CRITICAL"]
     assert event["evidence"]["customer_name"] == "Key Partner Ltd"
     assert event["evidence"]["normal_cycle_days"] == 10
@@ -510,7 +510,7 @@ def test_product_velocity_deceleration(db_session, biz_a):
     velo_events = [e for e in events if e.get("event_type") == "PRODUCT_VELOCITY_DECELERATION"]
     assert len(velo_events) == 1
     event = velo_events[0]
-    assert event["event_nature"] == "CONFIRMED_EVENT"
+    assert event["event_nature"] == "WARNING"
     assert event["severity"] == "HIGH"
     assert event["evidence"]["product_name"] == "Popular Valve"
     assert event["evidence"]["prior_30d_units"] == 20.0
@@ -1149,3 +1149,195 @@ def test_alert_summary_counters_and_pagination(client_a, db_session, biz_a):
     resp_new = client_a.get("/api/v1/alerts?status=NEW")
     assert resp_new.status_code == 200
     assert resp_new.json()["total"] == 2
+
+
+# =========================================================================== #
+# 21. Audit History Integrity: Event Hard Deletion Preserves Audit History    #
+# =========================================================================== #
+
+def test_event_deletion_preserves_audit_history(client_a, db_session, biz_a, user_a):
+    """Verify that deleting or purging a BusinessSignalEvent does NOT cascade-delete or erase audit records."""
+    event = BusinessSignalEvent(
+        event_id="evt_audit_preserve_1",
+        business_id=biz_a.id,
+        event_type="REVENUE_DECLINE_DETECTED",
+        event_nature="WARNING",
+        source="sales_monitoring",
+        severity="HIGH",
+        data_period="30d",
+        fingerprint="fp_audit_preserve_1",
+        title="Revenue Decline",
+        what_changed="Drop in volume",
+        why_it_matters="Cash flow risk",
+        suggested_action="Review accounts",
+        status="NEW",
+        detected_at=datetime.now(timezone.utc),
+    )
+    db_session.add(event)
+    db_session.commit()
+
+    # Transition 1: NEW -> ACKNOWLEDGED
+    resp_ack = client_a.patch(
+        "/api/v1/alerts/evt_audit_preserve_1/status",
+        json={"status": "ACKNOWLEDGED", "reason": "Reviewing with accountant"},
+    )
+    assert resp_ack.status_code == 200
+
+    # Transition 2: ACKNOWLEDGED -> RESOLVED
+    resp_res = client_a.patch(
+        "/api/v1/alerts/evt_audit_preserve_1/status",
+        json={"status": "RESOLVED", "reason": "Cash flow stabilized"},
+    )
+    assert resp_res.status_code == 200
+
+    # Verify 2 audit records exist
+    history_resp = client_a.get("/api/v1/alerts/evt_audit_preserve_1/history")
+    assert history_resp.status_code == 200
+    assert len(history_resp.json()) == 2
+
+    # Now simulate hard-deletion of the BusinessSignalEvent row from the database
+    db_session.delete(event)
+    db_session.commit()
+
+    # Verify audit records in business_signal_event_audits STILL EXIST and were not cascade-deleted
+    from sqlalchemy import select
+    audits = db_session.scalars(
+        select(BusinessSignalEventAudit).where(
+            BusinessSignalEventAudit.business_id == biz_a.id,
+            BusinessSignalEventAudit.event_id == "evt_audit_preserve_1",
+        )
+    ).all()
+    assert len(audits) == 2
+    assert audits[0].new_status in ["ACKNOWLEDGED", "RESOLVED"]
+    assert audits[1].new_status in ["ACKNOWLEDGED", "RESOLVED"]
+
+    # Verify get_alert_history API endpoint returns historical audit evidence even though parent event is gone
+    history_resp_after = client_a.get("/api/v1/alerts/evt_audit_preserve_1/history")
+    assert history_resp_after.status_code == 200
+    assert len(history_resp_after.json()) == 2
+    assert history_resp_after.json()[0]["event_id"] == "evt_audit_preserve_1"
+
+
+# =========================================================================== #
+# 22. Soft Deletion & Archival Preservation                                   #
+# =========================================================================== #
+
+def test_event_archival_soft_delete(client_a, db_session, biz_a, user_a):
+    """Verify soft-delete archival sets is_archived, appends audit trail, and filters from default queries."""
+    event = BusinessSignalEvent(
+        event_id="evt_archive_test_1",
+        business_id=biz_a.id,
+        event_type="SALES_DATA_MISSING",
+        event_nature="ASSUMPTION",
+        source="system_evaluator",
+        severity="INFORMATIONAL",
+        data_period="all",
+        fingerprint="fp_archive_test_1",
+        title="Missing Ledger",
+        what_changed="No records",
+        why_it_matters="Informational only",
+        suggested_action="Upload sales",
+        status="NEW",
+        detected_at=datetime.now(timezone.utc),
+    )
+    db_session.add(event)
+    db_session.commit()
+
+    # 1. Archive via POST /alerts/{event_id}/archive
+    archive_resp = client_a.post(
+        "/api/v1/alerts/evt_archive_test_1/archive",
+        json={"reason": "Business owner acknowledged and archived"},
+    )
+    assert archive_resp.status_code == 200
+    archived_data = archive_resp.json()
+    assert archived_data["is_archived"] is True
+    assert archived_data["archived_at"] is not None
+    assert archived_data["archive_reason"] == "Business owner acknowledged and archived"
+    assert archived_data["status"] == "ARCHIVED"
+
+    # 2. Verify excluded from default listing
+    resp_list_default = client_a.get("/api/v1/alerts")
+    assert resp_list_default.status_code == 200
+    assert not any(a["event_id"] == "evt_archive_test_1" for a in resp_list_default.json()["alerts"])
+
+    # 3. Verify included with include_archived=true
+    resp_list_all = client_a.get("/api/v1/alerts?include_archived=true")
+    assert resp_list_all.status_code == 200
+    assert any(a["event_id"] == "evt_archive_test_1" for a in resp_list_all.json()["alerts"])
+
+    # 4. Verify summary excludes archived alerts
+    resp_sum = client_a.get("/api/v1/alerts/summary")
+    assert resp_sum.status_code == 200
+    assert resp_sum.json()["total_alerts"] == 0
+
+    # 5. Verify audit history captures ARCHIVED transition
+    hist_resp = client_a.get("/api/v1/alerts/evt_archive_test_1/history")
+    assert hist_resp.status_code == 200
+    history = hist_resp.json()
+    assert len(history) == 1
+    assert history[0]["previous_status"] == "NEW"
+    assert history[0]["new_status"] == "ARCHIVED"
+    assert history[0]["reason"] == "Business owner acknowledged and archived"
+
+    # 6. DELETE /alerts/{event_id} is an idempotent soft-delete
+    del_resp = client_a.delete("/api/v1/alerts/evt_archive_test_1?reason=Clean+up")
+    assert del_resp.status_code == 200
+    assert del_resp.json()["is_archived"] is True
+
+
+# =========================================================================== #
+# 23. Unconfirmed Calendar Gaps & Zero-Variance Edge Cases                    #
+# =========================================================================== #
+
+def test_unconfirmed_calendar_gaps_and_heuristic_disclaimers(db_session, biz_a):
+    """Verify that missing calendar weeks are excluded from baseline calculations and disclaimers are present."""
+    upload = _create_sales_upload(db_session, biz_a.id)
+    now = datetime.now(timezone.utc)
+
+    # 7 active weeks with a calendar gap between day 85 and 70 (all within 90d window and > 30d ago)
+    weeks_offsets = [85, 70, 63, 56, 49, 42, 35]
+    revenues = [100000.0, 105000.0, 95000.0, 110000.0, 98000.0, 102000.0, 99000.0]
+    for days_ago, rev in zip(weeks_offsets, revenues):
+        db_session.add(
+            SalesTransaction(
+                upload_id=upload.id,
+                business_id=biz_a.id,
+                transaction_date=now - timedelta(days=days_ago),
+                customer_name="Periodic Client",
+                product_name="Service Package",
+                quantity=1,
+                unit_price=rev,
+                total_amount=rev,
+            )
+        )
+    # Severe drop in recent period
+    db_session.add(
+        SalesTransaction(
+            upload_id=upload.id,
+            business_id=biz_a.id,
+            transaction_date=now - timedelta(days=3),
+            customer_name="Periodic Client",
+            product_name="Service Package",
+            quantity=1,
+            unit_price=5000.0,
+            total_amount=5000.0,
+        )
+    )
+    db_session.commit()
+
+    engine = ChangeDetectionEngine(db_session)
+    events = engine.detect_changes(biz_a, now=now)
+
+    stat_events = [e for e in events if e.get("event_type") == "STATISTICAL_REVENUE_DROP"]
+    assert len(stat_events) == 1
+    event = stat_events[0]
+    evidence = event["evidence"]
+
+    # Verify heuristic disclosures
+    assert evidence["detector_type"] == "HEURISTIC_SAMPLE_STATISTICS"
+    assert "heuristic" in evidence["disclaimer"].lower()
+    assert evidence["historical_bucket_count"] >= 6
+    assert evidence["unconfirmed_periods_excluded_count"] >= 1
+    assert evidence["comparability_ratio"] == 4.2857
+    assert event["event_nature"] == "ESTIMATE"
+

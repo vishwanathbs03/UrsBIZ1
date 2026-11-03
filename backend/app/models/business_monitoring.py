@@ -76,26 +76,32 @@ class BusinessSignalEvent(Base):
     confidence: Mapped[float] = mapped_column(Float, default=0.85, nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Soft deletion / Archival
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    archive_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     business: Mapped["Business"] = relationship()
 
 
 class BusinessSignalEventAudit(Base):
-    """Audit log tracking state transitions for a business signal event."""
+    """Immutable audit log tracking state transitions for a business signal event."""
 
     __tablename__ = "business_signal_event_audits"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     event_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     business_id: Mapped[int] = mapped_column(
-        ForeignKey("businesses.id", ondelete="CASCADE"),
+        ForeignKey("businesses.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
     previous_status: Mapped[str] = mapped_column(String(32), nullable=False)
     new_status: Mapped[str] = mapped_column(String(32), nullable=False)
-    changed_by_user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+    changed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     changed_at: Mapped[datetime] = mapped_column(

@@ -22,6 +22,7 @@ from app.models.business import Business
 from app.models.user import User
 from app.repositories.business_repository import BusinessRepository
 from app.schemas.business_monitoring import (
+    AlertArchiveRequest,
     AlertAuditHistoryItem,
     AlertExplainRequest,
     AlertExplainResponse,
@@ -68,9 +69,10 @@ class AlertListResponse(BaseModel):
 )
 def list_alerts(
     severity: Optional[str] = Query(None, description="CRITICAL | HIGH | MEDIUM | LOW | INFORMATIONAL"),
-    alert_status: Optional[str] = Query(None, alias="status", description="NEW | ACKNOWLEDGED | RESOLVED | DISMISSED"),
+    alert_status: Optional[str] = Query(None, alias="status", description="NEW | ACKNOWLEDGED | RESOLVED | DISMISSED | ARCHIVED"),
     event_nature: Optional[str] = Query(None, description="CONFIRMED_EVENT | WARNING | ESTIMATE | ASSUMPTION"),
     include_suppressed: bool = Query(False, description="Include cooldown-suppressed alerts"),
+    include_archived: bool = Query(False, description="Include soft-deleted/archived alerts"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -84,6 +86,7 @@ def list_alerts(
         alert_status=alert_status,
         event_nature=event_nature,
         include_suppressed=include_suppressed,
+        include_archived=include_archived,
         limit=limit,
         offset=offset,
     )
@@ -163,6 +166,51 @@ def update_alert_status(
         new_status=payload.status,
         reason=payload.reason,
         user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/{event_id}/archive",
+    response_model=BusinessSignalItem,
+    status_code=status.HTTP_200_OK,
+    summary="Soft-delete/archive an alert preserving historical audit evidence",
+)
+def archive_alert(
+    event_id: str,
+    payload: Optional[AlertArchiveRequest] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BusinessSignalItem:
+    business = _get_active_business(current_user, db)
+    service = BusinessAlertsService(db)
+    reason = payload.reason if payload else None
+    return service.archive_alert(
+        business=business,
+        event_id=event_id,
+        user_id=current_user.id,
+        reason=reason,
+    )
+
+
+@router.delete(
+    "/{event_id}",
+    response_model=BusinessSignalItem,
+    status_code=status.HTTP_200_OK,
+    summary="Soft-delete an alert preserving historical audit evidence (alias for archive)",
+)
+def delete_alert(
+    event_id: str,
+    reason: Optional[str] = Query(None, description="Optional reason for deletion/archival"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> BusinessSignalItem:
+    business = _get_active_business(current_user, db)
+    service = BusinessAlertsService(db)
+    return service.archive_alert(
+        business=business,
+        event_id=event_id,
+        user_id=current_user.id,
+        reason=reason or "Deleted by user",
     )
 
 
