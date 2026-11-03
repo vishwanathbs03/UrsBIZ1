@@ -6,25 +6,28 @@ from app.api.v1.endpoints import (
     action_board,
     advisor,
     ai,
+    alerts,
     analytics_sprint13,
     analytics_v1_router,
     auth,
     benchmark,
     business,
     chat,
+    compliance,
     copilot,
     dashboard,
+    data_confidence,
     decision_workbench,
     dna,
     finance,
     forecasting,
     funding,
-    compliance,
     growth,
     health,
-    intelligence,
     insights,
+    intelligence,
     knowledge,
+    metrics_dictionary,
     notifications,
     ocr,
     opportunities,
@@ -43,13 +46,12 @@ from app.api.v1.endpoints import (
     swot,
     twin,
     what_if_scenario,
-    data_confidence,
-    metrics_dictionary,
 )
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
 api_router.include_router(action_board.router)
+api_router.include_router(alerts.router)
 api_router.include_router(auth.router)
 api_router.include_router(analytics_sprint13.router)
 api_router.include_router(analytics_v1_router.router)

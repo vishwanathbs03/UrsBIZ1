@@ -88,6 +88,9 @@ class ProactiveMonitoringService:
                 event_dict=raw_evt,
                 prefs=prefs,
             )
+            # Ensure event_nature is preserved from change_engine
+            if "event_nature" in raw_evt and "event_nature" not in processed:
+                processed["event_nature"] = raw_evt["event_nature"]
             evaluated_events.append(processed)
 
             # Persist if not in active cooldown or if escalated
@@ -98,6 +101,7 @@ class ProactiveMonitoringService:
                     event_id=evt_id,
                     business_id=business.id,
                     event_type=processed["event_type"],
+                    event_nature=processed.get("event_nature", "WARNING"),
                     source=processed["source"],
                     relevant_entity=processed.get("relevant_entity"),
                     detected_at=now,
@@ -138,6 +142,7 @@ class ProactiveMonitoringService:
                     event_id=e.get("event_id", ""),
                     business_id=business.id,
                     event_type=e["event_type"],
+                    event_nature=e.get("event_nature", "WARNING"),
                     source=e["source"],
                     relevant_entity=e.get("relevant_entity"),
                     detected_at=now.isoformat(),
@@ -188,7 +193,7 @@ class ProactiveMonitoringService:
             limit=limit,
         )
         if not stored_signals:
-            eval_res = self.evaluate_business_changes(business)
+            self.evaluate_business_changes(business)
             stored_signals = self.monitoring_repo.list_signals(
                 business_id=business.id,
                 include_suppressed=False,
@@ -222,6 +227,7 @@ class ProactiveMonitoringService:
                     event_id=s.event_id,
                     business_id=s.business_id,
                     event_type=s.event_type,
+                    event_nature=getattr(s, "event_nature", "WARNING"),
                     source=s.source,
                     relevant_entity=s.relevant_entity,
                     detected_at=s.detected_at.isoformat() if s.detected_at else datetime.now(timezone.utc).isoformat(),
@@ -240,6 +246,7 @@ class ProactiveMonitoringService:
                     escalation_level=s.escalation_level,
                     linked_recommendation_id=s.linked_recommendation_id,
                     status=s.status,
+                    resolved_at=s.resolved_at.isoformat() if s.resolved_at else None,
                 )
             )
 

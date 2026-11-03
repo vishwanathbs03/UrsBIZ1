@@ -86,3 +86,17 @@ export {
   type MetricExplorerResult,
   type MetricDictionaryResponse,
 } from "./metrics-dictionary-service";
+
+export {
+  alertsService,
+  type EventSeverity,
+  type EventNature,
+  type EventStatus,
+  type BusinessSignalItem,
+  type AlertListResponse,
+  type AlertSummaryResponse,
+  type AlertStatusUpdate,
+  type AlertAuditHistoryItem,
+  type AlertExplainResponse,
+  type ListAlertsParams,
+} from "./alerts-service";

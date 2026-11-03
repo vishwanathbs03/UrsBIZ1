@@ -11,6 +11,7 @@ from app.models.business_goal import BusinessGoal
 from app.models.business_monitoring import (
     BusinessMonitoringPreferences,
     BusinessSignalEvent,
+    BusinessSignalEventAudit,
     RecommendationRefreshRecord,
 )
 from app.models.certification import Certification
@@ -57,6 +58,7 @@ __all__ = [
     "BusinessDecision",
     "WhatIfScenario",
     "BusinessSignalEvent",
+    "BusinessSignalEventAudit",
     "BusinessMonitoringPreferences",
     "RecommendationRefreshRecord",
 ]

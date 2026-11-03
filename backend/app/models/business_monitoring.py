@@ -2,6 +2,7 @@
 
 Persists:
   - BusinessSignalEvent: Detected business changes, emerging risks, and verified opportunities.
+  - BusinessSignalEventAudit: Immutable audit history of event status transitions.
   - BusinessMonitoringPreferences: Configurable owner monitoring settings (with critical risk protection).
   - RecommendationRefreshRecord: Audit trail of recommendation re-evaluations and priority shifts.
 """
@@ -27,6 +28,7 @@ from app.utils.database import Base
 
 if TYPE_CHECKING:
     from app.models.business import Business
+    from app.models.user import User
 
 
 class BusinessSignalEvent(Base):
@@ -42,6 +44,9 @@ class BusinessSignalEvent(Base):
         index=True,
     )
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    event_nature: Mapped[str] = mapped_column(
+        String(32), default="WARNING", nullable=False, index=True
+    )
     source: Mapped[str] = mapped_column(String(64), nullable=False)
     relevant_entity: Mapped[str | None] = mapped_column(String(128), nullable=True)
     detected_at: Mapped[datetime] = mapped_column(
@@ -72,6 +77,37 @@ class BusinessSignalEvent(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     business: Mapped["Business"] = relationship()
+
+
+class BusinessSignalEventAudit(Base):
+    """Audit log tracking state transitions for a business signal event."""
+
+    __tablename__ = "business_signal_event_audits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    business_id: Mapped[int] = mapped_column(
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    previous_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    new_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    changed_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
+    )
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    business: Mapped["Business"] = relationship()
+    changed_by_user: Mapped["User"] = relationship()
 
 
 class BusinessMonitoringPreferences(Base):

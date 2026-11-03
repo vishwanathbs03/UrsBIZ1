@@ -1,17 +1,18 @@
-"""Pydantic v2 schemas for Proactive AI Business Monitoring & Event-Driven Intelligence (Phase 5).
+"""Pydantic v2 schemas for Proactive AI Business Monitoring & Event-Driven Intelligence (Phase 5 & 6).
 
 Covers:
-  - EventSeverity & MonitoringEventType enums
+  - EventSeverity, EventNature & MonitoringEventType enums
   - BusinessSignalItem & Feed Responses
   - Change Detection Criteria & Evidence Payloads
   - Monitoring Preferences & Update Models
   - Recommendation Refresh Log Schemas
+  - Alert Status Updates, Audits, Summary, and Grounded Explanations (Prompt 6.22)
 """
 
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -25,11 +26,21 @@ class EventSeverity(str, Enum):
     INFORMATIONAL = "INFORMATIONAL"
 
 
+class EventNature(str, Enum):
+    """Classification of the nature of a business event (Audit Item B)."""
+
+    CONFIRMED_EVENT = "CONFIRMED_EVENT"
+    WARNING = "WARNING"
+    ESTIMATE = "ESTIMATE"
+    ASSUMPTION = "ASSUMPTION"
+
+
 class MonitoringEventType(str, Enum):
     """Verified proactive business event types."""
 
     # Revenue & Financial
     REVENUE_DECLINE_DETECTED = "REVENUE_DECLINE_DETECTED"
+    STATISTICAL_REVENUE_DROP = "STATISTICAL_REVENUE_DROP"
     REVENUE_GROWTH_SURGE = "REVENUE_GROWTH_SURGE"
 
     # Customer Dynamics
@@ -39,10 +50,16 @@ class MonitoringEventType(str, Enum):
 
     # Product Performance
     PRODUCT_PERFORMANCE_DETERIORATED = "PRODUCT_PERFORMANCE_DETERIORATED"
+    PRODUCT_VELOCITY_DECELERATION = "PRODUCT_VELOCITY_DECELERATION"
     PRODUCT_MOMENTUM_SURGE = "PRODUCT_MOMENTUM_SURGE"
+
+    # Ingestion & Data Health
+    CSV_UPLOAD_FAILED = "CSV_UPLOAD_FAILED"
+    SALES_DATA_MISSING = "SALES_DATA_MISSING"
 
     # Demand Forecasting
     DEMAND_FORECAST_CHANGED = "DEMAND_FORECAST_CHANGED"
+    STALE_FORECAST = "STALE_FORECAST"
 
     # Business Health & Digital Readiness
     CRITICAL_READINESS_GAP_DETECTED = "CRITICAL_READINESS_GAP_DETECTED"
@@ -61,6 +78,7 @@ class EventStatus(str, Enum):
     NEW = "NEW"
     ACKNOWLEDGED = "ACKNOWLEDGED"
     RESOLVED = "RESOLVED"
+    DISMISSED = "DISMISSED"
     OBSOLETE = "OBSOLETE"
     SUPERSEDED = "SUPERSEDED"
 
@@ -85,6 +103,10 @@ class BusinessSignalItem(BaseModel):
     event_id: str
     business_id: int
     event_type: str
+    event_nature: str = Field(
+        default="WARNING",
+        description="'CONFIRMED_EVENT' | 'WARNING' | 'ESTIMATE' | 'ASSUMPTION'",
+    )
     source: str
     relevant_entity: Optional[str] = None
     detected_at: str
@@ -103,6 +125,7 @@ class BusinessSignalItem(BaseModel):
     escalation_level: int = 0
     linked_recommendation_id: Optional[str] = None
     status: str = "NEW"
+    resolved_at: Optional[str] = None
 
 
 class BusinessSignalsFeedResponse(BaseModel):
@@ -176,3 +199,77 @@ class MonitoringPreferencesUpdate(BaseModel):
     preferred_notification_types: Optional[list[str]] = None
     min_severity: Optional[str] = Field(None, description="'LOW' | 'MEDIUM' | 'HIGH'")
     cooldown_days: Optional[int] = Field(None, ge=1, le=30)
+
+
+# --------------------------------------------------------------------------- #
+# Event Centre Schemas (Prompt 6.22)                                          #
+# --------------------------------------------------------------------------- #
+
+
+class AlertStatusUpdate(BaseModel):
+    """Payload to update an alert's lifecycle status."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ACKNOWLEDGED", "RESOLVED", "DISMISSED"]
+    reason: Optional[str] = Field(None, max_length=500, description="Optional explanation for transition")
+
+
+class AlertAuditHistoryItem(BaseModel):
+    """Single audit entry recording status change."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int
+    event_id: str
+    business_id: int
+    previous_status: str
+    new_status: str
+    changed_by_user_id: int
+    changed_at: str
+    reason: Optional[str] = None
+
+
+class AlertSummaryResponse(BaseModel):
+    """Aggregated counters for business alerts dashboard."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    business_id: int
+    total_alerts: int
+    new_count: int
+    acknowledged_count: int
+    resolved_count: int
+    dismissed_count: int
+    critical_count: int
+    high_count: int
+    medium_count: int
+    low_and_info_count: int
+    confirmed_events_count: int
+    warnings_count: int
+    estimates_count: int
+    assumptions_count: int
+    last_evaluated_at: Optional[str] = None
+
+
+class AlertExplainRequest(BaseModel):
+    """Request payload to explain an alert."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    language: Literal["en", "kn"] = "en"
+
+
+class AlertExplainResponse(BaseModel):
+    """Grounded explanation of an alert."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    event_id: str
+    title: str
+    severity: str
+    event_nature: str
+    explanation: str
+    language: str
+    provider_used: str
+    is_fallback: bool
