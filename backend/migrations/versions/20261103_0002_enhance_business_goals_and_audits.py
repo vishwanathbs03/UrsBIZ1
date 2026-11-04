@@ -119,7 +119,7 @@ def upgrade() -> None:
                 "is_archived",
                 sa.Boolean(),
                 nullable=False,
-                server_default=sa.text("0"),
+                server_default=sa.false(),
             )
         )
         batch_op.add_column(
@@ -219,8 +219,57 @@ def upgrade() -> None:
         unique=False,
     )
 
+    # 3. Create database-level triggers enforcing append-only immutability
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute(sa.text("""
+            CREATE OR REPLACE FUNCTION trg_prevent_business_goal_audits_modification()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                RAISE EXCEPTION 'BusinessGoalAudit records are append-only and cannot be modified or deleted.';
+            END;
+            $$ LANGUAGE plpgsql;
+        """))
+        op.execute(sa.text("""
+            DROP TRIGGER IF EXISTS trg_no_update_business_goal_audits ON business_goal_audits;
+            CREATE TRIGGER trg_no_update_business_goal_audits
+            BEFORE UPDATE ON business_goal_audits
+            FOR EACH ROW EXECUTE FUNCTION trg_prevent_business_goal_audits_modification();
+        """))
+        op.execute(sa.text("""
+            DROP TRIGGER IF EXISTS trg_no_delete_business_goal_audits ON business_goal_audits;
+            CREATE TRIGGER trg_no_delete_business_goal_audits
+            BEFORE DELETE ON business_goal_audits
+            FOR EACH ROW EXECUTE FUNCTION trg_prevent_business_goal_audits_modification();
+        """))
+    else:
+        # SQLite
+        op.execute(sa.text("""
+            CREATE TRIGGER IF NOT EXISTS trg_prevent_business_goal_audits_update
+            BEFORE UPDATE ON business_goal_audits
+            BEGIN
+                SELECT RAISE(ABORT, 'BusinessGoalAudit records are append-only and cannot be updated.');
+            END;
+        """))
+        op.execute(sa.text("""
+            CREATE TRIGGER IF NOT EXISTS trg_prevent_business_goal_audits_delete
+            BEFORE DELETE ON business_goal_audits
+            BEGIN
+                SELECT RAISE(ABORT, 'BusinessGoalAudit records are append-only and cannot be deleted.');
+            END;
+        """))
+
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute(sa.text("DROP TRIGGER IF EXISTS trg_no_update_business_goal_audits ON business_goal_audits;"))
+        op.execute(sa.text("DROP TRIGGER IF EXISTS trg_no_delete_business_goal_audits ON business_goal_audits;"))
+        op.execute(sa.text("DROP FUNCTION IF EXISTS trg_prevent_business_goal_audits_modification();"))
+    else:
+        op.execute(sa.text("DROP TRIGGER IF EXISTS trg_prevent_business_goal_audits_update;"))
+        op.execute(sa.text("DROP TRIGGER IF EXISTS trg_prevent_business_goal_audits_delete;"))
+
     op.drop_index("ix_business_goal_audits_created_at", table_name="business_goal_audits")
     op.drop_index("ix_business_goal_audits_business_id", table_name="business_goal_audits")
     op.drop_index("ix_business_goal_audits_goal_id", table_name="business_goal_audits")

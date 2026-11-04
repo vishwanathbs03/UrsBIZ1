@@ -25,7 +25,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     with op.batch_alter_table("business_decisions") as batch_op:
-        batch_op.add_column(sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.text("0")))
+        batch_op.add_column(sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.false()))
         batch_op.add_column(sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True))
         batch_op.add_column(sa.Column("deleted_by_id", sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column("cancellation_reason", sa.Text(), nullable=True))

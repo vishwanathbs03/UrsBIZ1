@@ -73,7 +73,7 @@ def upgrade() -> None:
         sa.Column("quantity", sa.Float(), nullable=False),
         sa.Column("unit_price", sa.Float(), nullable=False),
         sa.Column("total_amount", sa.Float(), nullable=False),
-        sa.Column("is_duplicate", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_duplicate", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

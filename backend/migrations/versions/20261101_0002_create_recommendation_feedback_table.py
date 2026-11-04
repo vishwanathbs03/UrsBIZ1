@@ -29,7 +29,7 @@ def upgrade() -> None:
         sa.Column("recommendation_id", sa.String(length=100), nullable=False),
         sa.Column("feedback_type", sa.String(length=50), nullable=False),
         sa.Column("outcome_notes", sa.Text(), nullable=True),
-        sa.Column("suppress_recommendation", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("suppress_recommendation", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

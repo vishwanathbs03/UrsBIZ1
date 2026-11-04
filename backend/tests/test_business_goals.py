@@ -17,7 +17,7 @@ Verifies:
 from datetime import date, datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -804,13 +804,25 @@ def test_multi_business_same_owner_isolation(db_session: Session, test_setup, cl
     assert goal_a_id in ids_a_after
     assert goal_b_id not in ids_a_after
 
+    # 5. Explicit invalid/inaccessible active_business_id returns 404 (never silently switches)
+    user1.active_business_id = 99999
+    db_session.commit()
+    resp_invalid = client_a.get("/api/v1/goals")
+    assert resp_invalid.status_code == 404
+    assert "not found or inaccessible" in resp_invalid.json()["detail"]
+
+    # Restore active business
+    user1.active_business_id = biz1.id
+    db_session.commit()
+
 
 def test_verified_zero_sales_vs_incomplete_data(db_session: Session, test_setup, client_a):
     """Verify distinction between verified zero-sales period and incomplete or missing data.
 
     1. Unconfirmed / failed upload -> MISSING_DATA.
     2. Upload date span does not cover observation window -> MISSING_DATA with upload date notice.
-    3. Confirmed upload covers observation window but has 0 transactions -> AVAILABLE with 0.0.
+    3. Boundary transactions without confirmed reporting period -> MISSING_DATA (unconfirmed gap).
+    4. Confirmed upload with explicit verified reporting period metadata -> AVAILABLE with 0.0.
     """
     biz1 = test_setup["biz1"]
     today = date.today()
@@ -884,8 +896,8 @@ def test_verified_zero_sales_vs_incomplete_data(db_session: Session, test_setup,
     assert data_b["current_value"] is None
     assert "has not been uploaded yet" in data_b["data_freshness_warning"]
 
-    # Case C: Confirmed uploads span from 10 days ago to today.
-    # We define a goal specifically for a 3-day sub-window (5 days ago to 2 days ago) where ZERO sales happened.
+    # Case C: Confirmed uploads span from 10 days ago to today, BUT NO confirmed reporting period exists.
+    # Proves having transactions at endpoints (10 days ago and today) DOES NOT misclassify intervening days as zero sales.
     recent_upload = SalesUpload(
         business_id=biz1.id,
         filename="recent_sales.csv",
@@ -925,13 +937,13 @@ def test_verified_zero_sales_vs_incomplete_data(db_session: Session, test_setup,
     db_session.add_all([t_start, t_end])
     db_session.commit()
 
-    # Goal window between 5 days ago and 2 days ago: completely encompassed within uploaded ledger span [10 days ago .. today]
+    # Goal window between 5 days ago and 2 days ago: encompassed by endpoints, but lacks confirmed reporting period.
     w_start = today - timedelta(days=5)
     w_target = today - timedelta(days=2)
     resp_c = client_a.post(
         "/api/v1/goals",
         json={
-            "title": "Mid-week Window Verified Zero Revenue",
+            "title": "Mid-week Window Without Coverage Metadata",
             "metric_key": "revenue",
             "target_value": 50000.0,
             "start_date": w_start.isoformat(),
@@ -940,18 +952,58 @@ def test_verified_zero_sales_vs_incomplete_data(db_session: Session, test_setup,
     )
     assert resp_c.status_code == 201
     data_c = resp_c.json()
-    assert data_c["data_availability"] == "AVAILABLE"
-    assert data_c["current_value"] == 0.0
-    assert data_c["progress_pct"] == 0.0
-    assert "Verified zero transactions" in data_c["evidence_source"]
+    assert data_c["data_availability"] == "MISSING_DATA"
+    assert data_c["current_value"] is None
+    assert "Unconfirmed Coverage Gap" in data_c["evidence_source"]
+    assert "No confirmed reporting period or daily completeness" in data_c["data_freshness_warning"]
+
+    # Case D: Confirmed upload explicitly provides verified reporting period coverage in upload metadata.
+    # Only with explicit coverage metadata can zero matching transactions be verified as zero sales.
+    covered_upload = SalesUpload(
+        business_id=biz1.id,
+        filename="daily_complete_sales.csv",
+        file_format="csv",
+        file_size_bytes=2048,
+        status="completed",
+        row_count=1,
+        valid_row_count=1,
+        quality_summary={
+            "confirmed_reporting_period": {
+                "start_date": (today - timedelta(days=7)).isoformat(),
+                "end_date": today.isoformat(),
+                "is_complete": True,
+            },
+            "daily_completeness_confirmed": True,
+        },
+    )
+    db_session.add(covered_upload)
+    db_session.commit()
+
+    resp_d = client_a.post(
+        "/api/v1/goals",
+        json={
+            "title": "Mid-week Window With Confirmed Period",
+            "metric_key": "revenue",
+            "target_value": 50000.0,
+            "start_date": w_start.isoformat(),
+            "target_date": w_target.isoformat(),
+        },
+    )
+    assert resp_d.status_code == 201
+    data_d = resp_d.json()
+    assert data_d["data_availability"] == "AVAILABLE"
+    assert data_d["current_value"] == 0.0
+    assert data_d["progress_pct"] == 0.0
+    assert "Verified zero transactions in confirmed reporting period" in data_d["evidence_source"]
 
 
 def test_audit_trail_immutability_and_snapshots(db_session: Session, test_setup, client_a):
     """Verify that audit records are strictly append-only and snapshots capture complete provenance.
 
-    1. Updating or deleting an audit record raises ValueError.
-    2. Snapshot contains metric_key, observation_window, measurement_method, evidence_source, calculation_details.
-    3. Status changes capture accurate old_status and new_status.
+    1. ORM-level updates/deletes are blocked by SQLAlchemy event listeners.
+    2. Database-level updates/deletes via raw SQL are blocked by database triggers.
+    3. Snapshot contains metric_key, observation_window, measurement_method, evidence_source, calculation_details.
+    4. Status changes capture accurate old_status and new_status.
     """
     # 1. Create a goal
     resp = client_a.post(
@@ -1001,18 +1053,27 @@ def test_audit_trail_immutability_and_snapshots(db_session: Session, test_setup,
     assert "calculation_details" in snapshot
     assert snapshot["calculation_details"]["target_value"] == 250000.0
 
-    # 5. Direct database immutability check
+    # 5. ORM-level immutability check
     db_audit = db_session.query(BusinessGoalAudit).filter(BusinessGoalAudit.goal_id == goal_id).first()
     assert db_audit is not None
 
-    # Attempting to update db_audit should raise ValueError
     db_audit.notes = "Tampered notes"
     with pytest.raises(ValueError, match="append-only and cannot be updated"):
         db_session.commit()
     db_session.rollback()
 
-    # Attempting to delete db_audit should raise ValueError
     db_session.delete(db_audit)
     with pytest.raises(ValueError, match="append-only and cannot be deleted"):
+        db_session.commit()
+    db_session.rollback()
+
+    # 6. Database-level trigger immutability check (raw SQL)
+    with pytest.raises(Exception):
+        db_session.execute(text(f"UPDATE business_goal_audits SET notes='raw_sql_tampered' WHERE id={db_audit.id}"))
+        db_session.commit()
+    db_session.rollback()
+
+    with pytest.raises(Exception):
+        db_session.execute(text(f"DELETE FROM business_goal_audits WHERE id={db_audit.id}"))
         db_session.commit()
     db_session.rollback()

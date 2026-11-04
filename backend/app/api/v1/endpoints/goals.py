@@ -38,8 +38,11 @@ router = APIRouter(prefix="/goals", tags=["business-goals"])
 def _get_active_business(user: User, db: Session) -> Business:
     """Resolve active business for authenticated user enforcing strict tenant isolation.
 
-    Checks user.active_business_id first, falling back to the user's most recently
-    created business if active_business_id is unset or not found.
+    If user.active_business_id is explicitly set:
+        Must resolve to an accessible business owned by the user. If not found or
+        unauthorized, raises 404 immediately to prevent silent business switching.
+    If user.active_business_id is None (unselected):
+        Falls back to the user's most recently created business.
     """
     repo = BusinessRepository(db)
     if user.active_business_id is not None:
@@ -48,6 +51,12 @@ def _get_active_business(user: User, db: Session) -> Business:
         )
         if direct is not None:
             return direct
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Active business profile {user.active_business_id} not found or inaccessible for current user.",
+        )
+
+    # Initial onboarding fallback when active_business_id was never set
     rows = repo.list_for_owner(user.id)
     if rows:
         return rows[-1]

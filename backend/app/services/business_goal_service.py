@@ -568,6 +568,74 @@ class BusinessGoalService:
             snapshot["extra"] = extra
         return snapshot
 
+    @staticmethod
+    def _is_period_covered_by_metadata(
+        uploads: list[SalesUpload],
+        window_start: date,
+        window_end: date,
+    ) -> bool:
+        """Check if any confirmed upload provides explicit coverage metadata for the window.
+
+        Accepts:
+          - quality_summary["confirmed_reporting_period"]: {"start_date": "...", "end_date": "...", "is_complete": True}
+          - quality_summary["daily_completeness_confirmed"]: True with coverage_start_date/coverage_end_date
+          - quality_summary["covered_dates"] or quality_summary["daily_coverage_dates"] encompassing all window dates
+        """
+        for u in uploads:
+            qs = u.quality_summary
+            if not qs or not isinstance(qs, dict):
+                continue
+
+            # Pattern 1: Explicit confirmed reporting period dict
+            crp = qs.get("confirmed_reporting_period")
+            if isinstance(crp, dict):
+                try:
+                    s_val = crp.get("start_date") or crp.get("period_start")
+                    e_val = crp.get("end_date") or crp.get("period_end")
+                    is_comp = crp.get("is_complete", True)
+                    if s_val and e_val and is_comp:
+                        s_d = date.fromisoformat(str(s_val)) if isinstance(s_val, str) else s_val
+                        e_d = date.fromisoformat(str(e_val)) if isinstance(e_val, str) else e_val
+                        if s_d <= window_start and e_d >= window_end:
+                            return True
+                except Exception:
+                    pass
+
+            # Pattern 2: Top-level reporting period confirmation
+            if qs.get("daily_completeness_confirmed") or qs.get("reporting_period_confirmed"):
+                s_val = qs.get("coverage_start_date") or qs.get("reporting_period_start") or qs.get("start_date")
+                e_val = qs.get("coverage_end_date") or qs.get("reporting_period_end") or qs.get("end_date")
+                if s_val and e_val:
+                    try:
+                        s_d = date.fromisoformat(str(s_val)) if isinstance(s_val, str) else s_val
+                        e_d = date.fromisoformat(str(e_val)) if isinstance(e_val, str) else e_val
+                        if s_d <= window_start and e_d >= window_end:
+                            return True
+                    except Exception:
+                        pass
+
+            # Pattern 3: Explicit daily completeness records / covered dates
+            covered_dates = qs.get("covered_dates") or qs.get("daily_coverage_dates")
+            if isinstance(covered_dates, list) and covered_dates:
+                try:
+                    date_set = {
+                        date.fromisoformat(str(d)) if isinstance(d, str) else d
+                        for d in covered_dates
+                    }
+                    cur = window_start
+                    all_covered = True
+                    while cur <= window_end:
+                        if cur not in date_set:
+                            all_covered = False
+                            break
+                        cur += timedelta(days=1)
+                    if all_covered:
+                        return True
+                except Exception:
+                    pass
+
+        return False
+
     def _inspect_sales_coverage(
         self,
         business_id: int,
@@ -581,12 +649,12 @@ class BusinessGoalService:
         """
         # 1. Check if business has ANY confirmed sales uploads
         confirmed_uploads = (
-            self.db.query(SalesUpload.id)
+            self.db.query(SalesUpload)
             .filter(
                 SalesUpload.business_id == business_id,
                 SalesUpload.status.in_(["processed", "partial_success", "completed"]),
             )
-            .first()
+            .all()
         )
         if not confirmed_uploads:
             # Check if unconfirmed/pending/failed uploads exist
@@ -652,11 +720,26 @@ class BusinessGoalService:
                 f"Authoritative Sales Ledger (No Historical Records Preceding {min_d.strftime('%Y-%m-%d')})",
             )
 
-        # Window is legitimately encompassed within the uploaded ledger date span, but 0 transactions occurred:
+        # 3. Establish coverage from reliable upload metadata
+        # Having transactions on boundary dates does not prove intervening dates were recorded.
+        # We require an explicitly confirmed reporting period or daily completeness record.
+        has_verified_coverage = self._is_period_covered_by_metadata(
+            confirmed_uploads, window_start, window_end
+        )
+
+        if has_verified_coverage:
+            return (
+                GoalDataAvailability.AVAILABLE,
+                None,
+                f"Authoritative Ingested Sales Transactions (Verified zero transactions in confirmed reporting period {window_start} to {window_end})",
+            )
+
+        # No confirmed reporting period metadata establishing that intervening dates were complete
         return (
-            GoalDataAvailability.AVAILABLE,
-            None,
-            f"Authoritative Ingested Sales Transactions (Verified zero transactions between {window_start} and {window_end})",
+            GoalDataAvailability.MISSING_DATA,
+            f"No confirmed reporting period or daily completeness record covers this observation window ({window_start} to {window_end}). "
+            "Zero transactions cannot be verified without upload coverage metadata.",
+            "Authoritative Sales Ledger (Unconfirmed Coverage Gap)",
         )
 
     def _evaluate_metric(

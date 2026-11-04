@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    DDL,
     Float,
     ForeignKey,
     Integer,
@@ -159,12 +160,40 @@ class BusinessGoalAudit(Base):
 
 @event.listens_for(BusinessGoalAudit, "before_update")
 def _prevent_goal_audit_update(mapper: Any, connection: Any, target: BusinessGoalAudit) -> None:
-    """Enforce append-only immutability. Historical goal audit snapshots cannot be updated."""
+    """Enforce append-only immutability at ORM level. Historical goal audit snapshots cannot be updated."""
     raise ValueError("BusinessGoalAudit records are append-only and cannot be updated.")
 
 
 @event.listens_for(BusinessGoalAudit, "before_delete")
 def _prevent_goal_audit_delete(mapper: Any, connection: Any, target: BusinessGoalAudit) -> None:
-    """Enforce append-only immutability. Historical goal audit snapshots cannot be deleted."""
+    """Enforce append-only immutability at ORM level. Historical goal audit snapshots cannot be deleted."""
     raise ValueError("BusinessGoalAudit records are append-only and cannot be deleted.")
+
+
+# Database-level triggers ensuring append-only immutability against raw SQL and bulk operations
+_sqlite_update_trigger = DDL("""
+CREATE TRIGGER IF NOT EXISTS trg_prevent_business_goal_audits_update
+BEFORE UPDATE ON business_goal_audits
+BEGIN
+    SELECT RAISE(ABORT, 'BusinessGoalAudit records are append-only and cannot be updated.');
+END;
+""")
+event.listen(
+    BusinessGoalAudit.__table__,
+    "after_create",
+    _sqlite_update_trigger.execute_if(dialect="sqlite"),
+)
+
+_sqlite_delete_trigger = DDL("""
+CREATE TRIGGER IF NOT EXISTS trg_prevent_business_goal_audits_delete
+BEFORE DELETE ON business_goal_audits
+BEGIN
+    SELECT RAISE(ABORT, 'BusinessGoalAudit records are append-only and cannot be deleted.');
+END;
+""")
+event.listen(
+    BusinessGoalAudit.__table__,
+    "after_create",
+    _sqlite_delete_trigger.execute_if(dialect="sqlite"),
+)
 
