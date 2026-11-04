@@ -997,6 +997,170 @@ def test_verified_zero_sales_vs_incomplete_data(db_session: Session, test_setup,
     assert "Verified zero transactions in confirmed reporting period" in data_d["evidence_source"]
 
 
+def test_completeness_default_prevents_false_zero(db_session: Session, test_setup, client_a):
+    """Regression test: Omitting 'is_complete' or setting 'is_complete: False' in confirmed_reporting_period
+    must NEVER default to True or produce a false verified-zero result.
+    
+    1. Ledger has transactions on boundaries (10 days ago and today), with zero transactions in between.
+    2. Upload metadata covers the window dates, but 'is_complete' is omitted -> MISSING_DATA (Unconfirmed Coverage Gap).
+    3. Upload metadata has explicit 'is_complete: False' -> MISSING_DATA (Unconfirmed Coverage Gap).
+    4. Only when 'is_complete: True' is explicitly affirmed -> AVAILABLE with 0.0.
+    """
+    biz1 = test_setup["biz1"]
+    today = date.today()
+    w_start = today - timedelta(days=6)
+    w_target = today - timedelta(days=3)
+
+    # Base upload with transactions at 10 days ago and today
+    base_upload = SalesUpload(
+        business_id=biz1.id,
+        filename="base_sales.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        status="completed",
+        row_count=2,
+        valid_row_count=2,
+    )
+    db_session.add(base_upload)
+    db_session.commit()
+
+    t_start = SalesTransaction(
+        upload_id=base_upload.id,
+        business_id=biz1.id,
+        transaction_date=datetime.combine(today - timedelta(days=10), datetime.min.time()),
+        customer_name="Start Cust",
+        total_amount=10000.0,
+        quantity=1,
+        unit_price=10000.0,
+        product_name="Product Alpha",
+        is_duplicate=False,
+    )
+    t_end = SalesTransaction(
+        upload_id=base_upload.id,
+        business_id=biz1.id,
+        transaction_date=datetime.combine(today, datetime.min.time()),
+        customer_name="End Cust",
+        total_amount=12000.0,
+        quantity=1,
+        unit_price=12000.0,
+        product_name="Product Beta",
+        is_duplicate=False,
+    )
+    db_session.add_all([t_start, t_end])
+    db_session.commit()
+
+    # 1. Upload covering dates, but 'is_complete' is omitted completely
+    upload_omitted = SalesUpload(
+        business_id=biz1.id,
+        filename="sales_omitted_completeness.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        status="completed",
+        row_count=0,
+        valid_row_count=0,
+        quality_summary={
+            "confirmed_reporting_period": {
+                "start_date": (today - timedelta(days=7)).isoformat(),
+                "end_date": today.isoformat(),
+                # 'is_complete' is deliberately omitted!
+            }
+        },
+    )
+    db_session.add(upload_omitted)
+    db_session.commit()
+
+    resp_omitted = client_a.post(
+        "/api/v1/goals",
+        json={
+            "title": "Window with Omitted Completeness",
+            "metric_key": "revenue",
+            "target_value": 50000.0,
+            "start_date": w_start.isoformat(),
+            "target_date": w_target.isoformat(),
+        },
+    )
+    assert resp_omitted.status_code == 201
+    data_omitted = resp_omitted.json()
+    assert data_omitted["data_availability"] == "MISSING_DATA"
+    assert data_omitted["current_value"] is None
+    assert "Unconfirmed Coverage Gap" in data_omitted["evidence_source"]
+    assert "No confirmed reporting period or daily completeness" in data_omitted["data_freshness_warning"]
+
+    # 2. Upload with explicit 'is_complete': False
+    upload_incomplete = SalesUpload(
+        business_id=biz1.id,
+        filename="sales_explicit_incomplete.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        status="completed",
+        row_count=0,
+        valid_row_count=0,
+        quality_summary={
+            "confirmed_reporting_period": {
+                "start_date": (today - timedelta(days=7)).isoformat(),
+                "end_date": today.isoformat(),
+                "is_complete": False,
+            }
+        },
+    )
+    db_session.add(upload_incomplete)
+    db_session.commit()
+
+    resp_inc = client_a.post(
+        "/api/v1/goals",
+        json={
+            "title": "Window with Incomplete Period",
+            "metric_key": "revenue",
+            "target_value": 50000.0,
+            "start_date": w_start.isoformat(),
+            "target_date": w_target.isoformat(),
+        },
+    )
+    assert resp_inc.status_code == 201
+    data_inc = resp_inc.json()
+    assert data_inc["data_availability"] == "MISSING_DATA"
+    assert data_inc["current_value"] is None
+    assert "Unconfirmed Coverage Gap" in data_inc["evidence_source"]
+    assert "No confirmed reporting period or daily completeness" in data_inc["data_freshness_warning"]
+
+    # 3. Upload with explicit 'is_complete': True -> Now verified zero sales is permitted
+    upload_complete = SalesUpload(
+        business_id=biz1.id,
+        filename="sales_explicit_complete.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        status="completed",
+        row_count=0,
+        valid_row_count=0,
+        quality_summary={
+            "confirmed_reporting_period": {
+                "start_date": (today - timedelta(days=7)).isoformat(),
+                "end_date": today.isoformat(),
+                "is_complete": True,
+            }
+        },
+    )
+    db_session.add(upload_complete)
+    db_session.commit()
+
+    resp_comp = client_a.post(
+        "/api/v1/goals",
+        json={
+            "title": "Window with Complete Period",
+            "metric_key": "revenue",
+            "target_value": 50000.0,
+            "start_date": w_start.isoformat(),
+            "target_date": w_target.isoformat(),
+        },
+    )
+    assert resp_comp.status_code == 201
+    data_comp = resp_comp.json()
+    assert data_comp["data_availability"] == "AVAILABLE"
+    assert data_comp["current_value"] == 0.0
+    assert data_comp["progress_pct"] == 0.0
+    assert "Verified zero transactions in confirmed reporting period" in data_comp["evidence_source"]
+
+
 def test_audit_trail_immutability_and_snapshots(db_session: Session, test_setup, client_a):
     """Verify that audit records are strictly append-only and snapshots capture complete provenance.
 

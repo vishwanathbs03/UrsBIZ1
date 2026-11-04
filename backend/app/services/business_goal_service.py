@@ -592,8 +592,11 @@ class BusinessGoalService:
                 try:
                     s_val = crp.get("start_date") or crp.get("period_start")
                     e_val = crp.get("end_date") or crp.get("period_end")
-                    is_comp = crp.get("is_complete", True)
-                    if s_val and e_val and is_comp:
+                    # Completeness MUST be explicitly True; NEVER default to True
+                    is_comp = crp.get("is_complete")
+                    if is_comp is None:
+                        is_comp = crp.get("daily_complete")
+                    if is_comp is True and s_val and e_val:
                         s_d = date.fromisoformat(str(s_val)) if isinstance(s_val, str) else s_val
                         e_d = date.fromisoformat(str(e_val)) if isinstance(e_val, str) else e_val
                         if s_d <= window_start and e_d >= window_end:
@@ -601,8 +604,8 @@ class BusinessGoalService:
                 except Exception:
                     pass
 
-            # Pattern 2: Top-level reporting period confirmation
-            if qs.get("daily_completeness_confirmed") or qs.get("reporting_period_confirmed"):
+            # Pattern 2: Top-level daily completeness confirmation
+            if qs.get("daily_completeness_confirmed") is True:
                 s_val = qs.get("coverage_start_date") or qs.get("reporting_period_start") or qs.get("start_date")
                 e_val = qs.get("coverage_end_date") or qs.get("reporting_period_end") or qs.get("end_date")
                 if s_val and e_val:
