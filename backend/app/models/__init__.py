@@ -7,7 +7,7 @@ autogenerate see them in a single import.
 from app.models.action_item import ActionItem
 from app.models.business import Business
 from app.models.business_challenge import BusinessChallenge
-from app.models.business_goal import BusinessGoal
+from app.models.business_goal import BusinessGoal, BusinessGoalAudit
 from app.models.business_monitoring import (
     BusinessMonitoringPreferences,
     BusinessSignalEvent,
@@ -40,6 +40,7 @@ __all__ = [
     "DigitalPresence",
     "ExportHistory",
     "BusinessGoal",
+    "BusinessGoalAudit",
     "BusinessChallenge",
     "ChatSession",
     "ChatMessage",

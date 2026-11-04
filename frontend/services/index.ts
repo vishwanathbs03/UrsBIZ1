@@ -100,3 +100,22 @@ export {
   type AlertExplainResponse,
   type ListAlertsParams,
 } from "./alerts-service";
+
+export {
+  goalsService,
+  type GoalMeasurementMethod,
+  type GoalStatus,
+  type GoalDataAvailability,
+  type GoalMetricKey,
+  type RelatedItem,
+  type BusinessGoalAudit,
+  type BusinessGoal,
+  type BusinessGoalListResponse,
+  type BusinessGoalCreate,
+  type BusinessGoalUpdate,
+  type BusinessGoalStatusUpdate,
+  type BusinessGoalManualProgress,
+  type GoalAIExplanationResponse,
+  type ListGoalsParams,
+} from "./goals-service";
+

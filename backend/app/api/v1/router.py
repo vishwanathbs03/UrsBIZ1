@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     finance,
     forecasting,
     funding,
+    goals,
     growth,
     health,
     insights,
@@ -92,3 +93,4 @@ api_router.include_router(forecasting.router)
 api_router.include_router(what_if_scenario.router)
 api_router.include_router(data_confidence.router)
 api_router.include_router(metrics_dictionary.router)
+api_router.include_router(goals.router)
