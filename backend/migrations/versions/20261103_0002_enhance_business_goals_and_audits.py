@@ -103,7 +103,16 @@ def upgrade() -> None:
             sa.Column("last_evaluated_at", sa.DateTime(timezone=True), nullable=True)
         )
         batch_op.add_column(
-            sa.Column("created_by_user_id", sa.Integer(), nullable=True)
+            sa.Column(
+                "created_by_user_id",
+                sa.Integer(),
+                sa.ForeignKey(
+                    "users.id",
+                    name="fk_business_goals_created_by_user_id",
+                    ondelete="SET NULL",
+                ),
+                nullable=True,
+            )
         )
         batch_op.add_column(
             sa.Column(
@@ -117,7 +126,16 @@ def upgrade() -> None:
             sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True)
         )
         batch_op.add_column(
-            sa.Column("archived_by_user_id", sa.Integer(), nullable=True)
+            sa.Column(
+                "archived_by_user_id",
+                sa.Integer(),
+                sa.ForeignKey(
+                    "users.id",
+                    name="fk_business_goals_archived_by_user_id",
+                    ondelete="SET NULL",
+                ),
+                nullable=True,
+            )
         )
 
         batch_op.create_index(

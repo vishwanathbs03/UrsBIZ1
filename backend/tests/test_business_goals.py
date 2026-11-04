@@ -708,3 +708,311 @@ def test_cross_module_action_and_recommendation_integration(db_session: Session,
     assert len(data["related_recommendations"]) >= 1
     rec_ids = [r["id"] for r in data["related_recommendations"]]
     assert "rec_diversify_suppliers" in rec_ids
+
+
+def test_multi_business_same_owner_isolation(db_session: Session, test_setup, client_a):
+    """Verify strict tenant isolation between two businesses owned by the SAME user.
+
+    When active_business_id changes:
+    1. Goals created under Business A are not visible under Business B.
+    2. Direct access to Business A's goal while Business B is active returns 404.
+    3. Goals created under Business B belong strictly to Business B.
+    """
+    user1 = test_setup["user1"]
+    biz1 = test_setup["biz1"]
+
+    # Create second business owned by user1
+    biz1_second = Business(
+        owner_id=user1.id,
+        legal_name="Enterprise Alpha Logistics Pvt Ltd",
+        trade_name="Alpha Logistics",
+        industry="Logistics",
+        state_region="Karnataka",
+        established_year=2022,
+        employee_count=5,
+        annual_revenue=1500000.0,
+    )
+    db_session.add(biz1_second)
+    db_session.commit()
+    db_session.refresh(biz1_second)
+
+    # 1. Ensure user1.active_business_id is biz1.id
+    user1.active_business_id = biz1.id
+    db_session.commit()
+
+    # Create goal for Business 1
+    resp_create_a = client_a.post(
+        "/api/v1/goals",
+        json={
+            "title": "Alpha Primary Goal",
+            "metric_key": "monthly_revenue",
+            "target_value": 500000.0,
+        },
+    )
+    assert resp_create_a.status_code == 201
+    goal_a_id = resp_create_a.json()["id"]
+    assert resp_create_a.json()["business_id"] == biz1.id
+
+    # List goals for Business 1
+    resp_list_a = client_a.get("/api/v1/goals")
+    assert resp_list_a.status_code == 200
+    ids_a = [g["id"] for g in resp_list_a.json()["items"]]
+    assert goal_a_id in ids_a
+
+    # 2. Switch user1's active_business_id to biz1_second.id
+    user1.active_business_id = biz1_second.id
+    db_session.commit()
+
+    # List goals for Business 1_second -> should NOT list Business 1's goal
+    resp_list_b = client_a.get("/api/v1/goals")
+    assert resp_list_b.status_code == 200
+    ids_b = [g["id"] for g in resp_list_b.json()["items"]]
+    assert goal_a_id not in ids_b
+    assert len(ids_b) == 0
+
+    # Direct fetch of goal_a_id while Business 1_second is active should return 404
+    resp_get_direct = client_a.get(f"/api/v1/goals/{goal_a_id}")
+    assert resp_get_direct.status_code == 404
+
+    # 3. Create goal for Business 1_second
+    resp_create_b = client_a.post(
+        "/api/v1/goals",
+        json={
+            "title": "Alpha Logistics Secondary Goal",
+            "metric_key": "monthly_revenue",
+            "target_value": 200000.0,
+        },
+    )
+    assert resp_create_b.status_code == 201
+    goal_b_id = resp_create_b.json()["id"]
+    assert resp_create_b.json()["business_id"] == biz1_second.id
+
+    # List goals for Business 1_second -> only goal_b_id
+    resp_list_b_after = client_a.get("/api/v1/goals")
+    assert resp_list_b_after.status_code == 200
+    ids_b_after = [g["id"] for g in resp_list_b_after.json()["items"]]
+    assert goal_b_id in ids_b_after
+    assert goal_a_id not in ids_b_after
+
+    # 4. Switch back to biz1.id
+    user1.active_business_id = biz1.id
+    db_session.commit()
+
+    resp_list_a_after = client_a.get("/api/v1/goals")
+    assert resp_list_a_after.status_code == 200
+    ids_a_after = [g["id"] for g in resp_list_a_after.json()["items"]]
+    assert goal_a_id in ids_a_after
+    assert goal_b_id not in ids_a_after
+
+
+def test_verified_zero_sales_vs_incomplete_data(db_session: Session, test_setup, client_a):
+    """Verify distinction between verified zero-sales period and incomplete or missing data.
+
+    1. Unconfirmed / failed upload -> MISSING_DATA.
+    2. Upload date span does not cover observation window -> MISSING_DATA with upload date notice.
+    3. Confirmed upload covers observation window but has 0 transactions -> AVAILABLE with 0.0.
+    """
+    biz1 = test_setup["biz1"]
+    today = date.today()
+
+    # Case A: Only failed / unconfirmed upload exists
+    failed_upload = SalesUpload(
+        business_id=biz1.id,
+        filename="corrupted_ledger.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        status="failed",
+        row_count=0,
+    )
+    db_session.add(failed_upload)
+    db_session.commit()
+
+    resp_a = client_a.post(
+        "/api/v1/goals",
+        json={
+            "title": "Revenue with failed upload",
+            "metric_key": "monthly_revenue",
+            "target_value": 100000.0,
+        },
+    )
+    assert resp_a.status_code == 201
+    data_a = resp_a.json()
+    assert data_a["data_availability"] == "MISSING_DATA"
+    assert data_a["current_value"] is None
+    assert "unconfirmed or failed" in data_a["data_freshness_warning"]
+
+    # Case B: Confirmed upload exists, but all transactions are from 180 days ago (window is in future relative to data)
+    past_upload = SalesUpload(
+        business_id=biz1.id,
+        filename="historical_sales.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        status="completed",
+        row_count=1,
+        valid_row_count=1,
+    )
+    db_session.add(past_upload)
+    db_session.commit()
+
+    past_date = today - timedelta(days=180)
+    past_txn = SalesTransaction(
+        upload_id=past_upload.id,
+        business_id=biz1.id,
+        transaction_date=datetime.combine(past_date, datetime.min.time()),
+        customer_name="Old Customer",
+        total_amount=50000.0,
+        quantity=1,
+        unit_price=50000.0,
+        product_name="Historical Product",
+        is_duplicate=False,
+    )
+    db_session.add(past_txn)
+    db_session.commit()
+
+    # Monthly revenue goal defaults to current month which is > past_date
+    resp_b = client_a.post(
+        "/api/v1/goals",
+        json={
+            "title": "Current Month Revenue Awaiting New Ingestion",
+            "metric_key": "monthly_revenue",
+            "target_value": 100000.0,
+        },
+    )
+    assert resp_b.status_code == 201
+    data_b = resp_b.json()
+    assert data_b["data_availability"] == "MISSING_DATA"
+    assert data_b["current_value"] is None
+    assert "has not been uploaded yet" in data_b["data_freshness_warning"]
+
+    # Case C: Confirmed uploads span from 10 days ago to today.
+    # We define a goal specifically for a 3-day sub-window (5 days ago to 2 days ago) where ZERO sales happened.
+    recent_upload = SalesUpload(
+        business_id=biz1.id,
+        filename="recent_sales.csv",
+        file_format="csv",
+        file_size_bytes=1024,
+        status="completed",
+        row_count=2,
+        valid_row_count=2,
+    )
+    db_session.add(recent_upload)
+    db_session.commit()
+
+    # Transaction 1: 10 days ago
+    t_start = SalesTransaction(
+        upload_id=recent_upload.id,
+        business_id=biz1.id,
+        transaction_date=datetime.combine(today - timedelta(days=10), datetime.min.time()),
+        customer_name="Start Cust",
+        total_amount=10000.0,
+        quantity=1,
+        unit_price=10000.0,
+        product_name="Product Alpha",
+        is_duplicate=False,
+    )
+    # Transaction 2: today
+    t_end = SalesTransaction(
+        upload_id=recent_upload.id,
+        business_id=biz1.id,
+        transaction_date=datetime.combine(today, datetime.min.time()),
+        customer_name="End Cust",
+        total_amount=12000.0,
+        quantity=1,
+        unit_price=12000.0,
+        product_name="Product Beta",
+        is_duplicate=False,
+    )
+    db_session.add_all([t_start, t_end])
+    db_session.commit()
+
+    # Goal window between 5 days ago and 2 days ago: completely encompassed within uploaded ledger span [10 days ago .. today]
+    w_start = today - timedelta(days=5)
+    w_target = today - timedelta(days=2)
+    resp_c = client_a.post(
+        "/api/v1/goals",
+        json={
+            "title": "Mid-week Window Verified Zero Revenue",
+            "metric_key": "revenue",
+            "target_value": 50000.0,
+            "start_date": w_start.isoformat(),
+            "target_date": w_target.isoformat(),
+        },
+    )
+    assert resp_c.status_code == 201
+    data_c = resp_c.json()
+    assert data_c["data_availability"] == "AVAILABLE"
+    assert data_c["current_value"] == 0.0
+    assert data_c["progress_pct"] == 0.0
+    assert "Verified zero transactions" in data_c["evidence_source"]
+
+
+def test_audit_trail_immutability_and_snapshots(db_session: Session, test_setup, client_a):
+    """Verify that audit records are strictly append-only and snapshots capture complete provenance.
+
+    1. Updating or deleting an audit record raises ValueError.
+    2. Snapshot contains metric_key, observation_window, measurement_method, evidence_source, calculation_details.
+    3. Status changes capture accurate old_status and new_status.
+    """
+    # 1. Create a goal
+    resp = client_a.post(
+        "/api/v1/goals",
+        json={
+            "title": "Audit Snapshot Verification Goal",
+            "metric_key": "monthly_revenue",
+            "baseline_value": 0.0,
+            "target_value": 250000.0,
+            "unit": "INR",
+        },
+    )
+    assert resp.status_code == 201
+    goal_id = resp.json()["id"]
+
+    # 2. Transition status: ACTIVE -> PAUSED
+    resp_pause = client_a.post(
+        f"/api/v1/goals/{goal_id}/status",
+        json={"status": "PAUSED", "notes": "Paused for seasonal maintenance"},
+    )
+    assert resp_pause.status_code == 200
+
+    # 3. Transition status: PAUSED -> ACTIVE
+    resp_resume = client_a.post(
+        f"/api/v1/goals/{goal_id}/status",
+        json={"status": "ACTIVE", "notes": "Resumed after seasonal review"},
+    )
+    assert resp_resume.status_code == 200
+
+    # 4. Fetch audit history via API
+    resp_history = client_a.get(f"/api/v1/goals/{goal_id}/history")
+    assert resp_history.status_code == 200
+    audits = resp_history.json()
+    assert len(audits) >= 3
+
+    # Check pause transition audit record
+    pause_audit = next((a for a in audits if a["action"] == "STATUS_CHANGED" and a["new_status"] == "PAUSED"), None)
+    assert pause_audit is not None
+    assert pause_audit["old_status"] == "ACTIVE"
+    assert pause_audit["new_status"] == "PAUSED"
+    assert pause_audit["snapshot_data"] is not None
+    snapshot = pause_audit["snapshot_data"]
+    assert snapshot["metric_key"] == "monthly_revenue"
+    assert "observation_window" in snapshot
+    assert "measurement_method" in snapshot
+    assert "evidence_source" in snapshot
+    assert "calculation_details" in snapshot
+    assert snapshot["calculation_details"]["target_value"] == 250000.0
+
+    # 5. Direct database immutability check
+    db_audit = db_session.query(BusinessGoalAudit).filter(BusinessGoalAudit.goal_id == goal_id).first()
+    assert db_audit is not None
+
+    # Attempting to update db_audit should raise ValueError
+    db_audit.notes = "Tampered notes"
+    with pytest.raises(ValueError, match="append-only and cannot be updated"):
+        db_session.commit()
+    db_session.rollback()
+
+    # Attempting to delete db_audit should raise ValueError
+    db_session.delete(db_audit)
+    with pytest.raises(ValueError, match="append-only and cannot be deleted"):
+        db_session.commit()
+    db_session.rollback()

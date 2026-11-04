@@ -20,6 +20,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    event,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -154,3 +155,16 @@ class BusinessGoalAudit(Base):
 
     # Relationships
     goal: Mapped[BusinessGoal | None] = relationship(back_populates="audits")
+
+
+@event.listens_for(BusinessGoalAudit, "before_update")
+def _prevent_goal_audit_update(mapper: Any, connection: Any, target: BusinessGoalAudit) -> None:
+    """Enforce append-only immutability. Historical goal audit snapshots cannot be updated."""
+    raise ValueError("BusinessGoalAudit records are append-only and cannot be updated.")
+
+
+@event.listens_for(BusinessGoalAudit, "before_delete")
+def _prevent_goal_audit_delete(mapper: Any, connection: Any, target: BusinessGoalAudit) -> None:
+    """Enforce append-only immutability. Historical goal audit snapshots cannot be deleted."""
+    raise ValueError("BusinessGoalAudit records are append-only and cannot be deleted.")
+

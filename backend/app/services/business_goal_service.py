@@ -98,8 +98,8 @@ class BusinessGoalService:
         if not biz:
             raise ValueError(f"Business {business_id} does not exist.")
 
-        # Default start date to today if omitted
-        start_date = payload.start_date or date.today()
+        # Start date preserved as specified (None triggers metric-specific window default)
+        start_date = payload.start_date
 
         goal = BusinessGoal(
             business_id=business_id,
@@ -132,6 +132,12 @@ class BusinessGoalService:
             new_status=GoalStatus.ACTIVE.value,
             target_value=goal.target_value,
             notes=f"Goal created with target {goal.target_value} {goal.unit}.",
+            snapshot_data=self._build_snapshot_data(
+                goal=goal,
+                measured_value=goal.baseline_value,
+                progress_pct=0.0,
+                evidence_source="Goal Creation Initialization",
+            ),
         )
         self.db.add(audit)
         self.db.commit()
@@ -256,6 +262,11 @@ class BusinessGoalService:
             new_status=goal.status,
             target_value=goal.target_value,
             notes="; ".join(changes) if changes else "Goal details updated.",
+            snapshot_data=self._build_snapshot_data(
+                goal=goal,
+                evidence_source="Goal Parameter Update",
+                extra={"changes": changes},
+            ),
         )
         self.db.add(audit)
         self.db.commit()
@@ -306,6 +317,11 @@ class BusinessGoalService:
             measured_value=goal.current_value,
             progress_pct=goal.progress_pct,
             notes=payload.notes or f"Status changed from {current_status} to {next_status}.",
+            snapshot_data=self._build_snapshot_data(
+                goal=goal,
+                evidence_source=f"Owner Status Transition: {current_status} -> {next_status}",
+                data_availability=goal.data_availability,
+            ),
         )
         self.db.add(audit)
         self.db.commit()
@@ -345,8 +361,11 @@ class BusinessGoalService:
         )
         goal.progress_pct = pct
 
+        old_status = goal.status
+        new_status = goal.status
         if achieved and goal.status == GoalStatus.ACTIVE.value:
-            goal.status = GoalStatus.COMPLETED.value
+            new_status = GoalStatus.COMPLETED.value
+            goal.status = new_status
             goal.status_notes = "Goal achieved via manual progress declaration."
 
         audit = BusinessGoalAudit(
@@ -354,12 +373,21 @@ class BusinessGoalService:
             business_id=business_id,
             changed_by_user_id=user_id,
             action="MANUAL_PROGRESS_LOGGED",
-            old_status=goal.status,
-            new_status=goal.status,
+            old_status=old_status,
+            new_status=new_status,
             measured_value=goal.current_value,
             target_value=goal.target_value,
             progress_pct=goal.progress_pct,
             notes=payload.notes or f"Manual value updated to {goal.current_value} {goal.unit}.",
+            snapshot_data=self._build_snapshot_data(
+                goal=goal,
+                measured_value=goal.current_value,
+                progress_pct=goal.progress_pct,
+                remaining_gap=gap,
+                evidence_source="Owner Self-Reported Progress",
+                data_availability=GoalDataAvailability.AVAILABLE.value,
+                extra={"notes": payload.notes},
+            ),
         )
         self.db.add(audit)
         self.db.commit()
@@ -403,6 +431,12 @@ class BusinessGoalService:
             measured_value=goal.current_value,
             progress_pct=goal.progress_pct,
             notes=reason or "Goal archived. Audit snapshots preserved.",
+            snapshot_data=self._build_snapshot_data(
+                goal=goal,
+                evidence_source="Goal Soft-Archival",
+                data_availability=goal.data_availability,
+                extra={"archive_reason": reason},
+            ),
         )
         self.db.add(audit)
         self.db.commit()
@@ -478,6 +512,153 @@ class BusinessGoalService:
         gap = max(0.0, round(target - current, 2))
         return max(0.0, progress), gap, current >= target
 
+    def _build_snapshot_data(
+        self,
+        goal: BusinessGoal,
+        window_start: date | None = None,
+        window_end: date | None = None,
+        measured_value: float | None = None,
+        progress_pct: float | None = None,
+        remaining_gap: float | None = None,
+        evidence_source: str | None = None,
+        data_availability: str | None = None,
+        freshness_warning: str | None = None,
+        calculation_formula: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Construct structured, audit-ready snapshot capturing calculation provenance."""
+        today = date.today()
+        w_start = (
+            window_start.isoformat()
+            if window_start
+            else (goal.start_date.isoformat() if goal.start_date else None)
+        )
+        w_end = (
+            window_end.isoformat()
+            if window_end
+            else (goal.target_date.isoformat() if goal.target_date else today.isoformat())
+        )
+
+        calc_gap = remaining_gap
+        if calc_gap is None and goal.current_value is not None:
+            calc_gap = max(0.0, round(goal.target_value - goal.current_value, 2))
+
+        snapshot: dict[str, Any] = {
+            "metric_key": goal.metric_key,
+            "observation_window": {
+                "start_date": w_start,
+                "target_date": w_end,
+                "timeframe": goal.timeframe,
+            },
+            "measurement_method": goal.measurement_method,
+            "evidence_source": evidence_source or "Business Goal Registry",
+            "calculation_details": {
+                "baseline_value": goal.baseline_value,
+                "target_value": goal.target_value,
+                "measured_value": measured_value if measured_value is not None else goal.current_value,
+                "progress_pct": progress_pct if progress_pct is not None else goal.progress_pct,
+                "remaining_gap": calc_gap,
+                "unit": goal.unit,
+                "data_availability": data_availability or getattr(goal, "data_availability", None),
+                "data_freshness_warning": freshness_warning,
+                "formula": calculation_formula,
+            },
+        }
+        if extra:
+            snapshot["extra"] = extra
+        return snapshot
+
+    def _inspect_sales_coverage(
+        self,
+        business_id: int,
+        window_start: date,
+        window_end: date,
+    ) -> tuple[GoalDataAvailability, str | None, str]:
+        """Distinguish a verified zero-sales period from incomplete or unconfirmed data.
+
+        Returns:
+            (availability, freshness_warning, evidence_source)
+        """
+        # 1. Check if business has ANY confirmed sales uploads
+        confirmed_uploads = (
+            self.db.query(SalesUpload.id)
+            .filter(
+                SalesUpload.business_id == business_id,
+                SalesUpload.status.in_(["processed", "partial_success", "completed"]),
+            )
+            .first()
+        )
+        if not confirmed_uploads:
+            # Check if unconfirmed/pending/failed uploads exist
+            unconfirmed = (
+                self.db.query(SalesUpload.id)
+                .filter(SalesUpload.business_id == business_id)
+                .first()
+            )
+            if unconfirmed:
+                return (
+                    GoalDataAvailability.MISSING_DATA,
+                    "Sales uploads exist but are unconfirmed or failed. Please process and confirm sales uploads to track progress.",
+                    "Authoritative Sales Ledger (Unconfirmed Uploads Pending)",
+                )
+            return (
+                GoalDataAvailability.MISSING_DATA,
+                "No sales records uploaded. Ingest sales data to track metric progress.",
+                "Authoritative Ingested Sales Transactions (0 records)",
+            )
+
+        # 2. Check overall date span of valid transactions for this business
+        min_txn_dt = (
+            self.db.query(func.min(SalesTransaction.transaction_date))
+            .filter(
+                SalesTransaction.business_id == business_id,
+                SalesTransaction.is_duplicate.is_(False),
+            )
+            .scalar()
+        )
+        max_txn_dt = (
+            self.db.query(func.max(SalesTransaction.transaction_date))
+            .filter(
+                SalesTransaction.business_id == business_id,
+                SalesTransaction.is_duplicate.is_(False),
+            )
+            .scalar()
+        )
+
+        if not min_txn_dt or not max_txn_dt:
+            return (
+                GoalDataAvailability.MISSING_DATA,
+                "Confirmed sales uploads contain no valid transaction records.",
+                "Authoritative Sales Ledger (Empty)",
+            )
+
+        min_d = min_txn_dt.date() if isinstance(min_txn_dt, datetime) else min_txn_dt
+        max_d = max_txn_dt.date() if isinstance(max_txn_dt, datetime) else max_txn_dt
+
+        # If observation window starts AFTER latest uploaded transaction:
+        if window_start > max_d:
+            return (
+                GoalDataAvailability.MISSING_DATA,
+                f"Sales data for this observation window ({window_start} to {window_end}) has not been uploaded yet. "
+                f"Latest available confirmed transaction is from {max_d.strftime('%Y-%m-%d')}.",
+                f"Authoritative Sales Ledger (Awaiting Upload for {window_start.strftime('%Y-%m')})",
+            )
+
+        # If observation window ends BEFORE earliest uploaded transaction:
+        if window_end < min_d:
+            return (
+                GoalDataAvailability.MISSING_DATA,
+                f"Observation window ({window_start} to {window_end}) precedes the earliest available uploaded records ({min_d.strftime('%Y-%m-%d')}).",
+                f"Authoritative Sales Ledger (No Historical Records Preceding {min_d.strftime('%Y-%m-%d')})",
+            )
+
+        # Window is legitimately encompassed within the uploaded ledger date span, but 0 transactions occurred:
+        return (
+            GoalDataAvailability.AVAILABLE,
+            None,
+            f"Authoritative Ingested Sales Transactions (Verified zero transactions between {window_start} and {window_end})",
+        )
+
     def _evaluate_metric(
         self,
         goal: BusinessGoal,
@@ -536,10 +717,20 @@ class BusinessGoalService:
         metric_key = (goal.metric_key or "").lower()
 
         # Determine evaluation window
-        window_start = goal.start_date or (today - timedelta(days=30))
+        if goal.start_date:
+            window_start = goal.start_date
+        elif metric_key in ("monthly_revenue", "revenue"):
+            # Explicitly defined as current calendar month (1st of month to today)
+            window_start = date(today.year, today.month, 1)
+        elif metric_key in ("revenue_30d", "rolling_30d") or (goal.timeframe and "30" in goal.timeframe):
+            window_start = today - timedelta(days=30)
+        else:
+            window_start = today - timedelta(days=30)
+
         window_end = min(goal.target_date or today, today)
         start_dt = datetime.combine(window_start, datetime.min.time())
         end_dt = datetime.combine(window_end, datetime.max.time())
+        w_label = f"{window_start.strftime('%Y-%m-%d')} to {window_end.strftime('%Y-%m-%d')}"
 
         # 1. Monthly Revenue / Revenue
         if metric_key in ("monthly_revenue", "revenue", "revenue_30d"):
@@ -554,34 +745,26 @@ class BusinessGoalService:
                 .all()
             )
             if not txns:
-                # Check if business has any transactions at all
-                any_txns = (
-                    self.db.query(SalesTransaction.id)
-                    .filter(
-                        SalesTransaction.business_id == goal.business_id,
-                        SalesTransaction.is_duplicate.is_(False),
-                    )
-                    .first()
-                )
-                if not any_txns:
+                avail, warn, src = self._inspect_sales_coverage(goal.business_id, window_start, window_end)
+                if avail != GoalDataAvailability.AVAILABLE:
                     return (
                         None,
                         None,
                         goal.target_value,
-                        GoalDataAvailability.MISSING_DATA,
-                        "No sales records uploaded. Ingest sales data to track revenue progress.",
-                        "Authoritative Ingested Sales Transactions (0 records)",
+                        avail,
+                        warn,
+                        src,
                         False,
                     )
-                # Has data elsewhere, but none in measurement window
+                # Verified zero sales in the covered observation window
                 return (
                     0.0,
                     0.0,
                     goal.target_value,
                     GoalDataAvailability.AVAILABLE,
-                    f"No sales transactions recorded between {window_start} and {window_end}.",
-                    f"Authoritative Ingested Sales Transactions ({window_start} to {window_end})",
-                    False,
+                    None,
+                    src,
+                    False if goal.target_value > 0 else True,
                 )
 
             total_rev = round(sum(t.total_amount for t in txns), 2)
@@ -610,7 +793,7 @@ class BusinessGoalService:
                 gap,
                 availability,
                 freshness_warning,
-                f"Authoritative Ingested Sales Transactions ({len(txns)} verified rows)",
+                f"Authoritative Ingested Sales Transactions ({len(txns)} verified rows in {w_label})",
                 achieved,
             )
 
@@ -621,18 +804,37 @@ class BusinessGoalService:
                 .filter(
                     SalesTransaction.business_id == goal.business_id,
                     SalesTransaction.is_duplicate.is_(False),
+                    SalesTransaction.transaction_date >= start_dt,
+                    SalesTransaction.transaction_date <= end_dt,
                 )
                 .all()
             )
             if not txns:
+                avail, warn, src = self._inspect_sales_coverage(goal.business_id, window_start, window_end)
+                if avail != GoalDataAvailability.AVAILABLE:
+                    return (
+                        None,
+                        None,
+                        None,
+                        avail,
+                        warn,
+                        src,
+                        False,
+                    )
+                pct, gap, achieved = self._compute_progress_math(
+                    metric_key=metric_key,
+                    baseline=goal.baseline_value,
+                    target=goal.target_value,
+                    current=0.0,
+                )
                 return (
+                    0.0,
+                    pct,
+                    gap,
+                    GoalDataAvailability.AVAILABLE,
                     None,
-                    None,
-                    None,
-                    GoalDataAvailability.MISSING_DATA,
-                    "No sales transactions uploaded to compute customer concentration.",
-                    "Authoritative Sales Transactions (Missing)",
-                    False,
+                    src,
+                    achieved,
                 )
 
             by_cust = defaultdict(float)
@@ -660,7 +862,7 @@ class BusinessGoalService:
                 gap,
                 GoalDataAvailability.AVAILABLE,
                 None,
-                f"Customer Ledger ({len(by_cust)} active accounts, top account share)",
+                f"Customer Ledger ({len(by_cust)} active accounts in {w_label}, top account share: {conc}%)",
                 achieved,
             )
 
@@ -671,18 +873,37 @@ class BusinessGoalService:
                 .filter(
                     SalesTransaction.business_id == goal.business_id,
                     SalesTransaction.is_duplicate.is_(False),
+                    SalesTransaction.transaction_date >= start_dt,
+                    SalesTransaction.transaction_date <= end_dt,
                 )
                 .all()
             )
             if not txns:
+                avail, warn, src = self._inspect_sales_coverage(goal.business_id, window_start, window_end)
+                if avail != GoalDataAvailability.AVAILABLE:
+                    return (
+                        None,
+                        None,
+                        None,
+                        avail,
+                        warn,
+                        src,
+                        False,
+                    )
+                pct, gap, achieved = self._compute_progress_math(
+                    metric_key=metric_key,
+                    baseline=goal.baseline_value,
+                    target=goal.target_value,
+                    current=0.0,
+                )
                 return (
+                    0.0,
+                    pct,
+                    gap,
+                    GoalDataAvailability.AVAILABLE,
                     None,
-                    None,
-                    None,
-                    GoalDataAvailability.MISSING_DATA,
-                    "No sales transactions uploaded to compute repeat purchase rate.",
-                    "Authoritative Sales Transactions (Missing)",
-                    False,
+                    src,
+                    achieved,
                 )
 
             by_cust = defaultdict(int)
@@ -691,11 +912,8 @@ class BusinessGoalService:
                 by_cust[key] += 1
 
             total_custs = len(by_cust)
-            if total_custs == 0:
-                rate = 0.0
-            else:
-                repeats = sum(1 for cnt in by_cust.values() if cnt >= 2)
-                rate = round((repeats / total_custs) * 100.0, 1)
+            repeats = sum(1 for cnt in by_cust.values() if cnt >= 2)
+            rate = round((repeats / total_custs) * 100.0, 1) if total_custs > 0 else 0.0
 
             pct, gap, achieved = self._compute_progress_math(
                 metric_key=metric_key,
@@ -709,7 +927,7 @@ class BusinessGoalService:
                 gap,
                 GoalDataAvailability.AVAILABLE,
                 None,
-                f"Customer Purchase Frequency ({repeats}/{total_custs} accounts with >=2 orders)",
+                f"Customer Purchase Frequency ({repeats}/{total_custs} accounts with >=2 orders in {w_label})",
                 achieved,
             )
 
@@ -720,18 +938,37 @@ class BusinessGoalService:
                 .filter(
                     SalesTransaction.business_id == goal.business_id,
                     SalesTransaction.is_duplicate.is_(False),
+                    SalesTransaction.transaction_date >= start_dt,
+                    SalesTransaction.transaction_date <= end_dt,
                 )
                 .all()
             )
             if not txns:
+                avail, warn, src = self._inspect_sales_coverage(goal.business_id, window_start, window_end)
+                if avail != GoalDataAvailability.AVAILABLE:
+                    return (
+                        None,
+                        None,
+                        None,
+                        avail,
+                        warn,
+                        src,
+                        False,
+                    )
+                pct, gap, achieved = self._compute_progress_math(
+                    metric_key=metric_key,
+                    baseline=goal.baseline_value,
+                    target=goal.target_value,
+                    current=0.0,
+                )
                 return (
+                    0.0,
+                    pct,
+                    gap,
+                    GoalDataAvailability.AVAILABLE,
                     None,
-                    None,
-                    None,
-                    GoalDataAvailability.MISSING_DATA,
-                    "No sales transactions uploaded to compute average order value.",
-                    "Authoritative Sales Transactions (Missing)",
-                    False,
+                    src,
+                    achieved,
                 )
 
             total_rev = sum(t.total_amount for t in txns)
@@ -748,13 +985,13 @@ class BusinessGoalService:
                 gap,
                 GoalDataAvailability.AVAILABLE,
                 None,
-                f"Sales Invoices ({len(txns)} transactions, ₹{round(total_rev, 2)} total)",
+                f"Sales Invoices ({len(txns)} transactions, ₹{round(total_rev, 2)} in {w_label})",
                 achieved,
             )
 
         # 5. New Customers Count
         elif metric_key == "new_customers_count":
-            txns = (
+            all_txns = (
                 self.db.query(SalesTransaction)
                 .filter(
                     SalesTransaction.business_id == goal.business_id,
@@ -763,20 +1000,21 @@ class BusinessGoalService:
                 .order_by(SalesTransaction.transaction_date.asc())
                 .all()
             )
-            if not txns:
+            if not all_txns:
+                avail, warn, src = self._inspect_sales_coverage(goal.business_id, window_start, window_end)
                 return (
                     None,
                     None,
                     None,
-                    GoalDataAvailability.MISSING_DATA,
-                    "No transactions uploaded to compute customer acquisition.",
-                    "Customer Ledger (Missing)",
+                    avail,
+                    warn,
+                    src,
                     False,
                 )
 
             # Find first order date for each customer
             first_seen: dict[str, date] = {}
-            for t in txns:
+            for t in all_txns:
                 key = t.customer_name or t.customer_id or "Anonymous"
                 d = t.transaction_date.date() if isinstance(t.transaction_date, datetime) else t.transaction_date
                 if key not in first_seen or d < first_seen[key]:
@@ -796,7 +1034,7 @@ class BusinessGoalService:
                 gap,
                 GoalDataAvailability.AVAILABLE,
                 None,
-                f"Customer Ledger ({acquired} new customer accounts acquired in window)",
+                f"Customer Ledger ({acquired} new customer accounts acquired in {w_label})",
                 achieved,
             )
 
@@ -806,6 +1044,7 @@ class BusinessGoalService:
                 self.db.query(SalesUpload)
                 .filter(
                     SalesUpload.business_id == goal.business_id,
+                    SalesUpload.status.in_(["processed", "partial_success", "completed"]),
                     SalesUpload.created_at >= start_dt,
                     SalesUpload.created_at <= end_dt,
                 )
@@ -824,7 +1063,7 @@ class BusinessGoalService:
                 gap,
                 GoalDataAvailability.AVAILABLE,
                 None,
-                f"Data Ingestion Log ({len(uploads)} uploads recorded in period)",
+                f"Data Ingestion Log ({len(uploads)} uploads recorded in {w_label})",
                 achieved,
             )
 
@@ -966,6 +1205,16 @@ class BusinessGoalService:
                     target_value=goal.target_value,
                     progress_pct=pct,
                     notes=status_note,
+                    snapshot_data=self._build_snapshot_data(
+                        goal=goal,
+                        measured_value=current_val,
+                        progress_pct=pct,
+                        remaining_gap=gap,
+                        evidence_source=evidence_src,
+                        data_availability=avail.value,
+                        freshness_warning=freshness_warn,
+                        extra={"status_transition": f"{old_status} -> {new_status}"},
+                    ),
                 )
                 self.db.add(audit)
             elif has_changes:
@@ -981,6 +1230,15 @@ class BusinessGoalService:
                     target_value=goal.target_value,
                     progress_pct=pct,
                     notes=f"Evaluated progress: {pct}% ({evidence_src})",
+                    snapshot_data=self._build_snapshot_data(
+                        goal=goal,
+                        measured_value=current_val,
+                        progress_pct=pct,
+                        remaining_gap=gap,
+                        evidence_source=evidence_src,
+                        data_availability=avail.value,
+                        freshness_warning=freshness_warn,
+                    ),
                 )
                 self.db.add(audit)
 

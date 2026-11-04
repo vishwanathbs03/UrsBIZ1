@@ -72,6 +72,7 @@ class BusinessGoalAuditOut(BaseModel):
     target_value: float | None = None
     progress_pct: float | None = None
     notes: str | None = None
+    snapshot_data: dict[str, Any] | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
