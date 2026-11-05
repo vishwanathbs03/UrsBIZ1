@@ -14,6 +14,7 @@ import re
 import sys
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func
@@ -65,16 +66,20 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-# Attempt to register TrueType font with full Indic/Kannada and Unicode glyph coverage
+# Bundled and system TrueType font candidates with full Kannada and Latin glyph coverage.
+# Non-Kannada fonts (such as Arial or DejaVuSans) are intentionally excluded so they cannot
+# silently fallback and produce blank/missing Kannada glyphs in generated PDFs.
+_BUNDLED_KANNADA_FONT = Path(__file__).resolve().parent.parent / "assets" / "fonts" / "NotoSansKannada-Regular.ttf"
+
 _UNICODE_FONT_NAME = "Helvetica"
+_KANNADA_FONT_REGISTERED = False
+
 _FONT_CANDIDATES = [
+    ("UrsBizKannada", str(_BUNDLED_KANNADA_FONT), None),
     ("UrsBizKannada", "C:/Windows/Fonts/Nirmala.ttc", 0),
-    ("UrsBizKannada", "C:/Windows/Fonts/tunga.ttf", None),
     ("UrsBizKannada", "/usr/share/fonts/truetype/noto/NotoSansKannada-Regular.ttf", None),
     ("UrsBizKannada", "/usr/share/fonts/truetype/lohit-kannada/Lohit-Kannada.ttf", None),
-    ("UrsBizUnicode", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", None),
-    ("UrsBizUnicode", "/usr/share/fonts/TTF/DejaVuSans.ttf", None),
-    ("UrsBizUnicode", "C:/Windows/Fonts/arial.ttf", None),
+    ("UrsBizKannada", "C:/Windows/Fonts/tunga.ttf", None),
 ]
 
 for _font_name, _fpath, _sub_idx in _FONT_CANDIDATES:
@@ -85,9 +90,30 @@ for _font_name, _fpath, _sub_idx in _FONT_CANDIDATES:
             else:
                 pdfmetrics.registerFont(TTFont(_font_name, _fpath))
             _UNICODE_FONT_NAME = _font_name
+            _KANNADA_FONT_REGISTERED = True
             break
         except Exception:
             pass
+
+
+def check_kannada_glyph_coverage(
+    font_name: str | None = None,
+    sample_text: str = "ಶ್ರೀ ಬಸವೇಶ್ವರ ಎಂಟರ್‌ಪ್ರೈಸಸ್",
+) -> tuple[bool, list[str]]:
+    """Verify that the registered font contains character glyphs for the given text.
+
+    Returns:
+        tuple[is_fully_covered, missing_characters]
+    """
+    target_font = font_name or _UNICODE_FONT_NAME
+    try:
+        font = pdfmetrics.getFont(target_font)
+        if not hasattr(font, "face") or not hasattr(font.face, "charToGlyph"):
+            return False, [c for c in sample_text if ord(c) > 127]
+        missing = [ch for ch in sample_text if ord(ch) not in font.face.charToGlyph]
+        return len(missing) == 0, missing
+    except Exception:
+        return False, [c for c in sample_text if ord(c) > 127]
 
 
 def _is_numeric_or_currency(val: Any) -> bool:

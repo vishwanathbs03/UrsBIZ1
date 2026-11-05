@@ -20,6 +20,7 @@ Covers:
 import io
 import os
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 import openpyxl
 import pytest
@@ -39,7 +40,11 @@ from app.models.sales import SalesTransaction, SalesUpload
 from app.models.user import User
 from app.models.what_if_scenario import WhatIfScenario
 from app.schemas.business_report import ReportFormat, ReportType
-from app.services.report_export_service import _UNICODE_FONT_NAME
+from app.services.report_export_service import (
+    _KANNADA_FONT_REGISTERED,
+    _UNICODE_FONT_NAME,
+    check_kannada_glyph_coverage,
+)
 from app.services.report_storage_service import ReportStorageService, StorageSecurityError
 from app.utils.database import Base, get_db
 from app.utils.security import create_access_token
@@ -460,11 +465,20 @@ def test_report_generation_xlsx(db_session: Session, test_setup, client_a):
 
 def test_unicode_and_kannada_text_handling(db_session: Session, test_setup, client_a):
     """Graceful Unicode and Kannada text handling with font embedding across all export formats."""
+    # 1. Verify bundled Kannada font is registered and has 100% glyph coverage
+    assert _KANNADA_FONT_REGISTERED is True
+    assert _UNICODE_FONT_NAME == "UrsBizKannada"
+
+    sample_kannada_text = "ಶ್ರೀ ಬಸವೇಶ್ವರ ಎಂಟರ್‌ಪ್ರೈಸಸ್ (Basaveshwara Enterprises)"
+    covered, missing = check_kannada_glyph_coverage(_UNICODE_FONT_NAME, sample_kannada_text)
+    assert covered is True, f"Missing Kannada/Latin glyphs in {_UNICODE_FONT_NAME}: {missing}"
+    assert missing == []
+
     biz1 = test_setup["biz1"]
-    biz1.legal_name = "ಶ್ರೀ ಬಸವೇಶ್ವರ ಎಂಟರ್‌ಪ್ರೈಸಸ್ (Basaveshwara Enterprises)"
+    biz1.legal_name = sample_kannada_text
     db_session.commit()
 
-    # 1. PDF generation embeds Kannada/Indic font without crashing
+    # 2. PDF generation embeds Kannada TrueType font without crashing
     pdf_resp = client_a.post(
         "/api/v1/reports/generate",
         json={"report_type": "executive_summary", "format": "PDF"},
@@ -475,11 +489,11 @@ def test_unicode_and_kannada_text_handling(db_session: Session, test_setup, clie
     assert pdf_dl.content.startswith(b"%PDF-")
     assert len(pdf_dl.content) > 2000
 
-    # If an Indic font (e.g. Nirmala, Noto Sans Kannada) is available on the OS, verify TrueType font embedding
-    if _UNICODE_FONT_NAME != "Helvetica":
-        assert b"/FontFile2" in pdf_dl.content or b"/CIDFontType2" in pdf_dl.content
+    # TrueType font program and CID font mapping MUST be embedded into the PDF bytes
+    assert b"/FontFile2" in pdf_dl.content or b"/CIDFontType2" in pdf_dl.content
+    assert b"NotoSansKannada" in pdf_dl.content or b"Nirmala" in pdf_dl.content
 
-    # 2. CSV generation preserves exact Kannada characters with UTF-8 BOM
+    # 3. CSV generation preserves exact Kannada characters with UTF-8 BOM
     csv_resp = client_a.post(
         "/api/v1/reports/generate",
         json={"report_type": "executive_summary", "format": "CSV"},
@@ -490,7 +504,7 @@ def test_unicode_and_kannada_text_handling(db_session: Session, test_setup, clie
     csv_text = dl_csv.content.decode("utf-8-sig")
     assert "ಶ್ರೀ ಬಸವೇಶ್ವರ" in csv_text
 
-    # 3. XLSX generation preserves exact Kannada characters
+    # 4. XLSX generation preserves exact Kannada characters
     xlsx_resp = client_a.post(
         "/api/v1/reports/generate",
         json={"report_type": "executive_summary", "format": "XLSX"},
@@ -541,7 +555,7 @@ def test_download_increments_counter_and_records_audit(db_session: Session, clie
 
 
 # ==============================================================================
-# 5. Security: Tenant Isolation & Path Traversal
+# 5. Security: Tenant Isolation, Path Traversal & Symlinks
 # ==============================================================================
 
 def test_path_traversal_prevention():
@@ -556,6 +570,54 @@ def test_path_traversal_prevention():
 
     with pytest.raises(StorageSecurityError):
         storage.save_report_file(business_id=-1, report_id="test", file_format="pdf", content=b"fake")
+
+
+def test_symlink_escape_prevention(tmp_path):
+    """Storage service blocks symlink escapes and containment violations."""
+    from pathlib import Path
+    storage = ReportStorageService(base_dir=str(tmp_path))
+
+    # Outside secret file
+    outside_file = tmp_path / "secret_host_data.txt"
+    outside_file.write_text("CONFIDENTIAL_SYSTEM_CONFIG")
+
+    # Tenant directory
+    tenant_dir = tmp_path / "1"
+    tenant_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Test symlink escape during read
+    symlink_file = tenant_dir / "symlink_report.pdf"
+    symlink_created = False
+    try:
+        symlink_file.symlink_to(outside_file)
+        symlink_created = True
+    except (OSError, NotImplementedError):
+        pass
+
+    if symlink_created:
+        with pytest.raises(StorageSecurityError):
+            storage.read_report_file(business_id=1, relative_path="1/symlink_report.pdf")
+    else:
+        # Mocked verification for OS environments without symlink creation permissions
+        orig_resolve = Path.resolve
+
+        def mock_resolve(self, *args, **kwargs):
+            if self.name == "symlink_report.pdf":
+                return outside_file
+            return orig_resolve(self, *args, **kwargs)
+
+        from unittest.mock import patch
+        with patch.object(Path, "is_symlink", return_value=True), \
+             patch.object(Path, "resolve", side_effect=mock_resolve, autospec=True):
+            with pytest.raises(StorageSecurityError):
+                storage.read_report_file(business_id=1, relative_path="1/symlink_report.pdf")
+
+    # 2. Test relative path containment checks with Path.relative_to
+    with pytest.raises(StorageSecurityError):
+        storage.read_report_file(business_id=1, relative_path="../secret_host_data.txt")
+
+    with pytest.raises(StorageSecurityError):
+        storage.read_report_file(business_id=1, relative_path="1/../../../secret_host_data.txt")
 
 
 def test_cross_tenant_report_isolation(client_a, client_b):
