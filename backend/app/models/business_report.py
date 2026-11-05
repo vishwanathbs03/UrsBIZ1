@@ -113,7 +113,7 @@ class BusinessReport(Base):
     business: Mapped[Business] = relationship(back_populates="reports")
     created_by_user: Mapped[User | None] = relationship(foreign_keys=[created_by_user_id])
     audits: Mapped[list[BusinessReportAudit]] = relationship(
-        back_populates="report", cascade="all, delete-orphan"
+        back_populates="report"
     )
 
 
@@ -133,7 +133,7 @@ class BusinessReportAudit(Base):
         index=True,
     )
     business_id: Mapped[int] = mapped_column(
-        ForeignKey("businesses.id", ondelete="CASCADE"),
+        ForeignKey("businesses.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )

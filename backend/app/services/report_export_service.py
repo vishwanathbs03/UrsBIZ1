@@ -65,26 +65,73 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-# Attempt to register TrueType font for Unicode safety
+# Attempt to register TrueType font with full Indic/Kannada and Unicode glyph coverage
 _UNICODE_FONT_NAME = "Helvetica"
-for _fpath in [
-    "C:/Windows/Fonts/arial.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/TTF/DejaVuSans.ttf",
-]:
+_FONT_CANDIDATES = [
+    ("UrsBizKannada", "C:/Windows/Fonts/Nirmala.ttc", 0),
+    ("UrsBizKannada", "C:/Windows/Fonts/tunga.ttf", None),
+    ("UrsBizKannada", "/usr/share/fonts/truetype/noto/NotoSansKannada-Regular.ttf", None),
+    ("UrsBizKannada", "/usr/share/fonts/truetype/lohit-kannada/Lohit-Kannada.ttf", None),
+    ("UrsBizUnicode", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", None),
+    ("UrsBizUnicode", "/usr/share/fonts/TTF/DejaVuSans.ttf", None),
+    ("UrsBizUnicode", "C:/Windows/Fonts/arial.ttf", None),
+]
+
+for _font_name, _fpath, _sub_idx in _FONT_CANDIDATES:
     if os.path.exists(_fpath):
         try:
-            pdfmetrics.registerFont(TTFont("UrsBizUnicode", _fpath))
-            _UNICODE_FONT_NAME = "UrsBizUnicode"
+            if _sub_idx is not None:
+                pdfmetrics.registerFont(TTFont(_font_name, _fpath, subfontIndex=_sub_idx))
+            else:
+                pdfmetrics.registerFont(TTFont(_font_name, _fpath))
+            _UNICODE_FONT_NAME = _font_name
             break
         except Exception:
             pass
 
 
+def _is_numeric_or_currency(val: Any) -> bool:
+    """Return True if val represents a legitimate mathematical number, currency, or percentage."""
+    if isinstance(val, (int, float)):
+        return True
+    if not isinstance(val, str):
+        return False
+    s = val.strip()
+    if not s:
+        return False
+    clean_s = (
+        s.replace("₹", "")
+        .replace("$", "")
+        .replace("€", "")
+        .replace("£", "")
+        .replace(",", "")
+        .replace("%", "")
+        .strip()
+    )
+    try:
+        float(clean_s)
+        return True
+    except ValueError:
+        return False
+
+
 def _sanitize_formula(val: Any) -> Any:
-    """Prevent CSV/XLSX formula injection."""
-    if isinstance(val, str) and val and val[0] in ("=", "+", "-", "@", "\t", "\r"):
-        return f"'{val}"
+    """Prevent CSV/XLSX formula injection without damaging legitimate negative numbers.
+
+    Rules:
+      1. Legitimate numeric, currency, and percentage values (e.g. -5000, -₹7,500.00, -15.2%)
+         are preserved intact so mathematical calculations and financial reports remain accurate.
+      2. Non-numeric text strings starting with dangerous execution tokens (=, +, -, @, \\t, \\r)
+         are prepended with a single quote (') to force spreadsheets to treat them as plain text.
+    """
+    if isinstance(val, (int, float)):
+        return val
+    if isinstance(val, str) and val:
+        s = val.strip()
+        if _is_numeric_or_currency(s):
+            return val
+        if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+            return f"'{s}"
     return val
 
 

@@ -154,6 +154,68 @@ def list_report_history(
     return service.list_history(biz.id, page=page, page_size=page_size, report_type=report_type)
 
 
+# --- Preserved Sprint 13 Endpoints (Enriched with active_business_id tenant isolation) ---
+
+@router.get(
+    "/unified",
+    response_model=UnifiedReportResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate unified business intelligence report model",
+)
+def get_unified_report(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UnifiedReportResponse:
+    biz = _get_active_business(current_user, db)
+    service = ReportService(BusinessRepository(db))
+    report = service.generate_unified_report(biz)
+    now_iso = datetime.now(tz=timezone.utc).isoformat()
+    return UnifiedReportResponse(generated_at=now_iso, report=report)
+
+
+@router.get(
+    "/pdf",
+    status_code=status.HTTP_200_OK,
+    summary="Download PDF Business Report (Executive / Health)",
+)
+def download_pdf_report(
+    report_type: str = Query("executive", description="Report type: executive or health"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    biz = _get_active_business(current_user, db)
+    service = PdfReportService(BusinessRepository(db))
+    pdf_bytes = service.generate_pdf_report(biz, report_type=report_type)
+    filename = f"Business_{report_type.capitalize()}_Report.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/csv",
+    status_code=status.HTTP_200_OK,
+    summary="Download CSV Business Data Export (KPIs, Recommendations, DNA, SWOT)",
+)
+def download_csv_export(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    biz = _get_active_business(current_user, db)
+    service = CsvExportService(BusinessRepository(db))
+    csv_str = service.generate_csv_export(biz)
+    filename = "Business_Dashboard_Export.csv"
+    return Response(
+        content=csv_str,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# --- Parameterized Single Report Endpoints (Must be registered after static paths) ---
+
 @router.get(
     "/{report_id}",
     response_model=ReportDetailResponse,
@@ -240,63 +302,3 @@ def archive_report(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
-
-
-# --- Preserved Sprint 13 Endpoints (Enriched with active_business_id tenant isolation) ---
-
-@router.get(
-    "/unified",
-    response_model=UnifiedReportResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Generate unified business intelligence report model",
-)
-def get_unified_report(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> UnifiedReportResponse:
-    biz = _get_active_business(current_user, db)
-    service = ReportService(BusinessRepository(db))
-    report = service.generate_unified_report(biz)
-    now_iso = datetime.now(tz=timezone.utc).isoformat()
-    return UnifiedReportResponse(generated_at=now_iso, report=report)
-
-
-@router.get(
-    "/pdf",
-    status_code=status.HTTP_200_OK,
-    summary="Download PDF Business Report (Executive / Health)",
-)
-def download_pdf_report(
-    report_type: str = Query("executive", description="Report type: executive or health"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> Response:
-    biz = _get_active_business(current_user, db)
-    service = PdfReportService(BusinessRepository(db))
-    pdf_bytes = service.generate_pdf_report(biz, report_type=report_type)
-    filename = f"Business_{report_type.capitalize()}_Report.pdf"
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@router.get(
-    "/csv",
-    status_code=status.HTTP_200_OK,
-    summary="Download CSV Business Data Export (KPIs, Recommendations, DNA, SWOT)",
-)
-def download_csv_export(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> Response:
-    biz = _get_active_business(current_user, db)
-    service = CsvExportService(BusinessRepository(db))
-    csv_str = service.generate_csv_export(biz)
-    filename = "Business_Dashboard_Export.csv"
-    return Response(
-        content=csv_str,
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )

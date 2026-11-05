@@ -24,7 +24,8 @@ from datetime import date, datetime, timedelta, timezone
 import openpyxl
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -38,6 +39,7 @@ from app.models.sales import SalesTransaction, SalesUpload
 from app.models.user import User
 from app.models.what_if_scenario import WhatIfScenario
 from app.schemas.business_report import ReportFormat, ReportType
+from app.services.report_export_service import _UNICODE_FONT_NAME
 from app.services.report_storage_service import ReportStorageService, StorageSecurityError
 from app.utils.database import Base, get_db
 from app.utils.security import create_access_token
@@ -45,12 +47,19 @@ from app.utils.security import create_access_token
 
 @pytest.fixture
 def db_session():
-    """Isolated in-memory SQLite session with StaticPool."""
+    """Isolated in-memory SQLite session with StaticPool and active foreign key enforcement."""
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(bind=engine)
     SessionMaker = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     session = SessionMaker()
@@ -271,7 +280,7 @@ def test_report_generation_pdf(client_a):
 
 
 def test_report_generation_csv_and_formula_injection(db_session: Session, test_setup, client_a):
-    """CSV export with formula injection defense and UTF-8 BOM encoding."""
+    """CSV export with formula injection defense, negative number preservation, and UTF-8 BOM encoding."""
     biz1 = test_setup["biz1"]
     up = SalesUpload(
         business_id=biz1.id,
@@ -279,14 +288,14 @@ def test_report_generation_csv_and_formula_injection(db_session: Session, test_s
         file_format="csv",
         file_size_bytes=512,
         status="completed",
-        row_count=1,
-        valid_row_count=1,
+        row_count=2,
+        valid_row_count=2,
     )
     db_session.add(up)
     db_session.commit()
 
-    # Product name contains formula injection attempt
-    txn = SalesTransaction(
+    # Product and customer names contain malicious formula injection tokens (=, +, -, @)
+    txn1 = SalesTransaction(
         upload_id=up.id,
         business_id=biz1.id,
         transaction_date=datetime.now(timezone.utc) - timedelta(days=2),
@@ -297,37 +306,129 @@ def test_report_generation_csv_and_formula_injection(db_session: Session, test_s
         product_name="+EVIL_COMMAND()",  # Formula injection attempt!
         is_duplicate=False,
     )
+    txn2 = SalesTransaction(
+        upload_id=up.id,
+        business_id=biz1.id,
+        transaction_date=datetime.now(timezone.utc) - timedelta(days=1),
+        customer_name="-2+3+cmd|' /C calc'!A0",  # DDE command injection attempt!
+        total_amount=5000.0,
+        quantity=1,
+        unit_price=5000.0,
+        product_name="@DANGEROUS()",  # @ prefix injection attempt!
+        is_duplicate=False,
+    )
+    db_session.add_all([txn1, txn2])
+
+    # What-If Scenario with legitimate negative profit/margin figures
+    scenario = WhatIfScenario(
+        business_id=biz1.id,
+        owner_id=biz1.owner_id,
+        title="Cost Shock Analysis",
+        scenario_type="supplier_cost_increase",
+        baseline_metrics={"monthly_gross_profit_inr": 50000.0, "monthly_revenue_inr": 100000.0},
+        parameters={"cogs_delta_pct": 15.0},
+        projection_result={
+            "cases": [
+                {
+                    "case_label": "Worst Case",
+                    "projected_revenue_inr": 100000.0,
+                    "revenue_delta_inr": 0.0,
+                    "revenue_delta_pct": 0.0,
+                    "projected_cogs_inr": 57500.0,
+                    "projected_gross_profit_inr": 42500.0,
+                    "gross_profit_delta_inr": -7500.0,  # Legitimate negative float
+                    "gross_margin_pct": -15.2,  # Legitimate negative percentage
+                    "projected_opex_inr": 30000.0,
+                    "projected_operating_profit_inr": 12500.0,
+                    "operating_profit_delta_inr": -7500.0,
+                    "cash_runway_days_estimated": 90,
+                    "cash_runway_days_delta": -30,
+                    "break_even_revenue_inr": 70588.0,
+                }
+            ]
+        },
+    )
+    db_session.add(scenario)
+    db_session.commit()
+
+    # 1. Test Customer Performance CSV (checks = and - formula escaping)
+    cust_resp = client_a.post(
+        "/api/v1/reports/generate",
+        json={"report_type": "customer_performance", "format": "CSV"},
+    )
+    assert cust_resp.status_code == 201
+    cust_csv_dl = client_a.get(f"/api/v1/reports/{cust_resp.json()['report_id']}/download")
+    assert cust_csv_dl.status_code == 200
+    assert cust_csv_dl.content.startswith(b"\xef\xbb\xbf")
+    cust_text = cust_csv_dl.content.decode("utf-8-sig")
+
+    # Injected formula tokens starting with = or -cmd are neutralized with single quote prefix
+    assert "'=SUM(A1:A10)" in cust_text
+    assert "'-2+3+cmd|' /C calc'!A0" in cust_text
+
+    # 2. Test Product Performance CSV (checks + and @ formula escaping)
+    prod_resp = client_a.post(
+        "/api/v1/reports/generate",
+        json={"report_type": "product_performance", "format": "CSV"},
+    )
+    assert prod_resp.status_code == 201
+    prod_csv_dl = client_a.get(f"/api/v1/reports/{prod_resp.json()['report_id']}/download")
+    assert prod_csv_dl.status_code == 200
+    prod_text = prod_csv_dl.content.decode("utf-8-sig")
+
+    assert "'+EVIL_COMMAND()" in prod_text
+    assert "'@DANGEROUS()" in prod_text
+
+    # 3. Test Scenario Comparison CSV (verifies legitimate negative numbers are NOT prepended with ')
+    scen_resp = client_a.post(
+        "/api/v1/reports/generate",
+        json={"report_type": "scenario_comparison", "format": "CSV"},
+    )
+    assert scen_resp.status_code == 201
+    scen_csv_dl = client_a.get(f"/api/v1/reports/{scen_resp.json()['report_id']}/download")
+    assert scen_csv_dl.status_code == 200
+    scen_text = scen_csv_dl.content.decode("utf-8-sig")
+
+    # Legitimate negative financial numbers must NOT be damaged by formula sanitization
+    assert "-7500" in scen_text or "-7,500" in scen_text or "-15.2%" in scen_text
+    assert "'-7500" not in scen_text
+    assert "'-₹7,500" not in scen_text
+    assert "'-15.2%" not in scen_text
+
+
+def test_report_generation_xlsx(db_session: Session, test_setup, client_a):
+    """Generate and verify Excel (XLSX) workbook with styled sheets and formula protection."""
+    biz1 = test_setup["biz1"]
+    up = SalesUpload(
+        business_id=biz1.id,
+        filename="sales_xlsx.csv",
+        file_format="csv",
+        file_size_bytes=256,
+        status="completed",
+        row_count=1,
+        valid_row_count=1,
+    )
+    db_session.add(up)
+    db_session.commit()
+
+    txn = SalesTransaction(
+        upload_id=up.id,
+        business_id=biz1.id,
+        transaction_date=datetime.now(timezone.utc) - timedelta(days=2),
+        customer_name="=SUM(A1:A10)",  # Formula injection attempt!
+        total_amount=15000.0,
+        quantity=2,
+        unit_price=7500.0,
+        product_name="Standard Widget",
+        is_duplicate=False,
+    )
     db_session.add(txn)
     db_session.commit()
 
+    # Generate Customer Performance in XLSX (contains injected customer name '=SUM(A1:A10)')
     resp = client_a.post(
         "/api/v1/reports/generate",
-        json={
-            "report_type": "sales_revenue_performance",
-            "format": "CSV",
-        },
-    )
-    assert resp.status_code == 201
-    report_id = resp.json()["report_id"]
-
-    dl_resp = client_a.get(f"/api/v1/reports/{report_id}/download")
-    assert dl_resp.status_code == 200
-    assert "text/csv" in dl_resp.headers["content-type"]
-    assert dl_resp.content.startswith(b"\xef\xbb\xbf")  # UTF-8 BOM
-
-    csv_text = dl_resp.content.decode("utf-8-sig")
-    # Assert formulas were sanitized by prefixing with a single quote
-    assert "'=SUM(A1:A10)" in csv_text or "'+EVIL_COMMAND()" in csv_text or "₹15,000.00" in csv_text
-
-
-def test_report_generation_xlsx(client_a):
-    """Generate and verify Excel (XLSX) workbook with styled sheets."""
-    resp = client_a.post(
-        "/api/v1/reports/generate",
-        json={
-            "report_type": "executive_summary",
-            "format": "XLSX",
-        },
+        json={"report_type": "customer_performance", "format": "XLSX"},
     )
     assert resp.status_code == 201
     report_id = resp.json()["report_id"]
@@ -344,27 +445,48 @@ def test_report_generation_xlsx(client_a):
     ws1 = wb["Summary"]
     assert "Enterprise Alpha Manufacturing" in str(ws1["A2"].value)
 
+    # Verify that cells with injected formula are stored as string literals ('s'), NEVER formula ('f')
+    ws2 = wb["Data Tables"]
+    formula_found = False
+    for row in ws2.iter_rows():
+        for cell in row:
+            assert cell.data_type != "f", f"Dangerous formula cell detected in XLSX: {cell.value}"
+            if cell.value and "=SUM(A1:A10)" in str(cell.value):
+                formula_found = True
+                assert cell.data_type == "s"
+                assert str(cell.value).startswith("'")
+    assert formula_found, "Sanitized formula string '=SUM(A1:A10)' was not found in XLSX data table"
+
 
 def test_unicode_and_kannada_text_handling(db_session: Session, test_setup, client_a):
-    """Graceful Unicode and Kannada text handling across all export formats."""
+    """Graceful Unicode and Kannada text handling with font embedding across all export formats."""
     biz1 = test_setup["biz1"]
     biz1.legal_name = "ಶ್ರೀ ಬಸವೇಶ್ವರ ಎಂಟರ್‌ಪ್ರೈಸಸ್ (Basaveshwara Enterprises)"
     db_session.commit()
 
-    # 1. PDF generation does not crash on Kannada / Unicode text
+    # 1. PDF generation embeds Kannada/Indic font without crashing
     pdf_resp = client_a.post(
         "/api/v1/reports/generate",
         json={"report_type": "executive_summary", "format": "PDF"},
     )
     assert pdf_resp.status_code == 201
+    pdf_dl = client_a.get(f"/api/v1/reports/{pdf_resp.json()['report_id']}/download")
+    assert pdf_dl.status_code == 200
+    assert pdf_dl.content.startswith(b"%PDF-")
+    assert len(pdf_dl.content) > 2000
 
-    # 2. CSV generation preserves exact Kannada characters
+    # If an Indic font (e.g. Nirmala, Noto Sans Kannada) is available on the OS, verify TrueType font embedding
+    if _UNICODE_FONT_NAME != "Helvetica":
+        assert b"/FontFile2" in pdf_dl.content or b"/CIDFontType2" in pdf_dl.content
+
+    # 2. CSV generation preserves exact Kannada characters with UTF-8 BOM
     csv_resp = client_a.post(
         "/api/v1/reports/generate",
         json={"report_type": "executive_summary", "format": "CSV"},
     )
     assert csv_resp.status_code == 201
     dl_csv = client_a.get(f"/api/v1/reports/{csv_resp.json()['report_id']}/download")
+    assert dl_csv.content.startswith(b"\xef\xbb\xbf")
     csv_text = dl_csv.content.decode("utf-8-sig")
     assert "ಶ್ರೀ ಬಸವೇಶ್ವರ" in csv_text
 
@@ -374,6 +496,9 @@ def test_unicode_and_kannada_text_handling(db_session: Session, test_setup, clie
         json={"report_type": "executive_summary", "format": "XLSX"},
     )
     assert xlsx_resp.status_code == 201
+    dl_xlsx = client_a.get(f"/api/v1/reports/{xlsx_resp.json()['report_id']}/download")
+    wb = openpyxl.load_workbook(filename=io.BytesIO(dl_xlsx.content))
+    assert "ಶ್ರೀ ಬಸವೇಶ್ವರ" in str(wb["Summary"]["A2"].value)
 
 
 # ==============================================================================
@@ -508,8 +633,8 @@ def test_unauthenticated_access_returns_401():
 # 6. Archival, Audit Immutability & Source Non-Mutation
 # ==============================================================================
 
-def test_report_archival_soft_delete(client_a):
-    """Archiving a report prevents future downloads while preserving record."""
+def test_report_archival_soft_delete(db_session: Session, client_a):
+    """Archiving a report prevents future downloads while preserving record and full audit history."""
     gen_resp = client_a.post("/api/v1/reports/generate", json={"report_type": "executive_summary", "format": "PDF"})
     report_id = gen_resp.json()["report_id"]
 
@@ -524,6 +649,14 @@ def test_report_archival_soft_delete(client_a):
 
     # Download attempt returns 404
     assert client_a.get(f"/api/v1/reports/{report_id}/download").status_code == 404
+
+    # Audit records are preserved and an ARCHIVED action was logged
+    rep_obj = db_session.query(BusinessReport).filter(BusinessReport.report_id == report_id).first()
+    assert rep_obj is not None
+    audits = db_session.query(BusinessReportAudit).filter(BusinessReportAudit.report_id == rep_obj.id).all()
+    actions = [a.action for a in audits]
+    assert "GENERATED" in actions
+    assert "ARCHIVED" in actions
 
 
 def test_audit_trail_immutability(db_session: Session, client_a):
@@ -555,6 +688,41 @@ def test_audit_trail_immutability(db_session: Session, client_a):
         db_session.execute(text(f"DELETE FROM business_report_audits WHERE id={audit.id}"))
         db_session.commit()
     db_session.rollback()
+
+
+def test_audit_retention_on_business_deletion(db_session: Session, test_setup, client_a):
+    """BusinessReportAudit has ON DELETE RESTRICT foreign key preventing accidental cascade deletion."""
+    # 1. Model schema verification: foreign key must specify RESTRICT
+    fk_list = list(BusinessReportAudit.__table__.c.business_id.foreign_keys)
+    assert len(fk_list) == 1
+    assert fk_list[0].ondelete == "RESTRICT"
+
+    # 2. Generate a report which records a BusinessReportAudit
+    gen_resp = client_a.post(
+        "/api/v1/reports/generate",
+        json={"report_type": "executive_summary", "format": "PDF"},
+    )
+    assert gen_resp.status_code == 201
+
+    biz1 = test_setup["biz1"]
+    audits = db_session.query(BusinessReportAudit).filter(BusinessReportAudit.business_id == biz1.id).all()
+    assert len(audits) >= 1
+
+    # 3. Raw SQL deletion blocked by database-level RESTRICT foreign key constraint
+    with pytest.raises(IntegrityError):
+        db_session.execute(text(f"DELETE FROM businesses WHERE id = {biz1.id}"))
+        db_session.commit()
+    db_session.rollback()
+
+    # 4. ORM-level deletion blocked by append-only audit protections
+    with pytest.raises((IntegrityError, ValueError)):
+        db_session.delete(biz1)
+        db_session.commit()
+    db_session.rollback()
+
+    # 5. Verify historical audit records remain intact
+    surviving_audits = db_session.query(BusinessReportAudit).filter(BusinessReportAudit.business_id == biz1.id).all()
+    assert len(surviving_audits) == len(audits)
 
 
 def test_no_source_data_mutation(db_session: Session, test_setup, client_a):

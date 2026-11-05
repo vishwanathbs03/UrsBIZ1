@@ -102,7 +102,7 @@ def upgrade() -> None:
         sa.Column(
             "business_id",
             sa.Integer(),
-            sa.ForeignKey("businesses.id", ondelete="CASCADE"),
+            sa.ForeignKey("businesses.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column(
