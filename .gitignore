@@ -156,4 +156,7 @@ scripts/docx.txt
 Aibackend
 current-working-tree.txt
 scripts/debug/
+backend/storage/
+storage/
+
 

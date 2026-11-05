@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from app.models.product import Product
     from app.models.business_goal import BusinessGoal
     from app.models.business_challenge import BusinessChallenge
+    from app.models.business_report import BusinessReport
     from app.models.sales import SalesTransaction, SalesUpload
     from app.models.personalization import BusinessPersonalizationSettings
 
@@ -87,6 +88,9 @@ class Business(Base):
         back_populates="business", cascade="all, delete-orphan", lazy="selectin"
     )
     sales_uploads: Mapped[list["SalesUpload"]] = relationship(
+        back_populates="business", cascade="all, delete-orphan", lazy="selectin"
+    )
+    reports: Mapped[list["BusinessReport"]] = relationship(
         back_populates="business", cascade="all, delete-orphan", lazy="selectin"
     )
     sales_transactions: Mapped[list["SalesTransaction"]] = relationship(

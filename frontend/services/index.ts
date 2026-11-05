@@ -119,3 +119,21 @@ export {
   type ListGoalsParams,
 } from "./goals-service";
 
+export {
+  reportsService,
+  type ReportType,
+  type ReportCategory,
+  type ReportFileFormat,
+  type ReportCoverageStatus,
+  type ReportCatalogItem,
+  type ReportCatalogResponse,
+  type ReportTableData,
+  type ReportProvenance,
+  type ReportPreviewRequest,
+  type ReportPreviewResponse,
+  type ReportGenerateRequest,
+  type ReportItemOut,
+  type ReportHistoryResponse,
+} from "./reports-service";
+
+

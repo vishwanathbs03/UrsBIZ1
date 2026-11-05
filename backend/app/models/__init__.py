@@ -1,3 +1,4 @@
+from app.models.business_report import BusinessReport, BusinessReportAudit
 """ORM models package.
 
 Re-exports every model so SQLAlchemy's declarative base and Alembic
@@ -41,6 +42,8 @@ __all__ = [
     "ExportHistory",
     "BusinessGoal",
     "BusinessGoalAudit",
+    "BusinessReport",
+    "BusinessReportAudit",
     "BusinessChallenge",
     "ChatSession",
     "ChatMessage",

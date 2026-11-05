@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, FileText, Sparkles, TrendingUp } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, Sparkles, TrendingUp } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
@@ -12,6 +12,7 @@ import { PrintStyles } from "./PrintStyles";
 import { ReportHeader } from "./ReportHeader";
 import { ReportSidebar } from "./ReportSidebar";
 import { ReportSection } from "./ReportSection";
+import { ReportExportCentreView } from "./ReportExportCentreView";
 import { REPORT_SECTIONS, type ReportSectionKey } from "./sections";
 import {
   AnalyticsSummarySection,
@@ -41,6 +42,7 @@ import { useReportsData, type ReportsData } from "./use-reports-data";
  * printed page so the reader knows the source.
  */
 export function ReportsView() {
+  const [viewMode, setViewMode] = useState<"export-centre" | "interactive-briefing">("export-centre");
   const { state, refresh, isFetching } = useReportsData();
 
   const lastAnalyzedAt = useMemo<string | null>(() => {
@@ -80,6 +82,14 @@ export function ReportsView() {
       improvement: Math.round(lift),
     };
   }, [state]);
+
+  if (viewMode === "export-centre") {
+    return (
+      <PageContainer width="wide">
+        <ReportExportCentreView onSwitchToPrintView={() => setViewMode("interactive-briefing")} />
+      </PageContainer>
+    );
+  }
 
   if (state.status === "loading") {
     return (
@@ -145,6 +155,18 @@ export function ReportsView() {
         <div className="flex flex-col gap-4 lg:flex-row">
           <ReportSidebar />
           <div className="flex min-w-0 flex-1 flex-col gap-6 animate-page-fade">
+            <div className="report-no-print flex items-center justify-between pb-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewMode("export-centre")}
+                className="text-xs gap-1.5 h-8"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Back to Reports & Evidence Export Centre
+              </Button>
+            </div>
+
             <ReportHeader
               lastAnalyzedAt={lastAnalyzedAt}
               isRefreshing={isFetching}
