@@ -148,7 +148,7 @@ _bootstrap_done: set[str] = set()
 # ``alembic_version`` row; a mismatch means the operator forgot
 # to run ``alembic upgrade head`` (or vice versa) and we attempt
 # to bring the DB forward.
-EXPECTED_HEAD_REVISION = "20261103_0002"
+EXPECTED_HEAD_REVISION = "20261105_0002"
 
 # Tables that must exist for the schema to be considered
 # "complete" at the head revision. The list is a strict superset
@@ -183,6 +183,12 @@ EXPECTED_TABLES_AT_HEAD: tuple[str, ...] = (
     "business_decisions",
     "what_if_scenarios",
     "business_signal_event_audits",
+    "business_reports",
+    "business_report_audits",
+    "business_members",
+    "business_invitations",
+    "business_approval_requests",
+    "business_approval_audits",
 )
 
 
@@ -226,10 +232,11 @@ def run_alembic_upgrade(target: str = "head") -> None:
     from alembic import command
     from alembic.config import Config
 
-    cfg = Config("migrations.ini")
-    # The script location is set in migrations.ini; we still pass
-    # the runtime URL so the operator does not have to maintain
-    # ``sqlalchemy.url`` in the ini file.
+    from pathlib import Path
+    cfg_file = "migrations.ini" if Path("migrations.ini").exists() else "backend/migrations.ini"
+    cfg = Config(cfg_file)
+    if Path("backend/migrations").exists():
+        cfg.set_main_option("script_location", "backend/migrations")
     cfg.set_main_option("sqlalchemy.url", _settings.database_url)
     command.upgrade(cfg, target)
 

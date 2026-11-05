@@ -136,4 +136,26 @@ export {
   type ReportHistoryResponse,
 } from "./reports-service";
 
+export {
+  collaborationService,
+  type BusinessRole,
+  type ApprovalEntityType,
+  type ApprovalStatus,
+  type MemberOut,
+  type MemberListResponse,
+  type InvitationOut,
+  type InvitationListResponse,
+  type InvitationCreateRequest,
+  type InvitationAcceptRequest,
+  type InvitationAcceptResponse,
+  type TransferOwnershipRequest,
+  type TransferOwnershipResponse,
+  type ApprovalAuditOut,
+  type ApprovalRequestOut,
+  type ApprovalRequestCreate,
+  type ApprovalReviewRequest,
+  type ApprovalListResponse,
+  type ApprovalSummaryResponse,
+} from "./collaboration-service";
+
 

@@ -1,6 +1,7 @@
-"""Repository for recommendation lifecycle state persistence (Phase 5).
+"""Repository for recommendation lifecycle state persistence (Phase 5 & Phase 6.26 RBAC).
 
-Enforces business isolation and provides auditable state management.
+Enforces business isolation, provides auditable state management,
+and records user_id for multi-user collaboration tracking.
 """
 
 from __future__ import annotations
@@ -46,19 +47,26 @@ class RecommendationLifecycleRepository:
         recommendation_id: str,
         status: str,
         notes: str | None = None,
+        user_id: int | None = None,
     ) -> RecommendationLifecycleState:
         """Update or create a recommendation state transition with concurrency protection and idempotency."""
         now = datetime.now(timezone.utc)
         record = self.get_state(business_id, recommendation_id)
 
-        # Idempotent check — if already in desired state with identical notes, skip redundant DB write
-        if record is not None and record.status == status and (notes is None or record.notes == notes):
+        # Idempotent check — if already in desired state with identical notes and user, skip redundant DB write
+        if (
+            record is not None
+            and record.status == status
+            and (notes is None or record.notes == notes)
+            and (user_id is None or record.user_id == user_id)
+        ):
             return record
 
         try:
             if record is None:
                 record = RecommendationLifecycleState(
                     business_id=business_id,
+                    user_id=user_id,
                     recommendation_id=recommendation_id,
                     status=status,
                     notes=notes,
@@ -70,6 +78,8 @@ class RecommendationLifecycleRepository:
             else:
                 record.status = status
                 record.status_updated_at = now
+                if user_id is not None:
+                    record.user_id = user_id
                 if notes is not None:
                     record.notes = notes
                 if status == "Viewed" and record.first_viewed_at is None:
@@ -85,6 +95,8 @@ class RecommendationLifecycleRepository:
             if existing is not None:
                 existing.status = status
                 existing.status_updated_at = now
+                if user_id is not None:
+                    existing.user_id = user_id
                 if notes is not None:
                     existing.notes = notes
                 self.db.commit()
@@ -96,7 +108,7 @@ class RecommendationLifecycleRepository:
             raise
 
     def record_first_views(
-        self, business_id: int, recommendation_ids: list[str]
+        self, business_id: int, recommendation_ids: list[str], user_id: int | None = None
     ) -> None:
         """Record view event for any newly surfaced recommendations without overriding in-progress or accepted states."""
         now = datetime.now(timezone.utc)
@@ -107,6 +119,7 @@ class RecommendationLifecycleRepository:
             if rec_id not in existing:
                 new_state = RecommendationLifecycleState(
                     business_id=business_id,
+                    user_id=user_id,
                     recommendation_id=rec_id,
                     status="New",
                     first_viewed_at=now,

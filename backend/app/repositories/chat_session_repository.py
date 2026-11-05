@@ -1,18 +1,15 @@
 """ChatSessionRepository — data-access layer for the chat persistence
-endpoints (Sprint 7 Part 3).
+endpoints (Sprint 7 & Phase 6.26 RBAC).
 
 The repository owns every SQL statement that touches the
-``chat_sessions`` / ``chat_messages`` tables. The service layer
-is the only consumer; endpoints never touch the session
-directly.
+``chat_sessions`` / ``chat_messages`` tables.
 
-Every read is **owner-scoped** at the SQL level — a request for
-another user's conversation returns ``None``, which the service
-translates into a 404. The repository never leaks a row across
-owners.
+In Phase 6.26, chat sessions can be business-associated and
+chat messages record the auditable user_id of the collaborator.
 """
 from __future__ import annotations
 
+import json
 from typing import Sequence
 
 from sqlalchemy import select
@@ -34,35 +31,26 @@ class ChatSessionRepository:
     # ---- Sessions ----------------------------------------------------- #
 
     def create_session(
-        self, *, owner_id: int, title: str = ""
+        self, *, owner_id: int, title: str = "", business_id: int | None = None
     ) -> ChatSession:
-        """Insert a new session row and return it.
-
-        The repository commits the row before returning. This
-        matches the existing ``BusinessRepository`` /
-        ``BusinessService`` convention where every write
-        service commits its own changes — the endpoint is
-        not responsible for transaction management.
-        """
+        """Insert a new session row and return it."""
         session = ChatSession(
             owner_id=owner_id,
+            business_id=business_id,
             title=(title or "").strip()[:120],
         )
         self._db.add(session)
         self._db.flush()
         self._db.commit()
-        # Refresh so the caller sees the server-defaulted
-        # created_at / updated_at values.
         self._db.refresh(session)
         return session
 
-    def list_sessions(self, *, owner_id: int) -> Sequence[ChatSession]:
-        """Return the owner's sessions, newest first."""
-        stmt = (
-            select(ChatSession)
-            .where(ChatSession.owner_id == owner_id)
-            .order_by(ChatSession.updated_at.desc(), ChatSession.id.desc())
-        )
+    def list_sessions(self, *, owner_id: int, business_id: int | None = None) -> Sequence[ChatSession]:
+        """Return sessions for owner and optional business scope, newest first."""
+        stmt = select(ChatSession).where(ChatSession.owner_id == owner_id)
+        if business_id is not None:
+            stmt = stmt.where(ChatSession.business_id == business_id)
+        stmt = stmt.order_by(ChatSession.updated_at.desc(), ChatSession.id.desc())
         return tuple(self._db.scalars(stmt).all())
 
     def get_session(self, *, owner_id: int, session_id: int) -> ChatSession | None:
@@ -104,9 +92,7 @@ class ChatSessionRepository:
             session.fallback_used = bool(fallback_used)
         if message_count is not None:
             session.message_count = int(message_count)
-        # Force updated_at refresh even when the new values
-        # are identical to the old ones — important so the
-        # sidebar re-sorts after a user appends a message.
+
         from sqlalchemy import func as sqlfunc
         session.updated_at = sqlfunc.now()
         self._db.flush()
@@ -126,26 +112,9 @@ class ChatSessionRepository:
         sources: list[dict] | None = None,
         fallback_used: bool | None = None,
         generation_meta: dict | str | None = None,
+        user_id: int | None = None,
     ) -> ChatMessage:
-        """Append a message to the session and return it.
-
-        H7.8A P2 — ``fallback_used`` is propagated to the per-message
-        row when supplied, so the frontend ``MessageBubble`` can render
-        the correct trust label ("Calculated by UrsBiz rule engine"
-        vs "Generated explanation"). User messages always store
-        ``fallback_used=False`` because the trust label only applies
-        to assistant turns.
-
-        H7.8C — ``generation_meta`` is the structured
-        ``ChatGenerationMeta`` payload the provider layer stamps on
-        every assistant turn. The repository serialises a dict
-        via ``json.dumps(..., separators=(",", ":"))`` (compact
-        form, no whitespace) and accepts a pre-serialised string
-        for callers that already have one. User messages and any
-        caller that does not need provenance pass ``None`` and the
-        stored value defaults to ``""``.
-        """
-        import json
+        """Append a message to the session with auditable user_id tracking."""
         if isinstance(generation_meta, dict):
             generation_meta_json = json.dumps(
                 generation_meta, separators=(",", ":"), ensure_ascii=False
@@ -154,8 +123,10 @@ class ChatSessionRepository:
             generation_meta_json = generation_meta
         else:
             generation_meta_json = ""
+
         msg = ChatMessage(
             session_id=session.id,
+            user_id=user_id,
             role=role,
             kind=kind or "",
             content=content,

@@ -2,7 +2,7 @@
 
 The parent row in the normalized Business Digital Twin. One-to-many
 relationships fan out to products, certifications, digital presence,
-export history, goals, and challenges.
+export history, goals, challenges, members, invitations, and approval requests.
 """
 
 from datetime import datetime
@@ -23,10 +23,11 @@ if TYPE_CHECKING:
     from app.models.business_report import BusinessReport
     from app.models.sales import SalesTransaction, SalesUpload
     from app.models.personalization import BusinessPersonalizationSettings
+    from app.models.collaboration import BusinessMember, BusinessInvitation, ApprovalRequest
 
 
 class Business(Base):
-    """A business owned by a single user."""
+    """A business owned by a primary user and accessible by team collaborators."""
 
     __tablename__ = "businesses"
 
@@ -94,6 +95,15 @@ class Business(Base):
         back_populates="business", cascade="all, delete-orphan", lazy="selectin"
     )
     sales_transactions: Mapped[list["SalesTransaction"]] = relationship(
+        back_populates="business", cascade="all, delete-orphan", lazy="selectin"
+    )
+    members: Mapped[list["BusinessMember"]] = relationship(
+        back_populates="business", cascade="all, delete-orphan", lazy="selectin"
+    )
+    invitations: Mapped[list["BusinessInvitation"]] = relationship(
+        back_populates="business", cascade="all, delete-orphan", lazy="selectin"
+    )
+    approval_requests: Mapped[list["ApprovalRequest"]] = relationship(
         back_populates="business", cascade="all, delete-orphan", lazy="selectin"
     )
 

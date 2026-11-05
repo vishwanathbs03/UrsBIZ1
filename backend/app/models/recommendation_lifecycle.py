@@ -1,13 +1,16 @@
-"""ORM model for tracking recommendation lifecycle state (Phase 5).
+"""ORM model for tracking recommendation lifecycle state (Phase 5 & 6.26).
 
 Persists the auditable state of each recommendation for a business:
   New -> Viewed -> Accepted -> In Progress -> Completed -> Dismissed
+
+Includes auditable user_id tracking for MSME collaboration (Prompt 6.26).
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 from typing import TYPE_CHECKING
+
 from sqlalchemy import (
     DateTime,
     ForeignKey,
@@ -23,6 +26,7 @@ from app.utils.database import Base
 
 if TYPE_CHECKING:
     from app.models.business import Business
+    from app.models.user import User
 
 
 class RecommendationLifecycleState(Base):
@@ -34,6 +38,11 @@ class RecommendationLifecycleState(Base):
     business_id: Mapped[int] = mapped_column(
         ForeignKey("businesses.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     recommendation_id: Mapped[str] = mapped_column(
@@ -64,6 +73,7 @@ class RecommendationLifecycleState(Base):
     )
 
     business: Mapped["Business"] = relationship()
+    user: Mapped["User | None"] = relationship(foreign_keys=[user_id])
 
     __table_args__ = (
         UniqueConstraint("business_id", "recommendation_id", name="uq_business_recommendation"),

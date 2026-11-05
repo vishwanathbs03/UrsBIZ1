@@ -1,4 +1,3 @@
-from app.models.business_report import BusinessReport, BusinessReportAudit
 """ORM models package.
 
 Re-exports every model so SQLAlchemy's declarative base and Alembic
@@ -15,8 +14,20 @@ from app.models.business_monitoring import (
     BusinessSignalEventAudit,
     RecommendationRefreshRecord,
 )
+from app.models.business_report import BusinessReport, BusinessReportAudit
 from app.models.certification import Certification
 from app.models.chat import ChatMessage, ChatSession
+from app.models.collaboration import (
+    ApprovalAudit,
+    ApprovalEntityType,
+    ApprovalRequest,
+    ApprovalStatus,
+    BusinessInvitation,
+    BusinessMember,
+    BusinessRole,
+    InvitationStatus,
+    MemberStatus,
+)
 from app.models.data_provenance import BusinessDataProvenance, BusinessDataQualityAudit
 from app.models.decision_workbench import BusinessDecision
 from app.models.digital_presence import DigitalPresence
@@ -65,4 +76,13 @@ __all__ = [
     "BusinessSignalEventAudit",
     "BusinessMonitoringPreferences",
     "RecommendationRefreshRecord",
+    "BusinessMember",
+    "BusinessInvitation",
+    "ApprovalRequest",
+    "ApprovalAudit",
+    "BusinessRole",
+    "MemberStatus",
+    "InvitationStatus",
+    "ApprovalStatus",
+    "ApprovalEntityType",
 ]

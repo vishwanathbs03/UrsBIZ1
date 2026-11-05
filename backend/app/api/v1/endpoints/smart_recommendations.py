@@ -1,4 +1,4 @@
-"""Context-Aware Smart Recommendations API Endpoints (Phase 5 Advanced Intelligence).
+"""Context-Aware Smart Recommendations API Endpoints (Phase 5 Advanced Intelligence & Phase 6.26 RBAC).
 
 Endpoints for:
   - GET /recommendations: List context-grounded recommendations with category/priority/status filters
@@ -6,7 +6,7 @@ Endpoints for:
   - GET /recommendations/growth-strategy: 3-Horizon personalized growth roadmap
   - POST /recommendations/scenarios/simulate: Deterministic What-If impact simulation
   - POST /recommendations/feedback: Submit owner feedback and automatic recommendation suppression
-  - PATCH /recommendations/{id}/status: Update recommendation lifecycle status
+  - PATCH /recommendations/{id}/status: Update recommendation lifecycle status (tracking auditable user_id)
   - POST /recommendations/{id}/explain: AI explanation with deterministic fallback
 """
 
@@ -60,6 +60,7 @@ from app.schemas.business_monitoring import (
     MonitoringPreferencesSchema,
     MonitoringPreferencesUpdate,
 )
+from app.services.rbac_service import Permission, RBACService
 from app.services.recommendations.explanation_service import explain_recommendation
 from app.services.recommendations.recommendation_engine import SmartRecommendationEngine
 from app.utils.database import get_db
@@ -68,15 +69,8 @@ router = APIRouter(prefix="/recommendations", tags=["smart-recommendations"])
 
 
 def _get_active_business(user: User, db: Session):
-    """Resolve active business for authenticated user enforcing tenant isolation."""
-    repo = BusinessRepository(db)
-    business = repo.get_by_owner(user.id)
-    if not business:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active business profile found for this user.",
-        )
-    return business
+    """Resolve active business for authenticated user enforcing tenant isolation and RBAC."""
+    return RBACService.resolve_active_business(user=user, db=db).business
 
 
 @router.get(
@@ -273,20 +267,23 @@ def update_recommendation_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    business = _get_active_business(current_user, db)
+    ctx = RBACService.resolve_active_business(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.RECOMMENDATION_ACT)
     repo = RecommendationLifecycleRepository(db)
     updated = repo.update_status(
-        business_id=business.id,
+        business_id=ctx.business.id,
         recommendation_id=recommendation_id,
         status=payload.status.value,
         notes=payload.notes,
+        user_id=current_user.id,
     )
     return {
-        "business_id": business.id,
+        "business_id": ctx.business.id,
         "recommendation_id": updated.recommendation_id,
         "status": updated.status,
         "status_updated_at": updated.status_updated_at.isoformat() if updated.status_updated_at else None,
         "notes": updated.notes,
+        "user_id": updated.user_id,
     }
 
 
@@ -453,5 +450,3 @@ def dismiss_monitoring_signal(
     business = _get_active_business(current_user, db)
     engine = SmartRecommendationEngine(db)
     return engine.dismiss_signal(business=business, event_id=event_id)
-
-

@@ -1,12 +1,13 @@
-"""Business Goals and Progress Tracker API Endpoints (Prompt 6.24).
+"""Business Goals and Strategic Progress Tracker API Endpoints (Phase 6.24 & Phase 6.26 RBAC).
 
-Enables MSME owners to:
-  - Define measurable business goals linked to authoritative metrics.
-  - Track progress deterministically from verified business evidence.
-  - Distinguish automated metrics from manual declarations and estimates.
-  - Maintain an append-only audit trail and review trajectory over time.
-  - Request non-mutating AI guidance and trajectory evaluations.
-  - Enforce strict tenant isolation on every operation.
+Enables MSME owners and collaborators to define measurable business goals,
+track progress deterministically against real transaction metrics,
+log append-only audit histories, and receive grounded AI advisory.
+
+Enforces role-based permissions:
+  - Viewers & Analysts cannot mutate goals or declare manual progress.
+  - Viewers, Analysts, and Managers cannot delete/archive goals (Owner & Admin only).
+  - All roles can view goals and progress.
 """
 
 from __future__ import annotations
@@ -18,7 +19,6 @@ from sqlalchemy.orm import Session
 from app.middleware.auth_deps import get_current_user
 from app.models.business import Business
 from app.models.user import User
-from app.repositories.business_repository import BusinessRepository
 from app.schemas.business_goal import (
     BusinessGoalAuditOut,
     BusinessGoalCreate,
@@ -30,40 +30,15 @@ from app.schemas.business_goal import (
     GoalAIExplanationResponse,
 )
 from app.services.business_goal_service import BusinessGoalService
+from app.services.rbac_service import BusinessContext, Permission, RBACService
 from app.utils.database import get_db
 
 router = APIRouter(prefix="/goals", tags=["business-goals"])
 
 
-def _get_active_business(user: User, db: Session) -> Business:
-    """Resolve active business for authenticated user enforcing strict tenant isolation.
-
-    If user.active_business_id is explicitly set:
-        Must resolve to an accessible business owned by the user. If not found or
-        unauthorized, raises 404 immediately to prevent silent business switching.
-    If user.active_business_id is None (unselected):
-        Falls back to the user's most recently created business.
-    """
-    repo = BusinessRepository(db)
-    if user.active_business_id is not None:
-        direct = repo.get_by_id_for_owner(
-            business_id=user.active_business_id, owner_id=user.id
-        )
-        if direct is not None:
-            return direct
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Active business profile {user.active_business_id} not found or inaccessible for current user.",
-        )
-
-    # Initial onboarding fallback when active_business_id was never set
-    rows = repo.list_for_owner(user.id)
-    if rows:
-        return rows[-1]
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="Active business profile not found. Please complete onboarding first.",
-    )
+def _get_business_context(user: User, db: Session) -> BusinessContext:
+    """Resolve active business and user role enforcing tenant isolation and RBAC."""
+    return RBACService.resolve_active_business(user=user, db=db)
 
 
 @router.post(
@@ -77,12 +52,13 @@ def create_goal(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> BusinessGoalOut:
-    """Create a new business goal with strict tenant association."""
-    biz = _get_active_business(current_user, db)
+    """Create a new business goal with strict tenant association and RBAC validation."""
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.GOALS_MANAGE)
     svc = BusinessGoalService(db)
     try:
         return svc.create_goal(
-            business_id=biz.id,
+            business_id=ctx.business.id,
             user_id=current_user.id,
             payload=payload,
         )
@@ -107,10 +83,11 @@ def list_goals(
     ),
 ) -> BusinessGoalListResponse:
     """Retrieve all business goals for active business."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     svc = BusinessGoalService(db)
     return svc.list_goals(
-        business_id=biz.id,
+        business_id=ctx.business.id,
         include_archived=include_archived,
         status=status_filter,
     )
@@ -128,10 +105,11 @@ def get_goal(
     db: Annotated[Session, Depends(get_db)],
 ) -> BusinessGoalOut:
     """Retrieve single goal with strict tenant boundary check."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     svc = BusinessGoalService(db)
     try:
-        return svc.get_goal(goal_id=goal_id, business_id=biz.id, re_evaluate=True)
+        return svc.get_goal(goal_id=goal_id, business_id=ctx.business.id, re_evaluate=True)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
@@ -149,12 +127,13 @@ def update_goal(
     db: Annotated[Session, Depends(get_db)],
 ) -> BusinessGoalOut:
     """Update goal configuration and append to audit history."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.GOALS_MANAGE)
     svc = BusinessGoalService(db)
     try:
         return svc.update_goal(
             goal_id=goal_id,
-            business_id=biz.id,
+            business_id=ctx.business.id,
             user_id=current_user.id,
             payload=payload,
         )
@@ -175,12 +154,13 @@ def update_goal_status(
     db: Annotated[Session, Depends(get_db)],
 ) -> BusinessGoalOut:
     """Transition goal status adhering to validated lifecycle rules."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.GOALS_MANAGE)
     svc = BusinessGoalService(db)
     try:
         return svc.update_status(
             goal_id=goal_id,
-            business_id=biz.id,
+            business_id=ctx.business.id,
             user_id=current_user.id,
             payload=payload,
         )
@@ -201,12 +181,13 @@ def record_manual_progress(
     db: Annotated[Session, Depends(get_db)],
 ) -> BusinessGoalOut:
     """Record owner manual progress declaration."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.GOALS_MANAGE)
     svc = BusinessGoalService(db)
     try:
         return svc.record_manual_progress(
             goal_id=goal_id,
-            business_id=biz.id,
+            business_id=ctx.business.id,
             user_id=current_user.id,
             payload=payload,
         )
@@ -226,10 +207,11 @@ def evaluate_goal(
     db: Annotated[Session, Depends(get_db)],
 ) -> BusinessGoalOut:
     """Re-evaluate progress deterministically."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     svc = BusinessGoalService(db)
     try:
-        return svc.get_goal(goal_id=goal_id, business_id=biz.id, re_evaluate=True)
+        return svc.get_goal(goal_id=goal_id, business_id=ctx.business.id, re_evaluate=True)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
@@ -247,12 +229,13 @@ def archive_goal(
     reason: str | None = Query(None, description="Optional archival rationale"),
 ) -> BusinessGoalOut:
     """Soft delete goal and write archival entry to immutable audit log."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_DELETE)
     svc = BusinessGoalService(db)
     try:
         return svc.archive_goal(
             goal_id=goal_id,
-            business_id=biz.id,
+            business_id=ctx.business.id,
             user_id=current_user.id,
             reason=reason,
         )
@@ -272,9 +255,10 @@ def get_goal_history(
     db: Annotated[Session, Depends(get_db)],
 ) -> list[BusinessGoalAuditOut]:
     """Retrieve immutable audit snapshots for a goal."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     svc = BusinessGoalService(db)
-    return svc.get_goal_history(goal_id=goal_id, business_id=biz.id)
+    return svc.get_goal_history(goal_id=goal_id, business_id=ctx.business.id)
 
 
 @router.post(
@@ -289,9 +273,10 @@ def explain_goal_trajectory(
     db: Annotated[Session, Depends(get_db)],
 ) -> GoalAIExplanationResponse:
     """Generate grounded, non-mutating AI trajectory advice."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     svc = BusinessGoalService(db)
     try:
-        return svc.explain_goal(goal_id=goal_id, business_id=biz.id)
+        return svc.explain_goal(goal_id=goal_id, business_id=ctx.business.id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

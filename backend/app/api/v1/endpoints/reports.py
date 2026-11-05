@@ -1,8 +1,13 @@
-"""Reports & Evidence Export Centre API Endpoints — Phase 6.25.
+"""Reports & Evidence Export Centre API Endpoints — Phase 6.25 & Phase 6.26 RBAC.
 
 Provides evidence-backed, reproducible, tenant-isolated report catalogue,
 live preview, multi-format generation (PDF, CSV, XLSX), secure downloads,
 and historical audit accountability.
+
+Enforces role-based permissions:
+  - Viewers can view history and download generated reports, but cannot generate or delete.
+  - Analysts and Managers can preview, generate, and download reports.
+  - Only Administrators and Owners can delete / archive reports.
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ from app.schemas.business_report import (
 from app.schemas.reports import UnifiedReportResponse
 from app.services.csv_export_service import CsvExportService
 from app.services.pdf_report_service import PdfReportService
+from app.services.rbac_service import BusinessContext, Permission, RBACService
 from app.services.report_export_service import ReportExportService
 from app.services.report_service import ReportService
 from app.services.report_storage_service import ReportNotFoundError, StorageSecurityError
@@ -34,35 +40,9 @@ from app.utils.database import get_db
 router = APIRouter(prefix="/reports", tags=["reports-export-centre"])
 
 
-def _get_active_business(user: User, db: Session) -> Business:
-    """Resolve active business for authenticated user enforcing strict tenant isolation.
-
-    If user.active_business_id is explicitly set:
-        Must resolve to an accessible business owned by the user. If not found or
-        unauthorized, raises 404 immediately to prevent silent business switching.
-    If user.active_business_id is None (unselected):
-        Falls back to the user's most recently created business.
-    """
-    repo = BusinessRepository(db)
-    if user.active_business_id is not None:
-        direct = repo.get_by_id_for_owner(
-            business_id=user.active_business_id, owner_id=user.id
-        )
-        if direct is not None:
-            return direct
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Active business profile {user.active_business_id} not found or inaccessible for current user.",
-        )
-
-    # Initial onboarding fallback when active_business_id was never set
-    rows = repo.list_for_owner(user.id)
-    if rows:
-        return rows[-1]
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="No business profile registered for the current user. Complete onboarding first.",
-    )
+def _get_business_context(user: User, db: Session) -> BusinessContext:
+    """Resolve active business and user role enforcing tenant isolation and RBAC."""
+    return RBACService.resolve_active_business(user=user, db=db)
 
 
 # --- Phase 6.25 Reports / Evidence Export Centre Endpoints ---
@@ -78,8 +58,8 @@ def get_report_catalog(
     db: Session = Depends(get_db),
 ) -> ReportCatalogResponse:
     """Return catalogue of all supported business intelligence reports."""
-    # Ensure user has access
-    _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     service = ReportExportService(db)
     return service.get_catalog()
 
@@ -96,10 +76,11 @@ def preview_report(
     db: Session = Depends(get_db),
 ) -> ReportPreviewResponse:
     """Generate structured live preview without writing file to disk."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     service = ReportExportService(db)
     try:
-        return service.preview_report(biz, req)
+        return service.preview_report(ctx.business, req)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
@@ -119,12 +100,13 @@ def generate_report(
     db: Session = Depends(get_db),
 ) -> ReportDetailResponse:
     """Generate binary report file, store securely in tenant directory, and record audit."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.REPORTS_GENERATE)
     service = ReportExportService(db)
     client_ip = request.client.host if request.client else None
     try:
-        report = service.generate_report(biz, current_user, req, client_ip=client_ip)
-        return service.get_report_detail(biz.id, report.report_id)
+        report = service.generate_report(ctx.business, current_user, req, client_ip=client_ip)
+        return service.get_report_detail(ctx.business.id, report.report_id)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
@@ -149,9 +131,10 @@ def list_report_history(
     db: Session = Depends(get_db),
 ) -> ReportHistoryResponse:
     """List historical reports generated for active business."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     service = ReportExportService(db)
-    return service.list_history(biz.id, page=page, page_size=page_size, report_type=report_type)
+    return service.list_history(ctx.business.id, page=page, page_size=page_size, report_type=report_type)
 
 
 # --- Preserved Sprint 13 Endpoints (Enriched with active_business_id tenant isolation) ---
@@ -166,9 +149,10 @@ def get_unified_report(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> UnifiedReportResponse:
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     service = ReportService(BusinessRepository(db))
-    report = service.generate_unified_report(biz)
+    report = service.generate_unified_report(ctx.business)
     now_iso = datetime.now(tz=timezone.utc).isoformat()
     return UnifiedReportResponse(generated_at=now_iso, report=report)
 
@@ -183,9 +167,10 @@ def download_pdf_report(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.REPORTS_DOWNLOAD)
     service = PdfReportService(BusinessRepository(db))
-    pdf_bytes = service.generate_pdf_report(biz, report_type=report_type)
+    pdf_bytes = service.generate_pdf_report(ctx.business, report_type=report_type)
     filename = f"Business_{report_type.capitalize()}_Report.pdf"
     return Response(
         content=pdf_bytes,
@@ -203,9 +188,10 @@ def download_csv_export(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.REPORTS_DOWNLOAD)
     service = CsvExportService(BusinessRepository(db))
-    csv_str = service.generate_csv_export(biz)
+    csv_str = service.generate_csv_export(ctx.business)
     filename = "Business_Dashboard_Export.csv"
     return Response(
         content=csv_str,
@@ -220,18 +206,19 @@ def download_csv_export(
     "/{report_id}",
     response_model=ReportDetailResponse,
     status_code=status.HTTP_200_OK,
-    summary="Get single report details and metadata",
+    summary="Retrieve report metadata by ID",
 )
 def get_report_detail(
     report_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ReportDetailResponse:
-    """Get metadata for a generated report."""
-    biz = _get_active_business(current_user, db)
+    """Get metadata for a single report verifying tenant isolation."""
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     service = ReportExportService(db)
     try:
-        return service.get_report_detail(biz.id, report_id)
+        return service.get_report_detail(ctx.business.id, report_id)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
@@ -250,12 +237,13 @@ def download_report_file(
     db: Session = Depends(get_db),
 ) -> Response:
     """Securely download report file verifying tenant isolation and file integrity."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.REPORTS_DOWNLOAD)
     service = ReportExportService(db)
     client_ip = request.client.host if request.client else None
     try:
         content_bytes, mime_type, filename = service.download_report(
-            biz.id, current_user, report_id, client_ip=client_ip
+            ctx.business.id, current_user, report_id, client_ip=client_ip
         )
         return Response(
             content=content_bytes,
@@ -293,11 +281,12 @@ def archive_report(
     db: Session = Depends(get_db),
 ) -> ReportDetailResponse:
     """Soft-delete report, preventing future downloads while preserving audit trail."""
-    biz = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_DELETE)
     service = ReportExportService(db)
     try:
-        report = service.archive_report(biz.id, current_user, report_id, reason=reason)
-        return service.get_report_detail(biz.id, report.report_id)
+        report = service.archive_report(ctx.business.id, current_user, report_id, reason=reason)
+        return service.get_report_detail(ctx.business.id, report.report_id)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)

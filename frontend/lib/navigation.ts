@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   BookOpen,
   Target,
+  Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -103,6 +104,7 @@ export const navGroups: NavGroup[] = [
     label: "Workspace",
     links: [
       { href: "/reports", label: "Reports", icon: FileText },
+      { href: "/collaboration", label: "Team & Approvals", icon: Users, badge: "RBAC", neonBadge: true },
       { href: "/notifications", label: "Notifications", icon: Bell },
     ],
   },
@@ -128,6 +130,7 @@ export const mainNavLinks: NavLink[] = [
   { href: "/schemes", label: "Government Schemes", icon: Landmark },
   { href: "/assistant", label: "AI Business Assistant", icon: Bot, badge: "AI", neonBadge: true },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/collaboration", label: "Team & Approvals", icon: Users, badge: "RBAC", neonBadge: true },
   { href: "/notifications", label: "Notifications", icon: Bell },
 ];
 

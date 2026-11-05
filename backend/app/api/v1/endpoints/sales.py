@@ -1,4 +1,4 @@
-"""API router for Sales Ingestion and Sales Intelligence (Phase 3 & Phase 5 Resilience)."""
+"""API router for Sales Ingestion and Sales Intelligence (Phase 3 & Phase 6.26 RBAC)."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from sqlalchemy.orm import Session
 
 from app.middleware.auth_deps import get_current_user
 from app.models.user import User
-from app.repositories.business_repository import BusinessRepository
 from app.schemas.sales import (
     ColumnMapping,
     CustomerInsightsResponse,
@@ -30,6 +29,7 @@ from app.schemas.sales import (
     SalesUploadListItem,
     SalesUploadResponse,
 )
+from app.services.rbac_service import BusinessContext, Permission, RBACService
 from app.services.sales.parser import (
     EmptyFileError,
     MalformedFileError,
@@ -43,16 +43,9 @@ from app.utils.database import get_db
 router = APIRouter(prefix="/sales", tags=["sales-intelligence"])
 
 
-def _get_active_business(user: User, db: Session):
-    """Resolve active business for the authenticated user, enforcing authorization."""
-    repo = BusinessRepository(db)
-    business = repo.get_by_owner(user.id)
-    if not business:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active business profile found for user.",
-        )
-    return business
+def _get_business_context(user: User, db: Session) -> BusinessContext:
+    """Resolve active business and user role enforcing tenant isolation and RBAC."""
+    return RBACService.resolve_active_business(user=user, db=db)
 
 
 @router.post(
@@ -66,7 +59,8 @@ async def preview_sales_file(
     db: Session = Depends(get_db),
 ):
     """Inspects file headers and sample rows without modifying the database."""
-    _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_WRITE)
 
     try:
         content = await file.read()
@@ -99,7 +93,8 @@ async def confirm_and_ingest_sales(
     db: Session = Depends(get_db),
 ):
     """Validates rows against mapping, audits data quality, and commits sales records with idempotency."""
-    business = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_WRITE)
 
     try:
         mapping_dict = json.loads(mapping)
@@ -114,7 +109,7 @@ async def confirm_and_ingest_sales(
         content = await file.read()
         svc = SalesService(db)
         return svc.confirm_and_ingest(
-            business_id=business.id,
+            business_id=ctx.business.id,
             filename=file.filename or "uploaded_sales",
             file_bytes=content,
             mapping=col_mapping,
@@ -144,9 +139,10 @@ def get_sales_summary(
     db: Session = Depends(get_db),
 ):
     """Returns high-level transaction metrics and date range."""
-    business = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     svc = SalesService(db)
-    return svc.get_summary(business.id)
+    return svc.get_summary(ctx.business.id)
 
 
 @router.get(
@@ -159,9 +155,10 @@ def get_customer_insights(
     db: Session = Depends(get_db),
 ):
     """Calculates customer metrics and flags accounts with declining activity."""
-    business = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     svc = SalesService(db)
-    return svc.get_customer_insights(business.id)
+    return svc.get_customer_insights(ctx.business.id)
 
 
 @router.get(
@@ -174,9 +171,10 @@ def get_product_insights(
     db: Session = Depends(get_db),
 ):
     """Calculates product sales volumes, revenue rankings, and velocity trends."""
-    business = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     svc = SalesService(db)
-    return svc.get_product_insights(business.id)
+    return svc.get_product_insights(ctx.business.id)
 
 
 @router.get(
@@ -190,9 +188,10 @@ def get_sales_time_series(
     db: Session = Depends(get_db),
 ):
     """Aggregates sales over time without inventing missing dates or synthetic interpolation."""
-    business = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     svc = SalesService(db)
-    return svc.get_time_series(business.id, granularity)
+    return svc.get_time_series(ctx.business.id, granularity)
 
 
 @router.get(
@@ -207,9 +206,10 @@ def list_sales_uploads(
     db: Session = Depends(get_db),
 ):
     """Returns historical upload log and data quality scores with pagination."""
-    business = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_VIEW)
     svc = SalesService(db)
-    uploads = svc.list_uploads(business.id)
+    uploads = svc.list_uploads(ctx.business.id)
     return uploads[offset : offset + limit]
 
 
@@ -223,9 +223,10 @@ def delete_sales_upload(
     db: Session = Depends(get_db),
 ):
     """Enforces active business ownership and cascades deletion."""
-    business = _get_active_business(current_user, db)
+    ctx = _get_business_context(current_user, db)
+    RBACService.check_permission(ctx.role, Permission.DATA_DELETE)
     svc = SalesService(db)
-    deleted = svc.delete_upload(upload_id, business.id)
+    deleted = svc.delete_upload(upload_id, ctx.business.id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -9,10 +9,12 @@ from app.api.v1.endpoints import (
     alerts,
     analytics_sprint13,
     analytics_v1_router,
+    approvals,
     auth,
     benchmark,
     business,
     chat,
+    collaboration,
     compliance,
     copilot,
     dashboard,
@@ -94,3 +96,5 @@ api_router.include_router(what_if_scenario.router)
 api_router.include_router(data_confidence.router)
 api_router.include_router(metrics_dictionary.router)
 api_router.include_router(goals.router)
+api_router.include_router(collaboration.router)
+api_router.include_router(approvals.router)
