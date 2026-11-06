@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.main import app
+from app.models.action_item import ActionItem
 from app.models.business import Business
 from app.models.chat import ChatMessage, ChatSession
 from app.models.collaboration import (
@@ -576,6 +577,252 @@ def test_sole_owner_self_approval_allowance(client: TestClient, db_session: Sess
     )
     assert review_res.status_code == 200
     assert review_res.json()["status"] == "APPROVED"
+
+def test_owner_blocked_from_self_approval_when_admin_or_manager_exists(client: TestClient, db_session: Session):
+    """Owner is blocked from self-approving if an Administrator or Manager exists in the business."""
+    # 1. Owner with an Administrator in business
+    owner1 = _create_user(db_session, "owner_with_admin@test.com")
+    biz1 = _create_business(db_session, owner1, name="Admin Co")
+    admin1 = _create_user(db_session, "admin_co@test.com")
+    _add_member(db_session, biz1, admin1, BusinessRole.ADMINISTRATOR)
+
+    req1_res = client.post(
+        "/api/v1/approvals",
+        json={
+            "entity_type": "DECISION",
+            "entity_id": "1",
+            "title": "Owner Request with Admin",
+        },
+        headers=_auth_header(owner1),
+    )
+    assert req1_res.status_code == 201
+    app1_id = req1_res.json()["id"]
+
+    # Owner attempts self-approval -> BLOCKED because Admin exists
+    self_app1 = client.post(
+        f"/api/v1/approvals/{app1_id}/review",
+        json={"action": "APPROVE", "decision_notes": "Trying to bypass admin"},
+        headers=_auth_header(owner1),
+    )
+    assert self_app1.status_code == 403
+    assert "another eligible approver with role 'Administrator' exists" in self_app1.text
+
+    # 2. Owner with a Manager in business
+    owner2 = _create_user(db_session, "owner_with_mgr@test.com")
+    biz2 = _create_business(db_session, owner2, name="Manager Co")
+    mgr2 = _create_user(db_session, "mgr_co@test.com")
+    _add_member(db_session, biz2, mgr2, BusinessRole.MANAGER)
+
+    req2_res = client.post(
+        "/api/v1/approvals",
+        json={
+            "entity_type": "DECISION",
+            "entity_id": "2",
+            "title": "Owner Request with Manager",
+        },
+        headers=_auth_header(owner2),
+    )
+    assert req2_res.status_code == 201
+    app2_id = req2_res.json()["id"]
+
+    # Owner attempts self-approval -> BLOCKED because Manager exists
+    self_app2 = client.post(
+        f"/api/v1/approvals/{app2_id}/review",
+        json={"action": "APPROVE", "decision_notes": "Trying to bypass manager"},
+        headers=_auth_header(owner2),
+    )
+    assert self_app2.status_code == 403
+    assert "another eligible approver with role 'Manager' exists" in self_app2.text
+
+
+def test_owner_allowed_self_approval_when_only_analyst_exists(client: TestClient, db_session: Session):
+    """Owner CAN self-approve if the only other members are Analysts or Viewers (who lack FINANCIAL_APPROVE)."""
+    owner = _create_user(db_session, "owner_with_analyst@test.com")
+    biz = _create_business(db_session, owner, name="Analyst Only Co")
+    analyst = _create_user(db_session, "analyst_member@test.com")
+    _add_member(db_session, biz, analyst, BusinessRole.ANALYST)
+    viewer = _create_user(db_session, "viewer_member@test.com")
+    _add_member(db_session, biz, viewer, BusinessRole.VIEWER)
+
+    req_res = client.post(
+        "/api/v1/approvals",
+        json={
+            "entity_type": "DECISION",
+            "entity_id": "3",
+            "title": "Solo Owner Decision with Analysts",
+        },
+        headers=_auth_header(owner),
+    )
+    assert req_res.status_code == 201
+    app_id = req_res.json()["id"]
+
+    # Owner can self-approve because neither Analyst nor Viewer has FINANCIAL_APPROVE
+    self_app = client.post(
+        f"/api/v1/approvals/{app_id}/review",
+        json={"action": "APPROVE", "decision_notes": "Sole owner approved"},
+        headers=_auth_header(owner),
+    )
+    assert self_app.status_code == 200
+    assert self_app.json()["status"] == "APPROVED"
+
+
+def test_admin_and_manager_cannot_self_approve(client: TestClient, db_session: Session):
+    """Administrator and Manager are strictly forbidden from approving their own submissions."""
+    owner = _create_user(db_session, "owner_no_self@test.com")
+    biz = _create_business(db_session, owner)
+    admin = _create_user(db_session, "admin_no_self@test.com")
+    _add_member(db_session, biz, admin, BusinessRole.ADMINISTRATOR)
+    mgr = _create_user(db_session, "mgr_no_self@test.com")
+    _add_member(db_session, biz, mgr, BusinessRole.MANAGER)
+
+    # 1. Admin submits request
+    req1 = client.post(
+        "/api/v1/approvals",
+        json={"entity_type": "DECISION", "entity_id": "11", "title": "Admin Proposal"},
+        headers=_auth_header(admin),
+    )
+    assert req1.status_code == 201
+    # Admin tries to self-approve -> 403 Forbidden
+    self_admin = client.post(
+        f"/api/v1/approvals/{req1.json()['id']}/review",
+        json={"action": "APPROVE"},
+        headers=_auth_header(admin),
+    )
+    assert self_admin.status_code == 403
+    assert "cannot approve or reject your own request" in self_admin.text
+
+    # 2. Manager submits request
+    req2 = client.post(
+        "/api/v1/approvals",
+        json={"entity_type": "DECISION", "entity_id": "12", "title": "Manager Proposal"},
+        headers=_auth_header(mgr),
+    )
+    assert req2.status_code == 201
+    # Manager tries to self-approve -> 403 Forbidden
+    self_mgr = client.post(
+        f"/api/v1/approvals/{req2.json()['id']}/review",
+        json={"action": "APPROVE"},
+        headers=_auth_header(mgr),
+    )
+    assert self_mgr.status_code == 403
+    assert "cannot approve or reject your own request" in self_mgr.text
+
+
+def test_all_five_approval_entity_types_synchronization(client: TestClient, db_session: Session):
+    """Verify target entity status synchronization for all 5 entity types:
+    DECISION, DISCOUNT, BUDGET, GOAL, and RECOMMENDATION.
+    """
+    owner = _create_user(db_session, "owner_sync5@test.com")
+    biz = _create_business(db_session, owner)
+    manager = _create_user(db_session, "mgr_sync5@test.com")
+    _add_member(db_session, biz, manager, BusinessRole.MANAGER)
+
+    # --- 1. DISCOUNT Entity Sync ---
+    discount_dec = BusinessDecision(
+        business_id=biz.id,
+        owner_id=manager.id,
+        title="15% Festive Discount",
+        decision_type="offer_discount",
+        objective="Drive seasonal volume",
+        status="Draft",
+    )
+    db_session.add(discount_dec)
+    db_session.commit()
+
+    disc_req = client.post(
+        "/api/v1/approvals",
+        json={"entity_type": "DISCOUNT", "entity_id": str(discount_dec.id), "title": "Festive Discount Approval"},
+        headers=_auth_header(manager),
+    )
+    assert disc_req.status_code == 201
+    # Owner approves
+    client.post(
+        f"/api/v1/approvals/{disc_req.json()['id']}/review",
+        json={"action": "APPROVE", "decision_notes": "Discount approved for Diwali"},
+        headers=_auth_header(owner),
+    )
+    db_session.refresh(discount_dec)
+    assert discount_dec.status == "APPROVED"
+
+    # --- 2. BUDGET Entity Sync ---
+    budget_dec = BusinessDecision(
+        business_id=biz.id,
+        owner_id=manager.id,
+        title="Q1 Travel Budget",
+        decision_type="reduce_expenses",
+        objective="Cap non-essential travel",
+        status="Draft",
+    )
+    db_session.add(budget_dec)
+    db_session.commit()
+
+    budget_req = client.post(
+        "/api/v1/approvals",
+        json={"entity_type": "BUDGET", "entity_id": str(budget_dec.id), "title": "Q1 Travel Budget Cap"},
+        headers=_auth_header(manager),
+    )
+    assert budget_req.status_code == 201
+    # Owner rejects
+    client.post(
+        f"/api/v1/approvals/{budget_req.json()['id']}/review",
+        json={"action": "REJECT", "decision_notes": "Budget cap too restrictive"},
+        headers=_auth_header(owner),
+    )
+    db_session.refresh(budget_dec)
+    assert budget_dec.status == "REJECTED"
+
+    # --- 3. GOAL Entity Sync ---
+    goal = BusinessGoal(
+        business_id=biz.id,
+        title="Achieve 200k Revenue",
+        metric_key="monthly_revenue",
+        target_value=200000.0,
+        status="PAUSED",
+    )
+    db_session.add(goal)
+    db_session.commit()
+
+    goal_req = client.post(
+        "/api/v1/approvals",
+        json={"entity_type": "GOAL", "entity_id": str(goal.id), "title": "Activate 200k Goal"},
+        headers=_auth_header(manager),
+    )
+    assert goal_req.status_code == 201
+    # Owner approves
+    client.post(
+        f"/api/v1/approvals/{goal_req.json()['id']}/review",
+        json={"action": "APPROVE", "decision_notes": "Target confirmed"},
+        headers=_auth_header(owner),
+    )
+    db_session.refresh(goal)
+    assert goal.status == "ACTIVE"
+    assert goal.status_notes == "Target confirmed"
+
+    # --- 4. RECOMMENDATION Entity Sync ---
+    rec_req = client.post(
+        "/api/v1/approvals",
+        json={
+            "entity_type": "RECOMMENDATION",
+            "entity_id": "rec-smart-456",
+            "title": "Accept Cross-Sell Strategy",
+        },
+        headers=_auth_header(manager),
+    )
+    assert rec_req.status_code == 201
+    # Owner approves
+    client.post(
+        f"/api/v1/approvals/{rec_req.json()['id']}/review",
+        json={"action": "APPROVE", "decision_notes": "Recommended strategy accepted"},
+        headers=_auth_header(owner),
+    )
+    rec_lifecycle = db_session.query(RecommendationLifecycleState).filter_by(
+        recommendation_id="rec-smart-456", business_id=biz.id
+    ).first()
+    assert rec_lifecycle is not None
+    assert rec_lifecycle.status == "Accepted"
+    assert rec_lifecycle.user_id == owner.id
+    assert rec_lifecycle.notes == "Recommended strategy accepted"
+
 
 
 # ==============================================================================

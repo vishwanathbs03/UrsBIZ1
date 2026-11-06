@@ -17,14 +17,19 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.business import Business
+from app.models.action_item import ActionItem
+from app.models.business_goal import BusinessGoal
 from app.models.collaboration import (
     ApprovalAudit,
     ApprovalEntityType,
     ApprovalRequest,
     ApprovalStatus,
+    BusinessMember,
     BusinessRole,
+    MemberStatus,
 )
 from app.models.decision_workbench import BusinessDecision
+from app.models.recommendation_lifecycle import RecommendationLifecycleState
 from app.models.user import User
 from app.schemas.collaboration import (
     ApprovalAuditOut,
@@ -138,12 +143,39 @@ class ApprovalWorkflowService:
                 detail=f"Cannot review request {request_id} with current status '{approval_req.status}'.",
             )
 
-        # Self-approval guard: Only the Owner can self-approve their own requests
-        if approval_req.requester_user_id == reviewer.id and reviewer_role != BusinessRole.OWNER:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Dual-control governance violation: You cannot approve or reject your own request. Another authorized manager or owner must review it.",
-            )
+        # Dual-control governance: Requesters cannot approve their own requests
+        if approval_req.requester_user_id == reviewer.id:
+            # Sole-registered-owner exception:
+            # An Owner can self-approve ONLY IF they are genuinely the sole registered owner
+            # with NO other active members holding FINANCIAL_APPROVE authority (Administrator or Manager).
+            if reviewer_role == BusinessRole.OWNER:
+                other_approver = (
+                    self.db.query(BusinessMember)
+                    .filter(
+                        BusinessMember.business_id == business.id,
+                        BusinessMember.user_id != reviewer.id,
+                        BusinessMember.status == MemberStatus.ACTIVE.value,
+                        BusinessMember.role.in_([
+                            BusinessRole.ADMINISTRATOR.value,
+                            BusinessRole.MANAGER.value,
+                        ]),
+                    )
+                    .first()
+                )
+                if other_approver:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=(
+                            f"Dual-control governance violation: You cannot self-approve because another "
+                            f"eligible approver with role '{other_approver.role}' exists in this business. "
+                            "Independent review is required."
+                        ),
+                    )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Dual-control governance violation: You cannot approve or reject your own request. Another authorized manager or owner must review it.",
+                )
 
         action = req.action.upper()
         new_status = ApprovalStatus.APPROVED.value if action == "APPROVE" else ApprovalStatus.REJECTED.value
@@ -166,26 +198,98 @@ class ApprovalWorkflowService:
         )
         self.db.add(audit)
 
-        # Cross-module synchronization: If this is a decision, update the decision's status
-        if approval_req.entity_type == ApprovalEntityType.DECISION.value:
-            try:
-                dec_id = int(approval_req.entity_id)
-                dec = self.db.query(BusinessDecision).filter(
-                    BusinessDecision.id == dec_id,
-                    BusinessDecision.business_id == business.id,
-                ).first()
-                if dec:
-                    if action == "APPROVE":
-                        dec.status = "APPROVED"
-                    else:
-                        dec.status = "REJECTED"
-            except (ValueError, TypeError):
-                pass
+        # Cross-module synchronization across all 5 supported entity types
+        self._synchronize_target_entity(
+            approval_req=approval_req,
+            action=action,
+            reviewer=reviewer,
+            decision_notes=req.decision_notes,
+        )
 
         self.db.commit()
         self.db.refresh(approval_req)
 
         return self._to_out(approval_req)
+
+    def _synchronize_target_entity(
+        self,
+        approval_req: ApprovalRequest,
+        action: str,
+        reviewer: User,
+        decision_notes: str | None,
+    ) -> None:
+        """Synchronize the status and attributes of the target entity upon approval/rejection."""
+        entity_type = approval_req.entity_type
+        entity_id_str = str(approval_req.entity_id)
+
+        # 1. DECISION or DISCOUNT
+        if entity_type in (ApprovalEntityType.DECISION.value, ApprovalEntityType.DISCOUNT.value):
+            try:
+                dec_id = int(entity_id_str)
+                dec = self.db.query(BusinessDecision).filter(
+                    BusinessDecision.id == dec_id,
+                    BusinessDecision.business_id == approval_req.business_id,
+                ).first()
+                if dec:
+                    dec.status = "APPROVED" if action == "APPROVE" else "REJECTED"
+            except (ValueError, TypeError):
+                pass
+
+        # 2. BUDGET (can be BusinessDecision or ActionItem)
+        elif entity_type == ApprovalEntityType.BUDGET.value:
+            try:
+                item_id = int(entity_id_str)
+                dec = self.db.query(BusinessDecision).filter(
+                    BusinessDecision.id == item_id,
+                    BusinessDecision.business_id == approval_req.business_id,
+                ).first()
+                if dec:
+                    dec.status = "APPROVED" if action == "APPROVE" else "REJECTED"
+                else:
+                    action_item = self.db.query(ActionItem).filter(
+                        ActionItem.id == item_id,
+                    ).first()
+                    if action_item:
+                        action_item.category = "Approved" if action == "APPROVE" else "Rejected"
+            except (ValueError, TypeError):
+                pass
+
+        # 3. GOAL
+        elif entity_type == ApprovalEntityType.GOAL.value:
+            try:
+                goal_id = int(entity_id_str)
+                goal = self.db.query(BusinessGoal).filter(
+                    BusinessGoal.id == goal_id,
+                    BusinessGoal.business_id == approval_req.business_id,
+                ).first()
+                if goal:
+                    if action == "APPROVE":
+                        goal.status = "ACTIVE"
+                        goal.status_notes = decision_notes or "Goal approved via approval workflow"
+                    else:
+                        goal.status = "PAUSED"
+                        goal.status_notes = decision_notes or "Goal rejected via approval workflow"
+            except (ValueError, TypeError):
+                pass
+
+        # 4. RECOMMENDATION
+        elif entity_type == ApprovalEntityType.RECOMMENDATION.value:
+            rec = self.db.query(RecommendationLifecycleState).filter(
+                RecommendationLifecycleState.recommendation_id == entity_id_str,
+                RecommendationLifecycleState.business_id == approval_req.business_id,
+            ).first()
+            if not rec:
+                rec = RecommendationLifecycleState(
+                    business_id=approval_req.business_id,
+                    recommendation_id=entity_id_str,
+                    status="New",
+                )
+                self.db.add(rec)
+
+            rec.status = "Accepted" if action == "APPROVE" else "Dismissed"
+            rec.user_id = reviewer.id
+            if decision_notes:
+                rec.notes = decision_notes
 
     def cancel_request(
         self,
