@@ -792,3 +792,277 @@ def test_multi_user_tenant_isolation(client: TestClient, db_session: Session):
         headers=_auth_header(owner1),
     )
     assert res_cross.status_code == 404
+
+
+# ==============================================================================
+# 11. EXHAUSTIVE MATRIX & PERMISSION CHECKS (AUDIT COVERAGE)
+# ==============================================================================
+
+def test_exhaustive_5_roles_13_permissions_matrix():
+    """Verify all 65 combinations (5 roles x 13 permissions) explicitly match policy."""
+    expected_matrix = {
+        BusinessRole.OWNER: {
+            Permission.MEMBERS_VIEW: True,
+            Permission.MEMBERS_MANAGE: True,
+            Permission.FINANCIAL_APPROVE: True,
+            Permission.FINANCIAL_REQUEST: True,
+            Permission.DATA_VIEW: True,
+            Permission.DATA_WRITE: True,
+            Permission.DATA_DELETE: True,
+            Permission.GOALS_MANAGE: True,
+            Permission.SIMULATION_RUN: True,
+            Permission.REPORTS_GENERATE: True,
+            Permission.REPORTS_DOWNLOAD: True,
+            Permission.RECOMMENDATION_ACT: True,
+            Permission.CHAT_COLLABORATE: True,
+        },
+        BusinessRole.ADMINISTRATOR: {
+            Permission.MEMBERS_VIEW: True,
+            Permission.MEMBERS_MANAGE: True,
+            Permission.FINANCIAL_APPROVE: True,
+            Permission.FINANCIAL_REQUEST: True,
+            Permission.DATA_VIEW: True,
+            Permission.DATA_WRITE: True,
+            Permission.DATA_DELETE: True,
+            Permission.GOALS_MANAGE: True,
+            Permission.SIMULATION_RUN: True,
+            Permission.REPORTS_GENERATE: True,
+            Permission.REPORTS_DOWNLOAD: True,
+            Permission.RECOMMENDATION_ACT: True,
+            Permission.CHAT_COLLABORATE: True,
+        },
+        BusinessRole.MANAGER: {
+            Permission.MEMBERS_VIEW: True,
+            Permission.MEMBERS_MANAGE: False,
+            Permission.FINANCIAL_APPROVE: True,
+            Permission.FINANCIAL_REQUEST: True,
+            Permission.DATA_VIEW: True,
+            Permission.DATA_WRITE: True,
+            Permission.DATA_DELETE: False,
+            Permission.GOALS_MANAGE: True,
+            Permission.SIMULATION_RUN: True,
+            Permission.REPORTS_GENERATE: True,
+            Permission.REPORTS_DOWNLOAD: True,
+            Permission.RECOMMENDATION_ACT: True,
+            Permission.CHAT_COLLABORATE: True,
+        },
+        BusinessRole.ANALYST: {
+            Permission.MEMBERS_VIEW: True,
+            Permission.MEMBERS_MANAGE: False,
+            Permission.FINANCIAL_APPROVE: False,
+            Permission.FINANCIAL_REQUEST: True,
+            Permission.DATA_VIEW: True,
+            Permission.DATA_WRITE: False,
+            Permission.DATA_DELETE: False,
+            Permission.GOALS_MANAGE: False,
+            Permission.SIMULATION_RUN: True,
+            Permission.REPORTS_GENERATE: True,
+            Permission.REPORTS_DOWNLOAD: True,
+            Permission.RECOMMENDATION_ACT: False,
+            Permission.CHAT_COLLABORATE: True,
+        },
+        BusinessRole.VIEWER: {
+            Permission.MEMBERS_VIEW: True,
+            Permission.MEMBERS_MANAGE: False,
+            Permission.FINANCIAL_APPROVE: False,
+            Permission.FINANCIAL_REQUEST: False,
+            Permission.DATA_VIEW: True,
+            Permission.DATA_WRITE: False,
+            Permission.DATA_DELETE: False,
+            Permission.GOALS_MANAGE: False,
+            Permission.SIMULATION_RUN: False,
+            Permission.REPORTS_GENERATE: False,
+            Permission.REPORTS_DOWNLOAD: True,
+            Permission.RECOMMENDATION_ACT: False,
+            Permission.CHAT_COLLABORATE: True,
+        },
+    }
+
+    for role, perms in expected_matrix.items():
+        for perm, expected_allow in perms.items():
+            actual = RBACService.has_permission(role, perm)
+            assert actual == expected_allow, f"Mismatch for {role.value} on {perm.value}: expected {expected_allow}, got {actual}"
+
+
+def test_unknown_role_and_permission_explicit_deny():
+    """Verify that an unknown role or non-existent permission explicitly denies."""
+    assert not RBACService.has_permission("GhostRole", Permission.DATA_VIEW)
+    assert not RBACService.has_permission(BusinessRole.VIEWER, "invalid:permission")
+    with pytest.raises(Exception):
+        RBACService.check_permission(BusinessRole.VIEWER, "invalid:permission")
+
+
+def test_invitation_expiry_and_revocation_enforcement(client: TestClient, db_session: Session):
+    """Expired or revoked invitations cannot be accepted."""
+    owner = _create_user(db_session, "owner_exp@test.com")
+    biz = _create_business(db_session, owner)
+    invitee = _create_user(db_session, "invitee@test.com")
+
+    # 1. Expired invitation
+    expired_inv = BusinessInvitation(
+        business_id=biz.id,
+        email=invitee.email,
+        role="Manager",
+        token="expired-token-123",
+        invited_by_user_id=owner.id,
+        status=InvitationStatus.PENDING.value,
+        expires_at=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    db_session.add(expired_inv)
+    db_session.commit()
+
+    exp_res = client.post(
+        "/api/v1/collaboration/invitations/accept",
+        json={"token": "expired-token-123"},
+        headers=_auth_header(invitee),
+    )
+    assert exp_res.status_code == 400
+    assert "expired" in exp_res.text.lower()
+
+    # 2. Revoked invitation
+    revoked_inv = BusinessInvitation(
+        business_id=biz.id,
+        email=invitee.email,
+        role="Manager",
+        token="revoked-token-456",
+        invited_by_user_id=owner.id,
+        status=InvitationStatus.REVOKED.value,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=5),
+    )
+    db_session.add(revoked_inv)
+    db_session.commit()
+
+    rev_res = client.post(
+        "/api/v1/collaboration/invitations/accept",
+        json={"token": "revoked-token-456"},
+        headers=_auth_header(invitee),
+    )
+    assert rev_res.status_code == 400
+    assert "no longer pending" in rev_res.text.lower() or "revoked" in rev_res.text.lower()
+
+
+def test_invitation_wrong_user_email_rejection(client: TestClient, db_session: Session):
+    """A user cannot accept an invitation issued to a different email address."""
+    owner = _create_user(db_session, "owner_sec@test.com")
+    biz = _create_business(db_session, owner)
+    intended_user = _create_user(db_session, "intended@test.com")
+    imposter_user = _create_user(db_session, "imposter@test.com")
+
+    inv = BusinessInvitation(
+        business_id=biz.id,
+        email="intended@test.com",
+        role="Manager",
+        token="intended-token-789",
+        invited_by_user_id=owner.id,
+        status=InvitationStatus.PENDING.value,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=3),
+    )
+    db_session.add(inv)
+    db_session.commit()
+
+    # Imposter tries to accept
+    res = client.post(
+        "/api/v1/collaboration/invitations/accept",
+        json={"token": "intended-token-789"},
+        headers=_auth_header(imposter_user),
+    )
+    assert res.status_code == 403
+    assert "intended@test.com" in res.text
+
+
+def test_approval_invalid_state_transitions(client: TestClient, db_session: Session):
+    """Approved or cancelled requests cannot transition into inconsistent states."""
+    owner = _create_user(db_session, "owner_trans_chk@test.com")
+    biz = _create_business(db_session, owner)
+
+    app_req = ApprovalRequest(
+        business_id=biz.id,
+        requester_user_id=owner.id,
+        entity_type=ApprovalEntityType.DECISION,
+        entity_id="101",
+        title="Check State Machine",
+        status=ApprovalStatus.APPROVED.value,
+    )
+    db_session.add(app_req)
+    db_session.commit()
+
+    # 1. Attempt to review already approved request -> 400
+    res_review = client.post(
+        f"/api/v1/approvals/{app_req.id}/review",
+        json={"action": "APPROVE"},
+        headers=_auth_header(owner),
+    )
+    assert res_review.status_code == 400
+    assert "Cannot review request" in res_review.text
+
+    # 2. Attempt to cancel already approved request -> 400
+    res_cancel = client.post(
+        f"/api/v1/approvals/{app_req.id}/cancel",
+        headers=_auth_header(owner),
+    )
+    assert res_cancel.status_code == 400
+    assert "Cannot cancel request" in res_cancel.text
+
+
+def test_cross_tenant_comprehensive_isolation(client: TestClient, db_session: Session):
+    """Verify tenant isolation across invitation revocation, member removal, and request cancellation."""
+    owner_a = _create_user(db_session, "owner_a_iso@test.com")
+    biz_a = _create_business(db_session, owner_a, name="Biz A")
+
+    owner_b = _create_user(db_session, "owner_b_iso@test.com")
+    biz_b = _create_business(db_session, owner_b, name="Biz B")
+    member_b = _create_user(db_session, "member_b@test.com")
+    m_record = _add_member(db_session, biz_b, member_b, BusinessRole.ANALYST)
+
+    inv_b = BusinessInvitation(
+        business_id=biz_b.id,
+        email="pending_b@test.com",
+        role="Viewer",
+        token="token-biz-b-999",
+        invited_by_user_id=owner_b.id,
+        status=InvitationStatus.PENDING.value,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=2),
+    )
+    db_session.add(inv_b)
+
+    req_b = ApprovalRequest(
+        business_id=biz_b.id,
+        requester_user_id=owner_b.id,
+        entity_type=ApprovalEntityType.DECISION,
+        entity_id="500",
+        title="Biz B Request",
+        status=ApprovalStatus.PENDING.value,
+    )
+    db_session.add(req_b)
+    db_session.commit()
+
+    # 1. Owner A tries to revoke Biz B's invitation -> 404 (not in active business)
+    rev_res = client.delete(
+        f"/api/v1/collaboration/invitations/{inv_b.id}",
+        headers=_auth_header(owner_a),
+    )
+    assert rev_res.status_code == 404
+
+    # 2. Owner A tries to remove Biz B's member -> 404
+    rem_res = client.delete(
+        f"/api/v1/collaboration/members/{m_record.id}",
+        headers=_auth_header(owner_a),
+    )
+    assert rem_res.status_code == 404
+
+    # 3. Owner A tries to cancel Biz B's approval request -> 404
+    cancel_res = client.post(
+        f"/api/v1/approvals/{req_b.id}/cancel",
+        headers=_auth_header(owner_a),
+    )
+    assert cancel_res.status_code == 404
+
+    # 4. Owner A tries to transfer ownership of Biz B to member_b -> Owner A is in Biz A, so 400 (not member of Biz A)
+    trans_res = client.post(
+        "/api/v1/collaboration/transfer-ownership",
+        json={"new_owner_user_id": member_b.id},
+        headers=_auth_header(owner_a),
+    )
+    assert trans_res.status_code == 400
+    assert "must be an active member" in trans_res.text
+
