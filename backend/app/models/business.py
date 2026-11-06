@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from app.models.sales import SalesTransaction, SalesUpload
     from app.models.personalization import BusinessPersonalizationSettings
     from app.models.collaboration import BusinessMember, BusinessInvitation, ApprovalRequest
+    from app.models.integration import IntegrationConnection
 
 
 class Business(Base):
@@ -104,6 +105,9 @@ class Business(Base):
         back_populates="business", cascade="all, delete-orphan", lazy="selectin"
     )
     approval_requests: Mapped[list["ApprovalRequest"]] = relationship(
+        back_populates="business", cascade="all, delete-orphan", lazy="selectin"
+    )
+    integration_connections: Mapped[list["IntegrationConnection"]] = relationship(
         back_populates="business", cascade="all, delete-orphan", lazy="selectin"
     )
 

@@ -28,6 +28,7 @@ from app.api.v1.endpoints import (
     growth,
     health,
     insights,
+    integrations,
     intelligence,
     knowledge,
     metrics_dictionary,
@@ -98,3 +99,4 @@ api_router.include_router(metrics_dictionary.router)
 api_router.include_router(goals.router)
 api_router.include_router(collaboration.router)
 api_router.include_router(approvals.router)
+api_router.include_router(integrations.router)

@@ -33,6 +33,15 @@ from app.models.decision_workbench import BusinessDecision
 from app.models.digital_presence import DigitalPresence
 from app.models.export_history import ExportHistory
 from app.models.idempotency import IdempotencyRecord
+from app.models.integration import (
+    ConnectionStatus,
+    ErrorCategory,
+    IntegrationAudit,
+    IntegrationConnection,
+    IntegrationSyncExecution,
+    SyncExecutionStatus,
+    SyncTriggerType,
+)
 from app.models.notification_item import NotificationItem
 from app.models.personalization import BusinessPersonalizationSettings
 from app.models.product import Product
@@ -85,4 +94,11 @@ __all__ = [
     "InvitationStatus",
     "ApprovalStatus",
     "ApprovalEntityType",
+    "IntegrationConnection",
+    "IntegrationSyncExecution",
+    "IntegrationAudit",
+    "ConnectionStatus",
+    "SyncExecutionStatus",
+    "SyncTriggerType",
+    "ErrorCategory",
 ]

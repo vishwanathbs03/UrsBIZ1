@@ -20,6 +20,7 @@ import {
   BookOpen,
   Target,
   Users,
+  Plug,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -105,6 +106,7 @@ export const navGroups: NavGroup[] = [
     links: [
       { href: "/reports", label: "Reports", icon: FileText },
       { href: "/collaboration", label: "Team & Approvals", icon: Users, badge: "RBAC", neonBadge: true },
+      { href: "/integrations", label: "Integrations", icon: Plug, badge: "NEW", neonBadge: true },
       { href: "/notifications", label: "Notifications", icon: Bell },
     ],
   },
@@ -131,6 +133,7 @@ export const mainNavLinks: NavLink[] = [
   { href: "/assistant", label: "AI Business Assistant", icon: Bot, badge: "AI", neonBadge: true },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/collaboration", label: "Team & Approvals", icon: Users, badge: "RBAC", neonBadge: true },
+  { href: "/integrations", label: "Integrations", icon: Plug, badge: "NEW", neonBadge: true },
   { href: "/notifications", label: "Notifications", icon: Bell },
 ];
 
