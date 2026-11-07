@@ -249,3 +249,49 @@ def test_deterministic_kannada_fallback_currency_and_evidence():
     # 3. Kannada phrasing and headers must be present
     assert "ಒಟ್ಟಾರೆ ವ್ಯವಹಾರ ಸ್ಕೋರ್:" in resp.body or "ವ್ಯವಹಾರ" in resp.body
     assert resp.generation.language == "kn"
+
+
+def test_formatter_runtime_edge_cases_and_kannada_grammar(repo_root: Path):
+    """Verify formatters.ts executes with 100% precision for edge cases and Kannada grammar."""
+    import subprocess
+
+    test_script = repo_root / "frontend" / "scripts" / "test_formatters.ts"
+    assert test_script.exists(), f"Formatter test script missing at {test_script}"
+
+    res = subprocess.run(
+        ["npx", "--yes", "tsx", str(test_script)],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        shell=True,
+    )
+    assert res.returncode == 0, f"Formatter runtime check failed:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}"
+    assert "ALL_FORMATTER_RUNTIME_CHECKS_PASSED" in res.stdout
+
+
+def test_wcag_modal_dialog_escape_handlers_and_touch_targets(repo_root: Path):
+    """Verify all modal dialogs implement Escape key listeners and >=44px touch targets."""
+    # 1. ReviewApprovalModal.tsx
+    review_modal = repo_root / "frontend" / "features" / "collaboration" / "ReviewApprovalModal.tsx"
+    assert review_modal.exists()
+    rev_content = review_modal.read_text(encoding="utf-8")
+    assert 'role="dialog"' in rev_content
+    assert 'aria-modal="true"' in rev_content
+    assert 'e.key === "Escape"' in rev_content
+    assert "min-h-[44px] min-w-[44px]" in rev_content
+
+    # 2. MetricsDictionaryView.tsx
+    metrics_view = repo_root / "frontend" / "features" / "metrics-dictionary" / "components" / "MetricsDictionaryView.tsx"
+    assert metrics_view.exists()
+    met_content = metrics_view.read_text(encoding="utf-8")
+    assert 'role="dialog"' in met_content
+    assert 'aria-modal="true"' in met_content
+    assert 'e.key === "Escape"' in met_content
+    assert "min-h-[44px] min-w-[44px]" in met_content
+
+    # 3. QualityEvaluationPanel.tsx
+    eval_panel = repo_root / "frontend" / "features" / "assistant" / "QualityEvaluationPanel.tsx"
+    assert eval_panel.exists()
+    eval_content = eval_panel.read_text(encoding="utf-8")
+    assert 'e.key === "Escape"' in eval_content
+    assert "min-h-[44px]" in eval_content

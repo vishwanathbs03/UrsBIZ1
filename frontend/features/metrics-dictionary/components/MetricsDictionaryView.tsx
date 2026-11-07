@@ -47,6 +47,17 @@ export function MetricsDictionaryView() {
   const { t, language } = useLanguage();
 
   useEffect(() => {
+    if (!exploringKey) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleCloseExplorer();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [exploringKey]);
+
+  useEffect(() => {
     fetchDictionary();
   }, [selectedCategory]);
 
@@ -320,7 +331,7 @@ export function MetricsDictionaryView() {
                 type="button"
                 onClick={handleCloseExplorer}
                 aria-label={t("common.close", "Close")}
-                className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-muted min-h-[36px] min-w-[36px] flex items-center justify-center"
+                className="text-muted-foreground hover:text-foreground p-2 rounded-lg hover:bg-muted min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               >
                 <X className="h-4 w-4" />
               </button>

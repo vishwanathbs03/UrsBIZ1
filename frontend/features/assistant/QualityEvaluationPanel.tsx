@@ -64,6 +64,17 @@ export function QualityEvaluationPanel({
     fetchAnalytics(days);
   }, [days]);
 
+  useEffect(() => {
+    if (!onClose) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div
       className={cn(
@@ -123,7 +134,7 @@ export function QualityEvaluationPanel({
             <button
               type="button"
               onClick={onClose}
-              className="text-xs font-medium text-muted-foreground hover:text-foreground px-2 py-1"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground px-3 py-2 min-h-[44px] flex items-center justify-center focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
               {t("common.close", "Close")}
             </button>

@@ -4,8 +4,10 @@
  * Provides deterministic, locale-sensitive formatters for:
  * 1. Indian Rupee (INR / ₹) with Indian numbering system grouping (lakhs/crores)
  *    and bilingual compact representations (English and Kannada).
- * 2. Standardized calendar dates adhering to Indian business convention (DD-MM-YYYY).
- * 3. Relative time, percentages, and operational durations (DSO).
+ * 2. Standardized calendar dates adhering strictly to Indian business convention (DD-MM-YYYY),
+ *    with robust timezone parsing preventing date-boundary shifts.
+ * 3. Relative time with authentic grammatical pluralization in English and Kannada.
+ * 4. Operational durations (DSO) and percentages.
  */
 
 export type SupportedLanguage = "en" | "kn";
@@ -69,7 +71,8 @@ const ENGLISH_MONTHS = [
 
 /**
  * Format a numeric amount in Indian Rupees (INR / ₹) conforming to Indian numbering.
- * Supports compact display (Lakhs / Crores) in English and Kannada.
+ * Supports compact display (Lakhs / Crores) in English and Kannada, negative handling,
+ * and edge-case zero formatting.
  */
 export function formatINR(
   amount: number | null | undefined,
@@ -85,6 +88,16 @@ export function formatINR(
 
   if (amount === null || amount === undefined || Number.isNaN(amount)) {
     return fallback;
+  }
+
+  // Handle clean zero
+  if (amount === 0 || Object.is(amount, -0)) {
+    const symbol = showSymbol ? "₹" : "";
+    if (compact) {
+      return `${symbol}0`;
+    }
+    const fixedZero = (decimals ?? 2) > 0 ? `0.${"0".repeat(decimals ?? 2)}` : "0";
+    return `${symbol}${fixedZero}`;
   }
 
   const symbol = showSymbol ? "₹" : "";
@@ -133,14 +146,40 @@ export function formatINR(
 
 /**
  * Parses any date representation safely.
+ * Includes timezone-safe extraction for date-only strings (e.g., 'YYYY-MM-DD')
+ * to eliminate day-boundary shifts across timezones.
  */
-function parseDate(input: string | number | Date | null | undefined): Date | null {
+function parseDateParts(
+  input: string | number | Date | null | undefined,
+): { year: number; monthIdx: number; day: number; hours: number; minutes: number } | null {
   if (!input) return null;
-  if (input instanceof Date) {
-    return Number.isNaN(input.getTime()) ? null : input;
+
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+
+    // Check for date-only string: YYYY-MM-DD
+    const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+    if (dateOnlyMatch) {
+      const year = parseInt(dateOnlyMatch[1], 10);
+      const monthIdx = parseInt(dateOnlyMatch[2], 10) - 1;
+      const day = parseInt(dateOnlyMatch[3], 10);
+      if (monthIdx >= 0 && monthIdx < 12 && day >= 1 && day <= 31) {
+        return { year, monthIdx, day, hours: 0, minutes: 0 };
+      }
+    }
   }
-  const parsed = new Date(input);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+
+  const d = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(d.getTime())) return null;
+
+  return {
+    year: d.getFullYear(),
+    monthIdx: d.getMonth(),
+    day: d.getDate(),
+    hours: d.getHours(),
+    minutes: d.getMinutes(),
+  };
 }
 
 /**
@@ -151,33 +190,32 @@ export function formatDate(
   options: FormatDateOptions = {},
 ): string {
   const { format = "short", language = "en", fallback = "—" } = options;
-  const d = parseDate(dateInput);
-  if (!d) return fallback;
+  const parts = parseDateParts(dateInput);
+  if (!parts) return fallback;
 
-  const day = String(d.getDate()).padStart(2, "0");
-  const monthIdx = d.getMonth();
-  const monthNum = String(monthIdx + 1).padStart(2, "0");
-  const year = d.getFullYear();
-  const hours = String(d.getHours()).padStart(2, "0");
-  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const dayStr = String(parts.day).padStart(2, "0");
+  const monthNum = String(parts.monthIdx + 1).padStart(2, "0");
+  const yearStr = String(parts.year);
+  const hoursStr = String(parts.hours).padStart(2, "0");
+  const minutesStr = String(parts.minutes).padStart(2, "0");
 
   switch (format) {
     case "short":
-      return `${day}-${monthNum}-${year}`;
+      return `${dayStr}-${monthNum}-${yearStr}`;
     case "datetime":
-      return `${day}-${monthNum}-${year}, ${hours}:${minutes}`;
+      return `${dayStr}-${monthNum}-${yearStr}, ${hoursStr}:${minutesStr}`;
     case "long": {
       const monthName =
-        language === "kn" ? KANNADA_MONTHS[monthIdx] : ENGLISH_MONTHS[monthIdx];
-      return `${day} ${monthName} ${year}`;
+        language === "kn" ? KANNADA_MONTHS[parts.monthIdx] : ENGLISH_MONTHS[parts.monthIdx];
+      return `${dayStr} ${monthName} ${yearStr}`;
     }
     case "monthYear": {
       const monthName =
-        language === "kn" ? KANNADA_MONTHS[monthIdx] : ENGLISH_MONTHS[monthIdx];
-      return `${monthName} ${year}`;
+        language === "kn" ? KANNADA_MONTHS[parts.monthIdx] : ENGLISH_MONTHS[parts.monthIdx];
+      return `${monthName} ${yearStr}`;
     }
     default:
-      return `${day}-${monthNum}-${year}`;
+      return `${dayStr}-${monthNum}-${yearStr}`;
   }
 }
 
@@ -197,7 +235,8 @@ export function formatPercentage(
 }
 
 /**
- * Formats DSO (Days Sales Outstanding) or working capital cycle in English or Kannada.
+ * Formats DSO (Days Sales Outstanding) or working capital cycle in English or Kannada,
+ * strictly honoring singular vs. plural grammar.
  */
 export function formatDSO(
   days: number | null | undefined,
@@ -208,18 +247,24 @@ export function formatDSO(
     return fallback;
   }
   const rounded = Math.round(days);
-  return language === "kn" ? `${rounded} ದಿನಗಳು` : `${rounded} days`;
+  if (language === "kn") {
+    // Grammatical singular vs plural: 1 ದಿನ vs 2+ ದಿನಗಳು
+    return rounded === 1 ? "1 ದಿನ" : `${rounded} ದಿನಗಳು`;
+  }
+  return rounded === 1 ? "1 day" : `${rounded} days`;
 }
 
 /**
- * Formats a relative timestamp in English or Kannada.
+ * Formats a relative timestamp in English or Kannada with authentic grammatical
+ * singular and plural declensions (e.g., '1 ಗಂಟೆಯ ಹಿಂದೆ' vs '2 ಗಂಟೆಗಳ ಹಿಂದೆ').
  */
 export function formatRelativeTime(
   dateInput: string | number | Date | null | undefined,
   language: SupportedLanguage = "en",
 ): string {
-  const d = parseDate(dateInput);
-  if (!d) return "—";
+  if (!dateInput) return "—";
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(d.getTime())) return "—";
 
   const now = Date.now();
   const diffMs = now - d.getTime();
@@ -230,15 +275,22 @@ export function formatRelativeTime(
 
   if (language === "kn") {
     if (diffMin < 1) return "ಈಗಷ್ಟೇ";
+    // Minute singular/plural
+    if (diffMin === 1) return "1 ನಿಮಿಷದ ಹಿಂದೆ";
     if (diffMin < 60) return `${diffMin} ನಿಮಿಷಗಳ ಹಿಂದೆ`;
+    // Hour singular/plural: 1 ಗಂಟೆಯ ಹಿಂದೆ vs X ಗಂಟೆಗಳ ಹಿಂದೆ
+    if (diffHours === 1) return "1 ಗಂಟೆಯ ಹಿಂದೆ";
     if (diffHours < 24) return `${diffHours} ಗಂಟೆಗಳ ಹಿಂದೆ`;
+    // Day singular/plural: ನಿನ್ನೆ / 1 ದಿನದ ಹಿಂದೆ vs X ದಿನಗಳ ಹಿಂದೆ
     if (diffDays === 1) return "ನಿನ್ನೆ";
     if (diffDays < 30) return `${diffDays} ದಿನಗಳ ಹಿಂದೆ`;
     return formatDate(d, { format: "short", language: "kn" });
   }
 
   if (diffMin < 1) return "Just now";
+  if (diffMin === 1) return "1m ago";
   if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHours === 1) return "1h ago";
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 30) return `${diffDays}d ago`;
