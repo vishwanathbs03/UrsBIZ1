@@ -1089,3 +1089,152 @@ def test_repeated_products_in_same_invoice_and_line_item_amendments(client: Test
     assert rows_after[1].quantity == 8.0
     assert rows_after[1].total_amount == 2000.0
 
+
+
+def test_line_item_matching_reordering_and_uncertainty_handling(client: TestClient, db_session: Session):
+    """Verify line item matching behaviors:
+    1. Stable upstream line_item_id matches and updates the exact corresponding row even if lines are permuted/reordered.
+    2. Fallback matching without line IDs detects exact value duplicates even when lines are permuted/reordered.
+    3. Ambiguous/uncertain amendments without line IDs are suppressed (avoiding silent corruption of existing records).
+    """
+    owner = _create_user(db_session, "reorder_owner@test.com")
+    biz = _create_business(db_session, owner, "Reorder Test Business")
+
+    c_res = client.post(
+        "/api/v1/integrations/connections",
+        json={
+            "connector_id": "test_harness",
+            "name": "Reorder & Ambiguity Simulator",
+            "configuration": {"store_identifier": "BLR-RO-01", "batch_size": 10},
+            "credentials": {"api_key": "valid-test-key"},
+        },
+        headers=_auth_header(owner),
+    )
+    conn_id = c_res.json()["id"]
+    client.post(f"/api/v1/integrations/connections/{conn_id}/connect", headers=_auth_header(owner))
+
+    from unittest.mock import patch
+    from app.services.connectors.base import FetchResult
+    from app.services.connectors.implementations.test_harness import TestHarnessConnector
+
+    # -------------------------------------------------------------------------
+    # PART 1: Stable Line-Item ID Matching With Order Permutation
+    # -------------------------------------------------------------------------
+    line_l1 = {
+        "line_item_id": "L1",
+        "invoice_no": "INV-STABLE-01",
+        "tx_date": "2026-11-06T10:00:00Z",
+        "customer_name": "Retail Store",
+        "product": "Organic Honey 500g",
+        "qty": 10.0,
+        "unit_price": 100.0,
+        "amount": 1000.0,
+    }
+    line_l2 = {
+        "line_item_id": "L2",
+        "invoice_no": "INV-STABLE-01",
+        "tx_date": "2026-11-06T10:00:00Z",
+        "customer_name": "Retail Store",
+        "product": "Organic Honey 500g",
+        "qty": 3.0,
+        "unit_price": 100.0,
+        "amount": 300.0,
+    }
+
+    with patch.object(TestHarnessConnector, "fetch_records", return_value=FetchResult(
+        records=[line_l1, line_l2], next_cursor="2", has_more=False, total_discovered=2
+    )):
+        r1 = client.post(f"/api/v1/integrations/connections/{conn_id}/sync", json={"trigger_type": "MANUAL", "batch_limit": 2}, headers=_auth_header(owner))
+        assert r1.status_code == 202
+        assert r1.json()["records_imported"] == 2
+
+    # In DB: row 1 has L1 (qty 10), row 2 has L2 (qty 3)
+    row_l1 = db_session.query(SalesTransaction).filter_by(business_id=biz.id, invoice_id="INV-STABLE-01", line_item_id="L1").first()
+    row_l2 = db_session.query(SalesTransaction).filter_by(business_id=biz.id, invoice_id="INV-STABLE-01", line_item_id="L2").first()
+    assert row_l1.quantity == 10.0
+    assert row_l2.quantity == 3.0
+
+    # Reorder lines: Upstream sends L2 first, then L1 amended (qty 10 -> 12, amount 1000 -> 1200)
+    line_l1_amended = dict(line_l1, qty=12.0, amount=1200.0)
+    with patch.object(TestHarnessConnector, "fetch_records", return_value=FetchResult(
+        records=[line_l2, line_l1_amended], next_cursor="2", has_more=False, total_discovered=2
+    )):
+        r2 = client.post(f"/api/v1/integrations/connections/{conn_id}/sync", json={"trigger_type": "MANUAL", "batch_limit": 2}, headers=_auth_header(owner))
+        assert r2.status_code == 202
+        d2 = r2.json()
+        assert d2["duplicate_count"] == 1  # L2 was duplicate
+        assert d2["summary"]["records_updated"] == 1  # L1 was updated in-place
+
+    # Verify L1 was updated and L2 remained unchanged despite being sent first
+    db_session.expire_all()
+    row_l1_after = db_session.query(SalesTransaction).filter_by(business_id=biz.id, invoice_id="INV-STABLE-01", line_item_id="L1").first()
+    row_l2_after = db_session.query(SalesTransaction).filter_by(business_id=biz.id, invoice_id="INV-STABLE-01", line_item_id="L2").first()
+    assert row_l1_after.quantity == 12.0
+    assert row_l1_after.total_amount == 1200.0
+    assert row_l2_after.quantity == 3.0
+    assert row_l2_after.total_amount == 300.0
+
+    # -------------------------------------------------------------------------
+    # PART 2: Fallback Matching WITHOUT Line-Item ID (Reordering exact duplicates)
+    # -------------------------------------------------------------------------
+    line_no_id_a = {
+        "invoice_no": "INV-NOID-01",
+        "tx_date": "2026-11-06T10:00:00Z",
+        "product": "Coconut Oil 1L",
+        "qty": 5.0,
+        "unit_price": 200.0,
+        "amount": 1000.0,
+    }
+    line_no_id_b = {
+        "invoice_no": "INV-NOID-01",
+        "tx_date": "2026-11-06T10:00:00Z",
+        "product": "Coconut Oil 1L",
+        "qty": 20.0,
+        "unit_price": 180.0,
+        "amount": 3600.0,
+    }
+
+    with patch.object(TestHarnessConnector, "fetch_records", return_value=FetchResult(
+        records=[line_no_id_a, line_no_id_b], next_cursor="2", has_more=False, total_discovered=2
+    )):
+        r3 = client.post(f"/api/v1/integrations/connections/{conn_id}/sync", json={"trigger_type": "MANUAL", "batch_limit": 2}, headers=_auth_header(owner))
+        assert r3.status_code == 202
+        assert r3.json()["records_imported"] == 2
+
+    # Reorder lines without changes: upstream sends B first, then A
+    with patch.object(TestHarnessConnector, "fetch_records", return_value=FetchResult(
+        records=[line_no_id_b, line_no_id_a], next_cursor="2", has_more=False, total_discovered=2
+    )):
+        r4 = client.post(f"/api/v1/integrations/connections/{conn_id}/sync", json={"trigger_type": "MANUAL", "batch_limit": 2}, headers=_auth_header(owner))
+        assert r4.status_code == 202
+        d4 = r4.json()
+        assert d4["duplicate_count"] == 2
+        assert d4["summary"]["records_updated"] == 0
+
+    # -------------------------------------------------------------------------
+    # PART 3: Ambiguous / Uncertain Upstream Amendment Without Line IDs
+    # -------------------------------------------------------------------------
+    # Upstream amends BOTH lines without providing line IDs.
+    # UrsBiz must suppress silent in-place updates to avoid corrupting records.
+    line_no_id_a_changed = dict(line_no_id_a, qty=8.0, amount=1600.0)
+    line_no_id_b_changed = dict(line_no_id_b, qty=25.0, amount=4500.0)
+
+    with patch.object(TestHarnessConnector, "fetch_records", return_value=FetchResult(
+        records=[line_no_id_a_changed, line_no_id_b_changed], next_cursor="2", has_more=False, total_discovered=2
+    )):
+        r5 = client.post(f"/api/v1/integrations/connections/{conn_id}/sync", json={"trigger_type": "MANUAL", "batch_limit": 2}, headers=_auth_header(owner))
+        assert r5.status_code == 202
+        d5 = r5.json()
+        # In-place update is suppressed because match is uncertain
+        assert d5["summary"]["records_updated"] == 0
+        assert d5["summary"]["uncertain_line_matches_suppressed"] == 2
+        assert d5["records_skipped"] == 2
+
+    # Verify existing DB rows were NOT modified by arbitrary guesses
+    db_session.expire_all()
+    rows_noid = db_session.query(SalesTransaction).filter_by(business_id=biz.id, invoice_id="INV-NOID-01").order_by(SalesTransaction.id.asc()).all()
+    assert len(rows_noid) == 2
+    assert rows_noid[0].quantity == 5.0
+    assert rows_noid[0].total_amount == 1000.0
+    assert rows_noid[1].quantity == 20.0
+    assert rows_noid[1].total_amount == 3600.0

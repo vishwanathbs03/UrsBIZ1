@@ -524,10 +524,11 @@ class IntegrationService:
         current_batch_fps: set[tuple[Any, ...]] = set()
 
         # Pre-fetch existing invoice transactions for in-place amendment and repeated line handling
-        # Structured with composite keys: (invoice_norm, product_norm, line_identifier)
-        # where line_identifier is the stable line_item_id or ordinal occurrence index of that product on the invoice
-        existing_invoice_lines: dict[tuple[str, str, Any], SalesTransaction] = {}
-        db_product_occurrence_counts: dict[tuple[str, str], int] = defaultdict(int)
+        # Structured indices:
+        # 1. By stable upstream line item ID: (inv_norm, p_norm, line_item_id) -> SalesTransaction
+        existing_by_stable_line_id: dict[tuple[str, str, str], SalesTransaction] = {}
+        # 2. By (inv_norm, p_norm) -> list of SalesTransaction (ordered by id.asc())
+        existing_by_invoice_product: dict[tuple[str, str], list[SalesTransaction]] = defaultdict(list)
 
         for t in (
             self.db.query(SalesTransaction)
@@ -541,14 +542,18 @@ class IntegrationService:
             if t.invoice_id and t.product_name:
                 inv_norm = t.invoice_id.strip().lower()
                 p_norm = t.product_name.strip().lower()
-                idx = db_product_occurrence_counts[(inv_norm, p_norm)]
-                db_product_occurrence_counts[(inv_norm, p_norm)] += 1
-                existing_invoice_lines[(inv_norm, p_norm, idx)] = t
+                existing_by_invoice_product[(inv_norm, p_norm)].append(t)
+                lid = getattr(t, "line_item_id", None)
+                if lid and str(lid).strip():
+                    existing_by_stable_line_id[(inv_norm, p_norm, str(lid).strip())] = t
 
-        # Track line item occurrence counts within the current sync batch
-        batch_product_occurrence_counts: dict[tuple[str, str], int] = defaultdict(int)
+        # Track transactions already claimed/matched in this batch to prevent double-matching
+        claimed_tx_ids: set[int] = set()
         current_batch_invoiced_keys: set[tuple[str, str, Any]] = set()
+        uncertain_line_matches: list[dict[str, Any]] = []
 
+        # Step A: Normalize all records first
+        normalized_records: list[tuple[NormalizedTransaction, str, float, float]] = []
         for raw_rec in fetch_result.records:
             try:
                 norm_tx: NormalizedTransaction = connector.map_record(raw_rec)
@@ -561,72 +566,19 @@ class IntegrationService:
             p_name = (norm_tx.product_name or "").strip().lower()
             q_val = round(float(norm_tx.quantity), 4)
             tot_val = round(float(norm_tx.total_amount), 2)
+            normalized_records.append((norm_tx, p_name, q_val, tot_val))
 
-            if norm_tx.invoice_id:
-                inv_norm = norm_tx.invoice_id.strip().lower()
-                pair = (inv_norm, p_name)
+        # Step B: Process records with a three-pass resolution strategy for invoice lines:
+        # Pass 1: Invoiced items with stable upstream line_item_id
+        # Pass 2: Invoiced items without line_item_id -> exact value matches (order-independent duplicates)
+        # Pass 3: Invoiced items without line_item_id -> single-candidate amendments, additions, or uncertain match suppression
+        # Non-invoiced items are processed via standard fingerprinting
 
-                # Stable upstream line identifier or sequential line occurrence index
-                line_idx = batch_product_occurrence_counts[pair]
-                batch_product_occurrence_counts[pair] += 1
-                line_tag = str(norm_tx.line_item_id) if getattr(norm_tx, "line_item_id", None) else line_idx
-                inv_key = (inv_norm, p_name, line_tag)
+        unresolved_invoiced: list[tuple[NormalizedTransaction, str, float, float]] = []
 
-                # Check if this specific invoice line item already exists in the database
-                existing_tx = existing_invoice_lines.get(inv_key) or existing_invoice_lines.get((inv_norm, p_name, line_idx))
-
-                if existing_tx:
-                    # Line item exists in DB: check if values are identical (exact duplicate)
-                    if (
-                        round(float(existing_tx.quantity), 4) == q_val
-                        and round(float(existing_tx.total_amount), 2) == tot_val
-                    ):
-                        dup_count += 1
-                        skipped_count += 1
-                        continue
-                    else:
-                        # Legitimate upstream amendment to this specific invoice line item
-                        existing_tx.quantity = norm_tx.quantity
-                        existing_tx.unit_price = norm_tx.unit_price
-                        existing_tx.total_amount = norm_tx.total_amount
-                        existing_tx.transaction_date = norm_tx.transaction_date
-                        if norm_tx.customer_name:
-                            existing_tx.customer_name = norm_tx.customer_name
-                        if norm_tx.customer_id:
-                            existing_tx.customer_id = norm_tx.customer_id
-                        existing_tx.upload_id = sales_upload.id
-                        updated_count += 1
-                        continue
-
-                # Deduplicate against repeated identical lines within the current batch
-                if inv_key in current_batch_invoiced_keys:
-                    dup_count += 1
-                    skipped_count += 1
-                    continue
-
-                current_batch_invoiced_keys.add(inv_key)
-
-                # Brand new line item on invoice
-                tx_entity = SalesTransaction(
-                    upload_id=sales_upload.id,
-                    business_id=business.id,
-                    transaction_date=norm_tx.transaction_date,
-                    invoice_id=norm_tx.invoice_id,
-                    customer_id=norm_tx.customer_id,
-                    customer_name=norm_tx.customer_name,
-                    product_id=norm_tx.product_id,
-                    product_name=norm_tx.product_name,
-                    quantity=norm_tx.quantity,
-                    unit_price=norm_tx.unit_price,
-                    total_amount=norm_tx.total_amount,
-                    is_duplicate=False,
-                )
-                self.db.add(tx_entity)
-                imported_count += 1
-                existing_invoice_lines[inv_key] = tx_entity
-                existing_invoice_lines[(inv_norm, p_name, line_idx)] = tx_entity
-
-            else:
+        # --- PASS 1: Stable Line-Item ID Matching & Non-Invoiced Records ---
+        for norm_tx, p_name, q_val, tot_val in normalized_records:
+            if not norm_tx.invoice_id:
                 # Non-invoiced transaction (e.g. POS receipt)
                 date_str = norm_tx.transaction_date.strftime("%Y-%m-%d")
                 c_name = (norm_tx.customer_name or norm_tx.customer_id or "").strip().lower()
@@ -638,7 +590,6 @@ class IntegrationService:
                     continue
 
                 current_batch_fps.add(fp)
-
                 tx_entity = SalesTransaction(
                     upload_id=sales_upload.id,
                     business_id=business.id,
@@ -651,10 +602,173 @@ class IntegrationService:
                     quantity=norm_tx.quantity,
                     unit_price=norm_tx.unit_price,
                     total_amount=norm_tx.total_amount,
+                    line_item_id=None,
                     is_duplicate=False,
                 )
                 self.db.add(tx_entity)
                 imported_count += 1
+                continue
+
+            # Invoiced transaction: check for stable line_item_id
+            inv_norm = norm_tx.invoice_id.strip().lower()
+            stable_lid = (
+                str(norm_tx.line_item_id).strip()
+                if getattr(norm_tx, "line_item_id", None) and str(norm_tx.line_item_id).strip()
+                else None
+            )
+
+            if stable_lid is not None:
+                inv_key = (inv_norm, p_name, stable_lid)
+                existing_tx = existing_by_stable_line_id.get(inv_key)
+
+                if existing_tx:
+                    claimed_tx_ids.add(existing_tx.id)
+                    # Check exact duplicate
+                    if (
+                        round(float(existing_tx.quantity), 4) == q_val
+                        and round(float(existing_tx.total_amount), 2) == tot_val
+                    ):
+                        dup_count += 1
+                        skipped_count += 1
+                        continue
+                    else:
+                        # Legitimate upstream amendment to this specific line item
+                        existing_tx.quantity = norm_tx.quantity
+                        existing_tx.unit_price = norm_tx.unit_price
+                        existing_tx.total_amount = norm_tx.total_amount
+                        existing_tx.transaction_date = norm_tx.transaction_date
+                        if norm_tx.customer_name:
+                            existing_tx.customer_name = norm_tx.customer_name
+                        if norm_tx.customer_id:
+                            existing_tx.customer_id = norm_tx.customer_id
+                        existing_tx.upload_id = sales_upload.id
+                        updated_count += 1
+                        continue
+
+                # Deduplicate repeated identical lines within the current batch
+                if inv_key in current_batch_invoiced_keys:
+                    dup_count += 1
+                    skipped_count += 1
+                    continue
+
+                current_batch_invoiced_keys.add(inv_key)
+
+                # New line item with stable line ID
+                tx_entity = SalesTransaction(
+                    upload_id=sales_upload.id,
+                    business_id=business.id,
+                    transaction_date=norm_tx.transaction_date,
+                    invoice_id=norm_tx.invoice_id,
+                    customer_id=norm_tx.customer_id,
+                    customer_name=norm_tx.customer_name,
+                    product_id=norm_tx.product_id,
+                    product_name=norm_tx.product_name,
+                    quantity=norm_tx.quantity,
+                    unit_price=norm_tx.unit_price,
+                    total_amount=norm_tx.total_amount,
+                    line_item_id=stable_lid,
+                    is_duplicate=False,
+                )
+                self.db.add(tx_entity)
+                imported_count += 1
+                existing_by_stable_line_id[inv_key] = tx_entity
+                existing_by_invoice_product[(inv_norm, p_name)].append(tx_entity)
+                claimed_tx_ids.add(tx_entity.id)
+            else:
+                unresolved_invoiced.append((norm_tx, p_name, q_val, tot_val))
+
+        # --- PASS 2: Exact Value Matching for Items Without Line ID (Order-Independent Duplicates) ---
+        still_unresolved: list[tuple[NormalizedTransaction, str, float, float]] = []
+        for norm_tx, p_name, q_val, tot_val in unresolved_invoiced:
+            inv_norm = (norm_tx.invoice_id or "").strip().lower()
+            pair = (inv_norm, p_name)
+            candidates = existing_by_invoice_product[pair]
+            unclaimed = [t for t in candidates if t.id not in claimed_tx_ids]
+
+            matched_dup: SalesTransaction | None = None
+            for cand in unclaimed:
+                if (
+                    round(float(cand.quantity), 4) == q_val
+                    and round(float(cand.total_amount), 2) == tot_val
+                ):
+                    matched_dup = cand
+                    break
+
+            if matched_dup is not None:
+                claimed_tx_ids.add(matched_dup.id)
+                dup_count += 1
+                skipped_count += 1
+            else:
+                still_unresolved.append((norm_tx, p_name, q_val, tot_val))
+
+        # --- PASS 3: Fallback Amendments, Additions, & Uncertain Match Suppression ---
+        for norm_tx, p_name, q_val, tot_val in still_unresolved:
+            inv_norm = (norm_tx.invoice_id or "").strip().lower()
+            pair = (inv_norm, p_name)
+            candidates = existing_by_invoice_product[pair]
+            unclaimed = [t for t in candidates if t.id not in claimed_tx_ids]
+
+            if len(unclaimed) == 1:
+                # Unambiguous amendment: exactly one candidate line remains unmatched for this product on this invoice
+                target_tx = unclaimed[0]
+                claimed_tx_ids.add(target_tx.id)
+                target_tx.quantity = norm_tx.quantity
+                target_tx.unit_price = norm_tx.unit_price
+                target_tx.total_amount = norm_tx.total_amount
+                target_tx.transaction_date = norm_tx.transaction_date
+                if norm_tx.customer_name:
+                    target_tx.customer_name = norm_tx.customer_name
+                if norm_tx.customer_id:
+                    target_tx.customer_id = norm_tx.customer_id
+                target_tx.upload_id = sales_upload.id
+                updated_count += 1
+            elif len(unclaimed) == 0:
+                # Additional line item added to this invoice beyond existing lines
+                batch_key = (inv_norm, p_name, q_val, tot_val, len(candidates))
+                if batch_key in current_batch_invoiced_keys:
+                    dup_count += 1
+                    skipped_count += 1
+                    continue
+
+                current_batch_invoiced_keys.add(batch_key)
+                tx_entity = SalesTransaction(
+                    upload_id=sales_upload.id,
+                    business_id=business.id,
+                    transaction_date=norm_tx.transaction_date,
+                    invoice_id=norm_tx.invoice_id,
+                    customer_id=norm_tx.customer_id,
+                    customer_name=norm_tx.customer_name,
+                    product_id=norm_tx.product_id,
+                    product_name=norm_tx.product_name,
+                    quantity=norm_tx.quantity,
+                    unit_price=norm_tx.unit_price,
+                    total_amount=norm_tx.total_amount,
+                    line_item_id=None,
+                    is_duplicate=False,
+                )
+                self.db.add(tx_entity)
+                imported_count += 1
+                existing_by_invoice_product[pair].append(tx_entity)
+                claimed_tx_ids.add(tx_entity.id)
+            else:
+                # Uncertain Match: Multiple candidate lines exist without stable line_item_id and values differ.
+                # In accordance with data integrity requirements, avoid silently updating an uncertain match.
+                logger.warning(
+                    "Uncertain upstream line-item match on invoice '%s' for product '%s': "
+                    "%d candidate lines remain unmatched without stable line_item_id. "
+                    "In-place update suppressed to prevent associating amendment with the wrong line item.",
+                    norm_tx.invoice_id,
+                    norm_tx.product_name,
+                    len(unclaimed),
+                )
+                uncertain_line_matches.append({
+                    "invoice_id": norm_tx.invoice_id,
+                    "product_name": norm_tx.product_name,
+                    "quantity": norm_tx.quantity,
+                    "total_amount": norm_tx.total_amount,
+                    "candidate_count": len(unclaimed),
+                })
+                skipped_count += 1
 
         total_active_records = imported_count + updated_count
         sales_upload.valid_row_count = total_active_records
@@ -688,6 +802,7 @@ class IntegrationService:
             "has_more": fetch_result.has_more,
             "next_cursor": fetch_result.next_cursor,
             "records_updated": updated_count,
+            "uncertain_line_matches_suppressed": len(uncertain_line_matches),
         }
 
         # Update connection metadata
@@ -710,6 +825,7 @@ class IntegrationService:
                 "records_updated": updated_count,
                 "duplicate_count": dup_count,
                 "validation_failure_count": val_fail_count,
+                "uncertain_line_matches_suppressed": len(uncertain_line_matches),
             },
         )
 

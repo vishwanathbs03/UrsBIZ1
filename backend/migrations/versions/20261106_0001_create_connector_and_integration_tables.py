@@ -164,7 +164,11 @@ def upgrade() -> None:
     op.create_index("ix_integration_audits_event_type", "integration_audits", ["event_type"])
     op.create_index("ix_integration_audits_created_at", "integration_audits", ["created_at"])
 
-    # 4. Database-level immutability triggers for integration_audits
+    # 4. Add line_item_id to sales_transactions for upstream connector line tracking
+    op.add_column("sales_transactions", sa.Column("line_item_id", sa.String(100), nullable=True))
+    op.create_index("ix_sales_transactions_line_item_id", "sales_transactions", ["line_item_id"])
+
+    # 5. Database-level immutability triggers for integration_audits
     bind = op.get_bind()
     dialect = bind.dialect.name
 
@@ -215,6 +219,9 @@ def downgrade() -> None:
         op.execute("DROP TRIGGER IF EXISTS trg_no_update_integration_audits ON integration_audits;")
         op.execute("DROP TRIGGER IF EXISTS trg_no_delete_integration_audits ON integration_audits;")
         op.execute("DROP FUNCTION IF EXISTS trg_prevent_integration_audits_modification();")
+
+    op.drop_index("ix_sales_transactions_line_item_id", table_name="sales_transactions")
+    op.drop_column("sales_transactions", "line_item_id")
 
     op.drop_table("integration_audits")
     op.drop_table("integration_sync_executions")

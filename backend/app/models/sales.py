@@ -90,6 +90,7 @@ class SalesTransaction(Base):
     quantity: Mapped[float] = mapped_column(Float, nullable=False)
     unit_price: Mapped[float] = mapped_column(Float, nullable=False)
     total_amount: Mapped[float] = mapped_column(Float, nullable=False)
+    line_item_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     is_duplicate: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, index=True
     )

@@ -165,4 +165,5 @@ class CsvFeedConnector(BaseDataConnector):
             unit_price=unit_price,
             total_amount=total,
             raw_source_id=raw_record.get("raw_id"),
+            line_item_id=str(raw_record.get("line_item_id") or raw_record.get("line_no") or "").strip() or None,
         )
