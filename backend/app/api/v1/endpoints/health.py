@@ -1,9 +1,14 @@
 """Health check endpoints."""
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Response, status
 
 from app.monitoring.health import health_live, health_ready
 from app.schemas.health import HealthResponse
+from app.services.continuity_service import (
+    ContinuityService,
+    ContinuitySimulationRequest,
+    SystemContinuityStatus,
+)
 
 router = APIRouter()
 
@@ -34,3 +39,28 @@ def health_ready_v1(response: Response) -> dict:
     503 otherwise. Identical semantics to the root ``/health/ready``.
     """
     return health_ready(response)
+
+
+# --------------------------------------------------------------------------- #
+# Phase 6.30 — Business Continuity & Graceful Degradation
+# --------------------------------------------------------------------------- #
+
+
+@router.get(
+    "/health/continuity",
+    response_model=SystemContinuityStatus,
+    summary="Fetch holistic system continuity and graceful degradation status",
+)
+def get_continuity_status() -> SystemContinuityStatus:
+    """Returns the platform-wide continuity posture across database, AI, and knowledge subsystems."""
+    return ContinuityService.get_status()
+
+
+@router.post(
+    "/health/continuity/simulate",
+    response_model=SystemContinuityStatus,
+    summary="Simulate a subsystem outage or disaster drill",
+)
+def simulate_continuity_drill(req: ContinuitySimulationRequest) -> SystemContinuityStatus:
+    """Execute a simulated failure action to verify platform-wide graceful degradation."""
+    return ContinuityService.simulate_action(req.action)

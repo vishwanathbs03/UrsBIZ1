@@ -291,11 +291,19 @@ class AssistantProviderService:
         evidence_retriever: Any | None = None,
         tool_dispatcher: Any | None = None,
         tool_router: Any | None = None,
+        circuit_breaker: Any | None = None,
     ) -> None:
         self._context_builder = context_builder
         self._prompt_builder = prompt_builder or AssistantPromptBuilder()
         self._factory = provider_factory or ProviderFactory()
-        self._circuit_breaker = AICircuitBreaker(name="gemini")
+        if circuit_breaker is not None:
+            self._circuit_breaker = circuit_breaker
+        else:
+            try:
+                from app.services.ai.resilient_client import get_gemini_circuit_breaker
+                self._circuit_breaker = get_gemini_circuit_breaker()
+            except Exception:
+                self._circuit_breaker = AICircuitBreaker(name="gemini")
         # SPRINT AI-8 — the optional LLM-tool-request router.
         # When ``None`` (default) the provider behaves exactly
         # like today: the AI-1 ``ToolDispatcher`` runs the

@@ -181,5 +181,15 @@ export {
   type ChatFeedbackAnalytics,
 } from "./chat-feedback-service";
 
+export {
+  continuityService,
+  type ContinuityMode,
+  type SystemContinuityStatus,
+  type DatabaseContinuityStatus,
+  type AISubsystemContinuityStatus,
+  type KnowledgeContinuityStatus,
+} from "./continuity-service";
+
+
 
 

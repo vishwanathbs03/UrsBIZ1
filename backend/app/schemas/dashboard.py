@@ -62,3 +62,21 @@ class DashboardResponse(BaseModel):
         default_factory=list,
         description="Quick actions list alias",
     )
+    is_degraded: bool = Field(
+        default=False,
+        alias="isDegraded",
+        description="Whether dashboard data is served in degraded / snapshot continuity mode",
+    )
+    isDegraded: bool = Field(
+        default=False,
+        description="Whether dashboard data is served in degraded / snapshot continuity mode alias",
+    )
+    continuity_notice: str | None = Field(
+        default=None,
+        alias="continuityNotice",
+        description="Continuity notice describing degraded read-only state or cached snapshot provenance",
+    )
+    continuityNotice: str | None = Field(
+        default=None,
+        description="Continuity notice describing degraded read-only state or cached snapshot provenance alias",
+    )

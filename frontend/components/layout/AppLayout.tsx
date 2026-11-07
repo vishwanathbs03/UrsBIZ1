@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/layout/Navbar";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { ContinuityBanner } from "@/components/layout/ContinuityBanner";
 import { GlobalSearchModal } from "@/components/common/GlobalSearchModal";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,7 @@ export function AppLayout({ children, withSidebar = true, className }: AppLayout
   return (
     <div className="relative flex min-h-screen flex-col bg-background">
       <Navbar />
+      <ContinuityBanner />
       <GlobalSearchModal />
       <div className="flex flex-1">
         {withSidebar && <Sidebar />}
