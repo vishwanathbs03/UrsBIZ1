@@ -501,6 +501,7 @@ class IntegrationService:
         # 5. Normalize, validate, and persist transactional records
         discovered_count = len(fetch_result.records)
         imported_count = 0
+        updated_count = 0
         skipped_count = 0
         dup_count = 0
         val_fail_count = 0
@@ -517,9 +518,23 @@ class IntegrationService:
         self.db.add(sales_upload)
         self.db.flush()
 
-        # Fetch existing fingerprints for deduplication
+        # Fetch existing fingerprints for deduplication (strictly scoped to this business)
         existing_fps = self.sales_repo.get_transaction_fingerprints(business.id)
-        current_batch_fps: set[tuple[str, str, str, float]] = set()
+        current_batch_fps: set[tuple[Any, ...]] = set()
+
+        # Pre-fetch existing invoice transactions for in-place amendment handling
+        existing_invoice_txs: dict[tuple[str, str], SalesTransaction] = {}
+        for t in (
+            self.db.query(SalesTransaction)
+            .filter(
+                SalesTransaction.business_id == business.id,
+                SalesTransaction.invoice_id.isnot(None),
+            )
+            .all()
+        ):
+            if t.invoice_id and t.product_name:
+                key = (t.invoice_id.strip().lower(), t.product_name.strip().lower())
+                existing_invoice_txs[key] = t
 
         for raw_rec in fetch_result.records:
             try:
@@ -541,6 +556,7 @@ class IntegrationService:
                 c_name = (norm_tx.customer_name or norm_tx.customer_id or "").strip().lower()
                 fp = ("date", date_str, c_name, p_name, q_val, tot_val)
 
+            # 1. Exact duplicate check (exact same fingerprint already in DB or current batch)
             is_duplicate = fp in existing_fps or fp in current_batch_fps
             if is_duplicate:
                 dup_count += 1
@@ -549,6 +565,24 @@ class IntegrationService:
 
             current_batch_fps.add(fp)
 
+            # 2. In-place amendment check for legitimate upstream invoice corrections
+            if norm_tx.invoice_id:
+                inv_key = (norm_tx.invoice_id.strip().lower(), p_name)
+                if inv_key in existing_invoice_txs:
+                    existing_tx = existing_invoice_txs[inv_key]
+                    existing_tx.quantity = norm_tx.quantity
+                    existing_tx.unit_price = norm_tx.unit_price
+                    existing_tx.total_amount = norm_tx.total_amount
+                    existing_tx.transaction_date = norm_tx.transaction_date
+                    if norm_tx.customer_name:
+                        existing_tx.customer_name = norm_tx.customer_name
+                    if norm_tx.customer_id:
+                        existing_tx.customer_id = norm_tx.customer_id
+                    existing_tx.upload_id = sales_upload.id
+                    updated_count += 1
+                    continue
+
+            # 3. New transaction insertion
             tx_entity = SalesTransaction(
                 upload_id=sales_upload.id,
                 business_id=business.id,
@@ -565,16 +599,19 @@ class IntegrationService:
             )
             self.db.add(tx_entity)
             imported_count += 1
+            if norm_tx.invoice_id:
+                existing_invoice_txs[(norm_tx.invoice_id.strip().lower(), p_name)] = tx_entity
 
-        sales_upload.valid_row_count = imported_count
+        total_active_records = imported_count + updated_count
+        sales_upload.valid_row_count = total_active_records
         sales_upload.invalid_row_count = val_fail_count
 
         # 6. Update Provenance lineage
-        if imported_count > 0:
+        if total_active_records > 0:
             self._register_provenance(
                 business_id=business.id,
                 connector=connector,
-                imported_count=imported_count,
+                imported_count=total_active_records,
                 exec_id=exec_id,
             )
 
@@ -596,6 +633,7 @@ class IntegrationService:
         execution.summary = {
             "has_more": fetch_result.has_more,
             "next_cursor": fetch_result.next_cursor,
+            "records_updated": updated_count,
         }
 
         # Update connection metadata
@@ -615,6 +653,7 @@ class IntegrationService:
                 "execution_id": execution.execution_id,
                 "status": execution.status,
                 "records_imported": imported_count,
+                "records_updated": updated_count,
                 "duplicate_count": dup_count,
                 "validation_failure_count": val_fail_count,
             },
@@ -782,7 +821,13 @@ class IntegrationService:
         imported_count: int,
         exec_id: str,
     ) -> None:
-        """Register verifiable provenance lineage for connector imported sales records."""
+        """Register verifiable provenance lineage for connector imported sales records.
+
+        Note: 'data_quality_status = VERIFIED' signifies that imported transactional records
+        have passed deterministic internal schema, type safety, and sanity validation checks
+        during ingestion. It does not certify an independent third-party physical audit of the
+        remote upstream system.
+        """
         provenance = (
             self.db.query(BusinessDataProvenance)
             .filter(
@@ -791,6 +836,12 @@ class IntegrationService:
                 BusinessDataProvenance.source_module == f"connector:{connector.connector_id}",
             )
             .first()
+        )
+        methodology = (
+            f"Ingested and normalized via {connector.name} adapter with deduplication and in-place "
+            "invoice amendment handling. 'VERIFIED' denotes internal deterministic schema, type safety, "
+            "and sanity validation upon ingestion; it does not constitute an external audit of the "
+            "third-party source."
         )
         if not provenance:
             provenance = BusinessDataProvenance(
@@ -802,7 +853,7 @@ class IntegrationService:
                 measurement_period="continuous_sync",
                 unit="transactions",
                 currency="INR",
-                calculation_methodology=f"Ingested and normalized via {connector.name} adapter with deduplication.",
+                calculation_methodology=methodology,
                 data_quality_status="VERIFIED",
                 nature="actual",
                 freshness_status="FRESH",
@@ -815,4 +866,5 @@ class IntegrationService:
             val["imported_records"] = val.get("imported_records", 0) + imported_count
             val["last_sync_execution"] = exec_id
             provenance.metric_value = val
+            provenance.calculation_methodology = methodology
             provenance.freshness_as_of = datetime.now(timezone.utc)

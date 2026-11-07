@@ -1,8 +1,10 @@
 """Connector Credential Vault (Phase 6.27).
 
 Provides:
-  - Authenticated encryption at rest for external integration credentials (Fernet / AES-256).
+  - Authenticated encryption at rest for external integration credentials
+    (Fernet specification: 128-bit AES in CBC mode with PKCS7 padding + 128-bit HMAC-SHA256).
   - External key derivation with tenant-scoped isolation.
+  - Dedicated CONNECTOR_ENCRYPTION_KEY decoupled from JWT authentication secrets.
   - Secure credential masking for safe UI display (e.g. ••••••••abcd).
   - Deep secret redaction for logging, exception traces, and audit trails.
   - Deterministic credential fingerprinting for rotation verification.
@@ -13,6 +15,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import os
 import re
 from typing import Any
@@ -21,6 +24,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from app.config.settings import get_settings
+
+logger = logging.getLogger("atlas.connectors.vault")
 
 SECRET_KEY_PATTERNS = re.compile(
     r"(secret|password|token|key|credential|authorization|auth|bearer|passphrase)",
@@ -36,26 +41,46 @@ class ConnectorCredentialVault:
 
     @staticmethod
     def _init_fernet(master_key: str | None = None) -> Fernet:
-        """Initialize Fernet instance using an explicit key or derived key."""
-        env_key = master_key or os.environ.get("CONNECTOR_ENCRYPTION_KEY")
-        if env_key:
-            try:
-                # Test if it's already a valid Fernet key
-                return Fernet(env_key.encode("utf-8") if isinstance(env_key, str) else env_key)
-            except Exception:
-                pass
+        """Initialize Fernet instance using a dedicated connector encryption key decoupled from JWT secrets.
 
-        # Derive a stable 32-byte urlsafe-base64 key via HKDF from jwt_secret_key
+        Fernet uses 128-bit AES in CBC mode with PKCS7 padding and 128-bit HMAC-SHA256 authentication.
+        """
         settings = get_settings()
-        secret_source = getattr(settings, "jwt_secret_key", "ursbiz-default-vault-seed").encode("utf-8")
-        salt = b"ursbiz-connector-vault-v1"
+        key_candidate = (
+            master_key
+            or getattr(settings, "connector_encryption_key", "")
+            or os.environ.get("CONNECTOR_ENCRYPTION_KEY")
+        )
+
+        if key_candidate:
+            raw_bytes = key_candidate.encode("utf-8") if isinstance(key_candidate, str) else key_candidate
+            try:
+                # Test if it's already a valid 32-byte urlsafe-base64 Fernet key
+                return Fernet(raw_bytes)
+            except Exception:
+                # If key_candidate is a passphrase, derive a 32-byte Fernet key via HKDF
+                hkdf = HKDF(
+                    algorithm=hashes.SHA256(),
+                    length=32,
+                    salt=b"ursbiz-connector-vault-v1",
+                    info=b"ursbiz-credential-vault-encryption",
+                )
+                derived_key = base64.urlsafe_b64encode(hkdf.derive(raw_bytes))
+                return Fernet(derived_key)
+
+        # Standalone, isolated fallback key generation (completely decoupled from jwt_secret_key)
+        logger.warning(
+            "CONNECTOR_ENCRYPTION_KEY is unset. Using independent default key for development/test only. "
+            "Set CONNECTOR_ENCRYPTION_KEY in production to ensure isolated credential encryption."
+        )
         hkdf = HKDF(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=salt,
+            salt=b"ursbiz-connector-vault-v1",
             info=b"ursbiz-credential-vault-encryption",
         )
-        derived_key = base64.urlsafe_b64encode(hkdf.derive(secret_source))
+        fallback_source = b"ursbiz-dedicated-connector-vault-fallback-dev-seed"
+        derived_key = base64.urlsafe_b64encode(hkdf.derive(fallback_source))
         return Fernet(derived_key)
 
     def encrypt_credentials(self, business_id: int, credentials: dict[str, Any]) -> str:

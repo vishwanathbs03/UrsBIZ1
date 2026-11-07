@@ -130,6 +130,11 @@ class Settings(BaseSettings):
     cookie_samesite: str = "lax"
     cookie_httponly: bool = True
 
+    # Integration Connector Vault (Phase 6.27)
+    # Dedicated encryption key for external connector credentials (Fernet / AES-128-CBC + HMAC-SHA256).
+    # Must be independently managed and decoupled from JWT authentication secret.
+    connector_encryption_key: str = ""
+
     # Security hardening knobs
     trusted_proxy_hops: int = 1
     rate_limit_enabled: bool = True
@@ -282,6 +287,11 @@ def validate_security_settings(settings: Settings) -> list[str]:
             warnings.append("COOKIE_SECURE=false in production — auth cookie will travel over HTTP")
         if settings.jwt_secret_key in {"", "change-me", "CHANGE_ME"}:
             warnings.append("JWT_SECRET_KEY is unset or a placeholder in production")
+        if not settings.connector_encryption_key:
+            warnings.append(
+                "CONNECTOR_ENCRYPTION_KEY is unset or empty in production — "
+                "integration credentials will use unmanaged fallback"
+            )
         if not settings.security_headers_enabled:
             warnings.append("SECURITY_HEADERS_ENABLED=false in production")
         if not settings.rate_limit_enabled:

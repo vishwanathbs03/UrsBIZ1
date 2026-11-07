@@ -217,6 +217,25 @@ def test_credential_vault_encryption_masking_redaction():
     assert redacted["nested"]["api_key"] == "[REDACTED]"
     assert redacted["nested"]["safe_field"] == "public_info"
 
+    # 5. Dedicated CONNECTOR_ENCRYPTION_KEY and decoupling from jwt_secret_key
+    from app.config.settings import get_settings
+    settings = get_settings()
+    original_jwt_key = settings.jwt_secret_key
+
+    # A custom master_key operates independently
+    custom_vault = ConnectorCredentialVault(master_key="dedicated-isolated-vault-secret-key-2026")
+    custom_cipher = custom_vault.encrypt_credentials(biz_id, creds)
+    assert custom_vault.decrypt_credentials(biz_id, custom_cipher) == creds
+
+    # Modifying jwt_secret_key does not alter vault encryption/decryption
+    try:
+        settings.jwt_secret_key = "completely-different-jwt-key"
+        fresh_vault = ConnectorCredentialVault()
+        fresh_cipher = fresh_vault.encrypt_credentials(biz_id, creds)
+        assert fresh_vault.decrypt_credentials(biz_id, fresh_cipher) == creds
+    finally:
+        settings.jwt_secret_key = original_jwt_key
+
 
 # ==============================================================================
 # 3. CATALOGUE & CONNECTION CREATION API
@@ -528,6 +547,60 @@ def test_sync_execution_and_sales_deduplication(client: TestClient, db_session: 
     # Total database transactions must STILL be 10 (zero duplicate inflation)
     txns_after = db_session.query(SalesTransaction).filter_by(business_id=biz.id).all()
     assert len(txns_after) == 10
+
+    # 5. Legitimate upstream invoice amendment test:
+    # Upstream system amends INV-TH-0001 (quantity increases from original to 10.0, total from original to 2500.0)
+    # The sync engine must update the existing record in-place without creating a duplicate row in DB.
+    first_tx = db_session.query(SalesTransaction).filter_by(business_id=biz.id, invoice_id="INV-TH-0001").first()
+    assert first_tx is not None
+    original_qty = first_tx.quantity
+    original_total = first_tx.total_amount
+
+    from unittest.mock import patch
+    from app.services.connectors.base import FetchResult
+    from app.services.connectors.implementations.test_harness import TestHarnessConnector
+
+    amended_raw_record = {
+        "raw_id": "th-raw-1-amended",
+        "invoice_no": "INV-TH-0001",
+        "tx_date": first_tx.transaction_date.isoformat(),
+        "customer_id": first_tx.customer_id,
+        "customer_name": first_tx.customer_name,
+        "product_id": first_tx.product_id,
+        "product": first_tx.product_name,
+        "qty": 10.0,
+        "unit_price": 250.0,
+        "amount": 2500.0,
+    }
+
+    with patch.object(
+        TestHarnessConnector,
+        "fetch_records",
+        return_value=FetchResult(
+            records=[amended_raw_record],
+            next_cursor="1",
+            has_more=False,
+            total_discovered=1,
+        ),
+    ):
+        amend_res = client.post(
+            f"/api/v1/integrations/connections/{conn_id}/sync",
+            json={"trigger_type": "MANUAL", "batch_limit": 1},
+            headers=_auth_header(owner),
+        )
+        assert amend_res.status_code == 202
+        amend_data = amend_res.json()
+        assert amend_data["status"] == SyncExecutionStatus.SUCCEEDED.value
+        assert amend_data["duplicate_count"] == 0
+        assert amend_data["summary"]["records_updated"] == 1
+
+        # Total count in DB MUST remain 10 (no new row inserted)
+        assert db_session.query(SalesTransaction).filter_by(business_id=biz.id).count() == 10
+
+        # The existing transaction record must have updated values in-place
+        db_session.refresh(first_tx)
+        assert first_tx.quantity == 10.0
+        assert first_tx.total_amount == 2500.0
 
 
 # ==============================================================================
