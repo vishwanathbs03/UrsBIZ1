@@ -295,3 +295,68 @@ def test_wcag_modal_dialog_escape_handlers_and_touch_targets(repo_root: Path):
     eval_content = eval_panel.read_text(encoding="utf-8")
     assert 'e.key === "Escape"' in eval_content
     assert "min-h-[44px]" in eval_content
+
+    # 4. InviteMemberModal.tsx
+    invite_modal = repo_root / "frontend" / "features" / "collaboration" / "InviteMemberModal.tsx"
+    assert invite_modal.exists()
+    inv_content = invite_modal.read_text(encoding="utf-8")
+    assert 'role="dialog"' in inv_content
+    assert 'aria-modal="true"' in inv_content
+    assert 'e.key === "Escape"' in inv_content
+    assert "min-h-[44px] min-w-[44px]" in inv_content
+
+    # 5. ReportConfigModal.tsx
+    cfg_modal = repo_root / "frontend" / "features" / "reports" / "ReportConfigModal.tsx"
+    assert cfg_modal.exists()
+    cfg_content = cfg_modal.read_text(encoding="utf-8")
+    assert 'role="dialog"' in cfg_content
+    assert 'aria-modal="true"' in cfg_content
+    assert 'e.key === "Escape"' in cfg_content
+    assert "min-h-[44px] min-w-[44px]" in cfg_content
+
+    # 6. ReportPreviewModal.tsx
+    prev_modal = repo_root / "frontend" / "features" / "reports" / "ReportPreviewModal.tsx"
+    assert prev_modal.exists()
+    prev_content = prev_modal.read_text(encoding="utf-8")
+    assert 'role="dialog"' in prev_content
+    assert 'aria-modal="true"' in prev_content
+    assert 'e.key === "Escape"' in prev_content
+    assert "min-h-[44px] min-w-[44px]" in prev_content
+
+    # 7. ConnectionModal.tsx
+    conn_modal = repo_root / "frontend" / "features" / "integrations" / "ConnectionModal.tsx"
+    assert conn_modal.exists()
+    conn_content = conn_modal.read_text(encoding="utf-8")
+    assert 'role="dialog"' in conn_content
+    assert 'aria-modal="true"' in conn_content
+    assert 'e.key === "Escape"' in conn_content
+    assert "min-h-[44px] min-w-[44px]" in conn_content
+
+
+def test_modal_inventory_and_escape_handlers(repo_root: Path):
+    """Verify modal inventory scanner runs and all core interactive modals enforce Escape key listeners."""
+    import sys
+    backend_path = str(repo_root / "backend")
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
+    from scripts.scan_modals import scan_modals
+
+    items = scan_modals()
+    assert len(items) >= 15, f"Expected >= 15 modal/overlay candidates, got {len(items)}"
+
+    escape_enabled = {it["file"].replace("\\", "/") for it in items if it["has_escape"]}
+    required_escapes = [
+        "components/common/GlobalSearchModal.tsx",
+        "components/common/SlideOver.tsx",
+        "components/layout/MobileDrawer.tsx",
+        "components/ui/sheet.tsx",
+        "features/collaboration/ReviewApprovalModal.tsx",
+        "features/collaboration/InviteMemberModal.tsx",
+        "features/metrics-dictionary/components/MetricsDictionaryView.tsx",
+        "features/reports/ReportConfigModal.tsx",
+        "features/reports/ReportPreviewModal.tsx",
+        "features/integrations/ConnectionModal.tsx",
+        "features/advisor/ScenarioSimulationModal.tsx",
+    ]
+    for req in required_escapes:
+        assert req in escape_enabled, f"Missing Escape handler in {req}"
