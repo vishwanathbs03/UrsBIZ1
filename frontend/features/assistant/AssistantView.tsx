@@ -12,6 +12,7 @@
 import Link from "next/link";
 import {
   ArrowRight,
+  BarChart2,
   ChevronLeft,
   ChevronRight,
   History,
@@ -33,6 +34,7 @@ import { ContextPanel } from "./ContextPanel";
 import { PromptInput } from "./PromptInput";
 import { SuggestedQuestions } from "./SuggestedQuestions";
 import { SmartFollowUps } from "./SmartFollowUps";
+import { QualityEvaluationPanel } from "./QualityEvaluationPanel";
 import { useAssistantData } from "./use-assistant-data";
 import { classifyQuery } from "./classify-query";
 import { buildConsultantResponse } from "./consultant";
@@ -122,6 +124,7 @@ export function AssistantView() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [serverMessages, setServerMessages] = useState<ChatMessageOut[]>([]);
   const [useGroundedAI, setUseGroundedAI] = useState(true);
+  const [showQualityPanel, setShowQualityPanel] = useState(false);
 
   // Responsive drawer toggles for small screens
   const [showMobileHistory, setShowMobileHistory] = useState(false);
@@ -397,6 +400,19 @@ export function AssistantView() {
                 </span>
               </button>
 
+              {/* Quality Evaluation Analytics Toggle */}
+              <Button
+                type="button"
+                variant={showQualityPanel ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowQualityPanel((p) => !p)}
+                className="h-8 px-2.5 text-xs gap-1.5"
+                title="AI Answer Quality & Feedback Analytics"
+              >
+                <BarChart2 className="size-3.5" />
+                <span className="hidden md:inline">Quality</span>
+              </Button>
+
               {/* Mobile Sidebar Toggle Buttons */}
               <Button
                 type="button"
@@ -421,6 +437,13 @@ export function AssistantView() {
             </div>
           }
         />
+
+        {showQualityPanel && (
+          <QualityEvaluationPanel
+            onClose={() => setShowQualityPanel(false)}
+            className="animate-in fade-in duration-200"
+          />
+        )}
 
         {serverError && (
           <p

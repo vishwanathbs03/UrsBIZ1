@@ -6,6 +6,7 @@ import {
   Bot,
   ChevronDown,
   ChevronRight,
+  MessageSquare,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
@@ -17,6 +18,10 @@ import { TrustFirstResponse } from "./TrustFirstResponse";
 import { formatAssistantBody } from "./AssistantRenderer";
 import type { TrustLabel } from "./TrustBadge";
 import type { AssistantContext } from "./types";
+import {
+  chatFeedbackService,
+  type FeedbackCategory,
+} from "@/services/chat-feedback-service";
 
 interface MessageBubbleProps {
   message: ChatMessageModel;
@@ -59,6 +64,89 @@ export function MessageBubble({
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
   const [vote, setVote] = useState<"up" | "down" | null>(null);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [category, setCategory] = useState<FeedbackCategory>("Helpful");
+  const [rating, setRating] = useState<number>(5);
+  const [notes, setNotes] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedbackSaved, setFeedbackSaved] = useState(false);
+
+  const numericId = useMemo(() => {
+    const parsed = parseInt(message.id, 10);
+    return isNaN(parsed) ? null : parsed;
+  }, [message.id]);
+
+  const handleVote = async (newVote: "up" | "down" | null) => {
+    if (newVote === null) {
+      setVote(null);
+      setFeedbackSaved(false);
+      if (numericId !== null) {
+        try {
+          await chatFeedbackService.deleteFeedback(numericId);
+        } catch {
+          // Ignore delete failures on non-persisted test messages
+        }
+      }
+      return;
+    }
+
+    if (newVote === "up") {
+      setVote("up");
+      setCategory("Helpful");
+      setRating(5);
+      if (numericId !== null) {
+        try {
+          await chatFeedbackService.submitFeedback(numericId, {
+            rating: 5,
+            feedback_category: "Helpful",
+          });
+          setFeedbackSaved(true);
+        } catch {
+          // Tolerated for local mock messages
+        }
+      }
+    } else {
+      setVote("down");
+      setRating(2);
+      setCategory("Missing Evidence");
+      setShowFeedbackModal(true);
+    }
+  };
+
+  const handleSubmitDetailedFeedback = async () => {
+    setIsSubmitting(true);
+    try {
+      if (numericId !== null) {
+        await chatFeedbackService.submitFeedback(numericId, {
+          rating,
+          feedback_category: category,
+          notes: notes.trim() || undefined,
+        });
+      }
+      setFeedbackSaved(true);
+      setShowFeedbackModal(false);
+    } catch {
+      // Tolerated for mock sessions
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteFeedback = async () => {
+    setIsSubmitting(true);
+    try {
+      if (numericId !== null) {
+        await chatFeedbackService.deleteFeedback(numericId);
+      }
+      setVote(null);
+      setFeedbackSaved(false);
+      setShowFeedbackModal(false);
+    } catch {
+      // Tolerated for mock sessions
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   // The legacy 3-state derivation is still exported because
   // downstream tests + the TrustFirstResponse shell consume it.
   // The path-selection itself now lives in the shell.
@@ -172,7 +260,8 @@ export function MessageBubble({
               copied={copied}
               onCopy={handleCopy}
               vote={vote}
-              onVote={setVote}
+              onVote={handleVote}
+              onOpenDetails={() => setShowFeedbackModal(true)}
             />
           </div>
         ) : (
@@ -187,8 +276,117 @@ export function MessageBubble({
             {isUser ? (
               <p className="whitespace-pre-line text-sm">{message.content}</p>
             ) : (
-              <TypedBody text={message.content} />
+              <>
+                <TypedBody text={message.content} />
+                <ActionToolbar
+                  copied={copied}
+                  onCopy={handleCopy}
+                  vote={vote}
+                  onVote={handleVote}
+                  onOpenDetails={() => setShowFeedbackModal(true)}
+                />
+              </>
             )}
+          </div>
+        )}
+        {showFeedbackModal && (
+          <div className="rounded-xl border border-border bg-card p-3 shadow-md space-y-2.5 text-xs animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                <MessageSquare className="size-3.5 text-primary" />
+                Provide Answer Feedback
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowFeedbackModal(false)}
+                className="text-muted-foreground hover:text-foreground text-sm leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                Rating (1 - 5)
+              </label>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setRating(r)}
+                    className={cn(
+                      "size-7 rounded-lg font-bold border transition-colors",
+                      rating === r
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-muted/30 text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                Category
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as FeedbackCategory)}
+                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground"
+              >
+                <option value="Helpful">Helpful</option>
+                <option value="Incorrect Information">Incorrect Information</option>
+                <option value="Missing Evidence">Missing Evidence</option>
+                <option value="Outdated Data">Outdated Data</option>
+                <option value="Difficult to Understand">Difficult to Understand</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                Notes / Factual Corrections (Optional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="What was incorrect, missing, or helpful?"
+                maxLength={1000}
+                rows={2}
+                className="w-full rounded-lg border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={handleDeleteFeedback}
+                disabled={isSubmitting}
+                className="text-[11px] text-destructive hover:underline"
+              >
+                Remove feedback
+              </button>
+
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowFeedbackModal(false)}
+                  className="rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmitDetailedFeedback}
+                  disabled={isSubmitting}
+                  className="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+                >
+                  {isSubmitting ? "Saving..." : "Submit"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
         {!isUser && message.sources && message.sources.length > 0 && (
@@ -217,11 +415,13 @@ function ActionToolbar({
   onCopy,
   vote,
   onVote,
+  onOpenDetails,
 }: {
   copied: boolean;
   onCopy: () => void;
   vote: "up" | "down" | null;
   onVote: (v: "up" | "down" | null) => void;
+  onOpenDetails?: () => void;
 }) {
   return (
     <div className="absolute -bottom-3 right-3 flex items-center gap-1 rounded-full border border-border bg-card px-1 py-0.5 opacity-0 shadow-soft transition-opacity group-hover:opacity-100">
@@ -262,6 +462,19 @@ function ActionToolbar({
       >
         <ThumbsDown className="size-3" />
       </button>
+      {onOpenDetails && (
+        <>
+          <span className="text-border">·</span>
+          <button
+            type="button"
+            onClick={onOpenDetails}
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+            title="Feedback & Quality"
+          >
+            Feedback
+          </button>
+        </>
+      )}
     </div>
   );
 }

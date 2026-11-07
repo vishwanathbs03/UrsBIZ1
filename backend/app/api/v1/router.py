@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     benchmark,
     business,
     chat,
+    chat_feedback,
     collaboration,
     compliance,
     copilot,
@@ -90,6 +91,7 @@ api_router.include_router(ocr.router)
 api_router.include_router(finance.router)
 api_router.include_router(copilot.router)
 api_router.include_router(chat.router)
+api_router.include_router(chat_feedback.router)
 api_router.include_router(advisor.router)
 api_router.include_router(sales.router)
 api_router.include_router(forecasting.router)

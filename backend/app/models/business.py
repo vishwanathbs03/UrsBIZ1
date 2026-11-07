@@ -14,6 +14,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.utils.database import Base
 
 if TYPE_CHECKING:
+    from app.models.chat_feedback import ChatFeedback
     from app.models.certification import Certification
     from app.models.digital_presence import DigitalPresence
     from app.models.export_history import ExportHistory
@@ -109,6 +110,10 @@ class Business(Base):
     )
     integration_connections: Mapped[list["IntegrationConnection"]] = relationship(
         back_populates="business", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    chat_feedbacks: Mapped[list["ChatFeedback"]] = relationship(
+        "ChatFeedback", back_populates="business", cascade="all, delete-orphan", lazy="selectin"
     )
 
     personalization_settings: Mapped["BusinessPersonalizationSettings | None"] = relationship(

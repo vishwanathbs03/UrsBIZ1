@@ -17,6 +17,7 @@ from app.models.business_monitoring import (
 from app.models.business_report import BusinessReport, BusinessReportAudit
 from app.models.certification import Certification
 from app.models.chat import ChatMessage, ChatSession
+from app.models.chat_feedback import ChatFeedback, FeedbackCategory
 from app.models.collaboration import (
     ApprovalAudit,
     ApprovalEntityType,
@@ -67,6 +68,8 @@ __all__ = [
     "BusinessChallenge",
     "ChatSession",
     "ChatMessage",
+    "ChatFeedback",
+    "FeedbackCategory",
     "ActionItem",
     "NotificationItem",
     "SalesUpload",

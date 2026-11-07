@@ -30,6 +30,7 @@ from app.utils.database import Base
 if TYPE_CHECKING:
     from app.models.business import Business
     from app.models.user import User
+    from app.models.chat_feedback import ChatFeedback
 
 
 class ChatSession(Base):
@@ -130,6 +131,7 @@ class ChatMessage(Base):
     )
 
     session: Mapped["ChatSession"] = relationship(back_populates="messages")
+    feedback: Mapped[list["ChatFeedback"]] = relationship("ChatFeedback", back_populates="message", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         return f"<ChatMessage id={self.id} session={self.session_id} role={self.role}>"

@@ -158,4 +158,28 @@ export {
   type ApprovalSummaryResponse,
 } from "./collaboration-service";
 
+export {
+  integrationService,
+  type ConnectionStatus,
+  type SyncExecutionStatus,
+  type OperationalStatus,
+  type ConnectorCatalogueItem,
+  type ConnectionOut,
+  type ConnectionTestResultOut,
+  type SyncExecutionOut,
+  type IntegrationAuditOut,
+} from "./integration-service";
+
+export {
+  chatFeedbackService,
+  FEEDBACK_CATEGORIES,
+  type FeedbackCategory,
+  type ChatFeedbackResponse,
+  type ChatFeedbackCreateRequest,
+  type ChatFeedbackUpdateRequest,
+  type GroundingCorrelationMetrics,
+  type ChatFeedbackAnalytics,
+} from "./chat-feedback-service";
+
+
 
