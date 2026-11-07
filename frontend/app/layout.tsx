@@ -55,9 +55,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-background text-foreground antialiased">
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2.5 focus:font-medium focus:text-primary-foreground focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-accent"
         >
-          Skip to content
+          Skip to content / ಮುಖ್ಯ ವಿಷಯಕ್ಕೆ ತೆರಳಿ
         </a>
         <AuthProviderClient>
           <QueryProvider>

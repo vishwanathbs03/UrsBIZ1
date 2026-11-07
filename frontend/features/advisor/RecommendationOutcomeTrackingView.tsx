@@ -24,6 +24,8 @@ import {
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { LevelBadge } from "@/features/dashboard/LevelBadge";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/context/language-context";
+import { formatINR } from "@/lib/formatters";
 import type {
   BeforeAfterMeasurementResponse,
   CategoryEffectivenessItem,
@@ -43,6 +45,7 @@ export function RecommendationOutcomeTrackingView({
   isLoading,
 }: RecommendationOutcomeTrackingViewProps) {
   const [activeTab, setActiveTab] = useState<"effectiveness" | "measurement" | "categories">("effectiveness");
+  const { language } = useLanguage();
 
   if (isLoading || !effectiveness) {
     return (
@@ -302,13 +305,13 @@ export function RecommendationOutcomeTrackingView({
                           <div>
                             <span className="text-neutral-400 block text-[11px]">Pre-Period Baseline</span>
                             <span className="font-semibold text-neutral-200">
-                              {m.unit === "INR" ? `₹${m.baseline_value.toLocaleString()}` : m.baseline_value}
+                              {m.unit === "INR" ? formatINR(m.baseline_value, { language }) : m.baseline_value}
                             </span>
                           </div>
                           <div>
                             <span className="text-neutral-400 block text-[11px]">Post-Period Measured</span>
                             <span className="font-semibold text-neutral-200">
-                              {m.unit === "INR" ? `₹${m.post_value.toLocaleString()}` : m.post_value}
+                              {m.unit === "INR" ? formatINR(m.post_value, { language }) : m.post_value}
                             </span>
                           </div>
                         </div>

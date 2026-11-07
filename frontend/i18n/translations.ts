@@ -152,20 +152,45 @@ export interface LandingTranslations {
   };
 }
 
+export interface FinancialTermEntry {
+  label: string;
+  desc: string;
+}
+
 export interface Translations {
   nav: {
     home: string;
     dashboard: string;
-    schemes: string;
+    business: string;
+    intelligence: string;
+    sales: string;
     analytics: string;
     predictiveAnalytics: string;
-    actionBoard: string;
     insights: string;
-    reports: string;
-    assistant: string;
-    business: string;
+    dataConfidence: string;
+    metrics: string;
     advisor: string;
+    actionBoard: string;
+    decisionWorkbench: string;
+    whatIf: string;
+    goals: string;
+    schemes: string;
+    assistant: string;
+    reports: string;
+    collaboration: string;
+    integrations: string;
     notifications: string;
+    groupOverview: string;
+    groupBusiness: string;
+    groupIntelligence: string;
+    groupActions: string;
+    groupDiscover: string;
+    groupAssistant: string;
+    groupWorkspace: string;
+    badgeNew: string;
+    badgeAi: string;
+    badgeRbac: string;
+    more: string;
   };
   landing: LandingTranslations;
   assistant: {
@@ -266,6 +291,115 @@ export interface Translations {
     back: string;
     copied: string;
     copy: string;
+    filter: string;
+    all: string;
+    search: string;
+    view: string;
+    details: string;
+    status: string;
+    actions: string;
+    confirm: string;
+    submit: string;
+    close: string;
+    refresh: string;
+    date: string;
+    amount: string;
+    currencySymbol: string;
+  };
+  financialTerms: {
+    dso: FinancialTermEntry;
+    workingCapital: FinancialTermEntry;
+    cashFlow: FinancialTermEntry;
+    grossMargin: FinancialTermEntry;
+    netProfit: FinancialTermEntry;
+    revenue: FinancialTermEntry;
+    operatingExpenses: FinancialTermEntry;
+    accountsReceivable: FinancialTermEntry;
+    accountsPayable: FinancialTermEntry;
+    inventoryTurnover: FinancialTermEntry;
+    burnRate: FinancialTermEntry;
+    customerConcentration: FinancialTermEntry;
+    cashRunway: FinancialTermEntry;
+  };
+  roles: {
+    owner: string;
+    administrator: string;
+    manager: string;
+    analyst: string;
+    viewer: string;
+  };
+  decisions: {
+    draft: string;
+    proposed: string;
+    pendingApproval: string;
+    approved: string;
+    rejected: string;
+    executed: string;
+    cancelled: string;
+    newDecision: string;
+    requestApproval: string;
+    approve: string;
+    reject: string;
+    soleOwnerAutoApproved: string;
+  };
+  feedbackEvaluation: {
+    helpful: string;
+    incorrectInformation: string;
+    missingEvidence: string;
+    outdatedData: string;
+    difficultToUnderstand: string;
+    qualityScore: string;
+    helpfulnessRate: string;
+    totalFeedback: string;
+    groundedVsFallback: string;
+    groundedAnswers: string;
+    ruleFallbacks: string;
+    unclassified: string;
+    zeroRetention: string;
+    unvote: string;
+  };
+  goalsTracker: {
+    title: string;
+    activeGoals: string;
+    targetValue: string;
+    currentValue: string;
+    deadline: string;
+    milestones: string;
+    onTrack: string;
+    atRisk: string;
+    behind: string;
+    achieved: string;
+  };
+  reportsExport: {
+    title: string;
+    exportReport: string;
+    downloadPdf: string;
+    downloadCsv: string;
+    downloadXlsx: string;
+    auditPackage: string;
+    checksum: string;
+  };
+  connectors: {
+    title: string;
+    tallyPrime: string;
+    zohoBooks: string;
+    manualLedger: string;
+    syncStatus: string;
+    connected: string;
+    inactive: string;
+    beta: string;
+    lastSync: string;
+  };
+  a11y: {
+    skipToContent: string;
+    openNavigation: string;
+    closeNavigation: string;
+    toggleTheme: string;
+    languageSelect: string;
+    currentLanguage: string;
+    externalLink: string;
+    breadcrumb: string;
+    loadingState: string;
   };
 }
 
@@ -274,16 +408,36 @@ export const translations: Record<SupportedLanguage, Translations> = {
     nav: {
       home: "Home",
       dashboard: "Dashboard",
-      schemes: "Government Schemes",
+      business: "Business Profile",
+      intelligence: "Health Score",
+      sales: "Sales Intelligence",
       analytics: "Analytics",
-      predictiveAnalytics: "Predictive Analytics",
-      actionBoard: "Action Board",
+      predictiveAnalytics: "Forecasts",
       insights: "Insights",
+      dataConfidence: "Data Confidence",
+      metrics: "Metrics Dictionary",
+      advisor: "AI Advisor",
+      actionBoard: "Recommendations",
+      decisionWorkbench: "Decision Workbench",
+      whatIf: "What-If Simulator",
+      goals: "Business Goals",
+      schemes: "Government Schemes",
+      assistant: "AI Business Assistant",
       reports: "Reports",
-      assistant: "AI Assistant",
-      business: "Business",
-      advisor: "Advisor",
+      collaboration: "Team & Approvals",
+      integrations: "Integrations",
       notifications: "Notifications",
+      groupOverview: "Overview",
+      groupBusiness: "Business",
+      groupIntelligence: "Intelligence",
+      groupActions: "Actions",
+      groupDiscover: "Discover",
+      groupAssistant: "Assistant",
+      groupWorkspace: "Workspace",
+      badgeNew: "NEW",
+      badgeAi: "AI",
+      badgeRbac: "RBAC",
+      more: "More",
     },
     landing: {
       hero: {
@@ -543,22 +697,190 @@ export const translations: Record<SupportedLanguage, Translations> = {
       back: "Back",
       copied: "Copied!",
       copy: "Copy",
+      filter: "Filter",
+      all: "All",
+      search: "Search",
+      view: "View",
+      details: "Details",
+      status: "Status",
+      actions: "Actions",
+      confirm: "Confirm",
+      submit: "Submit",
+      close: "Close",
+      refresh: "Refresh",
+      date: "Date",
+      amount: "Amount",
+      currencySymbol: "₹",
+    },
+    financialTerms: {
+      dso: {
+        label: "Days Sales Outstanding (DSO)",
+        desc: "Average number of days required to collect invoice payment after a sale.",
+      },
+      workingCapital: {
+        label: "Working Capital",
+        desc: "Operating liquidity available for daily transactions (Current Assets minus Current Liabilities).",
+      },
+      cashFlow: {
+        label: "Cash Flow",
+        desc: "Net movement of cash funds transferred into and out of the business ledger.",
+      },
+      grossMargin: {
+        label: "Gross Margin",
+        desc: "Percentage of revenue exceeding Cost of Goods Sold (COGS).",
+      },
+      netProfit: {
+        label: "Net Profit",
+        desc: "Final earnings remaining after deducting all operational costs, taxes, and interest.",
+      },
+      revenue: {
+        label: "Revenue",
+        desc: "Total gross turnover recognized from verified sales orders and customer invoices.",
+      },
+      operatingExpenses: {
+        label: "Operating Expenses (OpEx)",
+        desc: "Fixed and variable overhead expenditures required to maintain business operations.",
+      },
+      accountsReceivable: {
+        label: "Accounts Receivable",
+        desc: "Pending payments legally owed to the business by customers for goods delivered.",
+      },
+      accountsPayable: {
+        label: "Accounts Payable",
+        desc: "Outstanding liabilities owed by the business to suppliers and vendors.",
+      },
+      inventoryTurnover: {
+        label: "Inventory Turnover",
+        desc: "Rate at which physical stock is sold and replenished over a standard operating cycle.",
+      },
+      burnRate: {
+        label: "Burn Rate",
+        desc: "Net cash depletion rate per month when operating expenditures exceed collections.",
+      },
+      customerConcentration: {
+        label: "Customer Concentration",
+        desc: "Share of revenue accounted for by top buyers, indicating structural revenue risk.",
+      },
+      cashRunway: {
+        label: "Cash Runway",
+        desc: "Estimated survival duration in months based on available cash reserves and monthly burn.",
+      },
+    },
+    roles: {
+      owner: "Owner",
+      administrator: "Administrator",
+      manager: "Manager",
+      analyst: "Analyst",
+      viewer: "Viewer",
+    },
+    decisions: {
+      draft: "Draft",
+      proposed: "Proposed",
+      pendingApproval: "Pending Approval",
+      approved: "Approved",
+      rejected: "Rejected",
+      executed: "Executed",
+      cancelled: "Cancelled",
+      newDecision: "New Decision",
+      requestApproval: "Request Approval",
+      approve: "Approve",
+      reject: "Reject",
+      soleOwnerAutoApproved: "Sole Owner — Auto-Approved",
+    },
+    feedbackEvaluation: {
+      helpful: "Helpful",
+      incorrectInformation: "Incorrect Information",
+      missingEvidence: "Missing Evidence",
+      outdatedData: "Outdated Data",
+      difficultToUnderstand: "Difficult to Understand",
+      qualityScore: "Quality Score",
+      helpfulnessRate: "Helpfulness Rate",
+      totalFeedback: "Total Feedback",
+      groundedVsFallback: "Grounded vs. Rule Fallback Telemetry",
+      groundedAnswers: "Grounded Answers",
+      ruleFallbacks: "Rule Engine Fallbacks",
+      unclassified: "Unclassified",
+      zeroRetention: "Zero-Retention Data Sovereignty",
+      unvote: "Remove feedback",
+    },
+    goalsTracker: {
+      title: "Business Goals & Progress Tracker",
+      activeGoals: "Active Goals",
+      targetValue: "Target Value",
+      currentValue: "Current Value",
+      deadline: "Deadline",
+      milestones: "Milestones",
+      onTrack: "On Track",
+      atRisk: "At Risk",
+      behind: "Behind",
+      achieved: "Achieved",
+    },
+    reportsExport: {
+      title: "Reports & Evidence Export Centre",
+      exportReport: "Export Report",
+      downloadPdf: "Download PDF",
+      downloadCsv: "Download CSV",
+      downloadXlsx: "Download Excel",
+      auditPackage: "Audit Evidence Package",
+      checksum: "SHA-256 Checksum",
+    },
+    connectors: {
+      title: "Integrations & Connectors",
+      tallyPrime: "Tally Prime ERP",
+      zohoBooks: "Zoho Books",
+      manualLedger: "Manual Ledger Upload",
+      syncStatus: "Sync Status",
+      connected: "Connected",
+      inactive: "Inactive",
+      beta: "Beta",
+      lastSync: "Last Synchronized",
+    },
+    a11y: {
+      skipToContent: "Skip to main content",
+      openNavigation: "Open navigation menu",
+      closeNavigation: "Close navigation menu",
+      toggleTheme: "Toggle color theme",
+      languageSelect: "Change interface language",
+      currentLanguage: "Current language: English",
+      externalLink: "(opens in a new window)",
+      breadcrumb: "Breadcrumb navigation",
+      loadingState: "Loading content, please wait...",
     },
   },
   kn: {
     nav: {
       home: "ಮುಖಪುಟ",
       dashboard: "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್",
-      schemes: "ಸರ್ಕಾರಿ ಯೋಜನೆಗಳು",
+      business: "ವ್ಯವಹಾರ ಪ್ರೊಫೈಲ್",
+      intelligence: "ಆರೋಗ್ಯ ಸ್ಕೋರ್",
+      sales: "ಮಾರಾಟ ಬುದ್ಧಿಮತ್ತೆ",
       analytics: "ವಿಶ್ಲೇಷಣೆ",
-      predictiveAnalytics: "ಭವಿಷ್ಯದ ಮುನ್ಸೂಚನೆ",
-      actionBoard: "ಕ್ರಿಯಾ ಮಂಡಳಿ",
+      predictiveAnalytics: "ಮುನ್ಸೂಚನೆಗಳು",
       insights: "ಒಳನೋಟಗಳು",
+      dataConfidence: "ದತ್ತಾಂಶ ವಿಶ್ವಾಸಾರ್ಹತೆ",
+      metrics: "ಮೆಟ್ರಿಕ್ಸ್ ನಿಘಂಟು",
+      advisor: "AI ಸಲಹೆಗಾರ",
+      actionBoard: "ಶಿಫಾರಸುಗಳು",
+      decisionWorkbench: "ನಿರ್ಧಾರ ಕಾರ್ಯಕ್ಷೇತ್ರ",
+      whatIf: "ಸನ್ನಿವೇಶ ಸಿಮ್ಯುಲೇಟರ್",
+      goals: "ವ್ಯವಹಾರ ಗುರಿಗಳು",
+      schemes: "ಸರ್ಕಾರಿ ಯೋಜನೆಗಳು",
+      assistant: "AI ವ್ಯವಹಾರ ಸಹಾಯಕ",
       reports: "ವರದಿಗಳು",
-      assistant: "AI ಸಹಾಯಕ",
-      business: "ವ್ಯವಹಾರ",
-      advisor: "ಸಲಹೆಗಾರ",
+      collaboration: "ತಂಡ ಮತ್ತು ಅನುಮೋದನೆಗಳು",
+      integrations: "ಸಂಯೋಜನೆಗಳು",
       notifications: "ಸೂಚನೆಗಳು",
+      groupOverview: "ಅವಲೋಕನ",
+      groupBusiness: "ವ್ಯವಹಾರ",
+      groupIntelligence: "ಬುದ್ಧಿಮತ್ತೆ",
+      groupActions: "ಕ್ರಮಗಳು",
+      groupDiscover: "ಅನ್ವೇಷಿಸಿ",
+      groupAssistant: "ಸಹಾಯಕ",
+      groupWorkspace: "ಕಾರ್ಯಕ್ಷೇತ್ರ",
+      badgeNew: "ಹೊಸತು",
+      badgeAi: "AI",
+      badgeRbac: "RBAC",
+      more: "ಇನ್ನಷ್ಟು",
     },
     landing: {
       hero: {
@@ -815,6 +1137,154 @@ export const translations: Record<SupportedLanguage, Translations> = {
       back: "ಹಿಂದೆ",
       copied: "ನಕಲಿಸಲಾಗಿದೆ!",
       copy: "ನಕಲಿಸಿ",
+      filter: "ಫಿಲ್ಟರ್",
+      all: "ಎಲ್ಲವೂ",
+      search: "ಹುಡುಕಿ",
+      view: "ವೀಕ್ಷಿಸಿ",
+      details: "ವಿವರಗಳು",
+      status: "ಸ್ಥಿತಿ",
+      actions: "ಕ್ರಮಗಳು",
+      confirm: "ದೃಢೀಕರಿಸಿ",
+      submit: "ಸಲ್ಲಿಸಿ",
+      close: "ಮುಚ್ಚಿ",
+      refresh: "ನವೀಕರಿಸಿ",
+      date: "ದಿನಾಂಕ",
+      amount: "ಮೊತ್ತ",
+      currencySymbol: "₹",
+    },
+    financialTerms: {
+      dso: {
+        label: "ವಸೂಲಾತಿ ಬಾಕಿ ದಿನಗಳು (DSO)",
+        desc: "ಮಾರಾಟದ ನಂತರ ಗ್ರಾಹಕರಿಂದ ಹಣ ವಸೂಲಿ ಮಾಡಲು ಬೇಕಾಗುವ ಸರಾಸರಿ ದಿನಗಳ ಸಂಖ್ಯೆ.",
+      },
+      workingCapital: {
+        label: "ಕಾರ್ಯನಿರತ ಬಂಡವಾಳ",
+        desc: "ದೈನಂದಿನ ಕಾರ್ಯಾಚರಣೆಗೆ ಲಭ್ಯವಿರುವ ದ್ರವ್ಯತೆ (ಪ್ರಸ್ತುತ ಆಸ್ತಿಗಳು ಮೈನಸ್ ಪ್ರಸ್ತುತ ಬಾಧ್ಯತೆಗಳು).",
+      },
+      cashFlow: {
+        label: "ನಗದು ಹರಿವು",
+        desc: "ವ್ಯವಹಾರದ ಲೆಡ್ಜರ್‌ಗೆ ಒಳಬರುವ ಮತ್ತು ಹೊರಹೋಗುವ ನಗದು ನಿಧಿಗಳ ನಿವ್ವಳ ಚಲನೆ.",
+      },
+      grossMargin: {
+        label: "ಒಟ್ಟು ಲಾಭಾಂಶ",
+        desc: "ಮಾರಾಟವಾದ ಸರಕುಗಳ ವೆಚ್ಚವನ್ನು (COGS) ಕಳೆದ ನಂತರ ಉಳಿಯುವ ಆದಾಯದ ಶೇಕಡಾವಾರು ಪ್ರಮಾಣ.",
+      },
+      netProfit: {
+        label: "ನಿವ್ವಳ ಲಾಭ",
+        desc: "ಎಲ್ಲಾ ಕಾರ್ಯಾಚರಣೆಯ ವೆಚ್ಚಗಳು, ತೆರಿಗೆಗಳು ಮತ್ತು ಬಡ್ಡಿಯನ್ನು ಕಳೆದ ನಂತರ ಉಳಿಯುವ ಅಂತಿಮ ಗಳಿಕೆ.",
+      },
+      revenue: {
+        label: "ಆದಾಯ",
+        desc: "ಪರಿಶೀಲಿಸಿದ ಮಾರಾಟ ಆದೇಶಗಳು ಮತ್ತು ಇನ್‌ವಾಯ್ಸ್‌ಗಳಿಂದ ಗುರುತಿಸಲಾದ ಒಟ್ಟು ವಹಿವಾಟು.",
+      },
+      operatingExpenses: {
+        label: "ಕಾರ್ಯಾಚರಣೆಯ ವೆಚ್ಚಗಳು (OpEx)",
+        desc: "ವ್ಯವಹಾರದ ದೈನಂದಿನ ಕಾರ್ಯಾಚರಣೆಯನ್ನು ನಿರ್ವಹಿಸಲು ಅಗತ್ಯವಿರುವ ಸ್ಥಿರ ಮತ್ತು ವ್ಯತ್ಯಾಸಗೊಳ್ಳುವ ವೆಚ್ಚಗಳು.",
+      },
+      accountsReceivable: {
+        label: "ಸ್ವೀಕರಿಸಬೇಕಾದ ಬಾಕಿ",
+        desc: "ವಿತರಿಸಿದ ಸರಕುಗಳಿಗಾಗಿ ಗ್ರಾಹಕರಿಂದ ವ್ಯವಹಾರಕ್ಕೆ ಕಾನೂನುಬದ್ಧವಾಗಿ ಬರಬೇಕಾದ ಬಾಕಿ ಪಾವತಿಗಳು.",
+      },
+      accountsPayable: {
+        label: "ಪಾವತಿಸಬೇಕಾದ ಬಾಕಿ",
+        desc: "ಸರಬರಾಜುದಾರರಿಗೆ ಮತ್ತು ಮಾರಾಟಗಾರರಿಗೆ ವ್ಯವಹಾರವು ಪಾವತಿಸಬೇಕಾದ ಬಾಕಿ ಹೊಣೆಗಾರಿಕೆಗಳು.",
+      },
+      inventoryTurnover: {
+        label: "ದಾಸ್ತಾನು ವಹಿವಾಟು ದರ",
+        desc: "ಪ್ರಮಾಣಿತ ಕಾರ್ಯಾಚರಣಾ ಚಕ್ರದಲ್ಲಿ ಭೌತಿಕ ಸ್ಟಾಕ್ ಮಾರಾಟವಾಗಿ ಮರುಪೂರಣಗೊಳ್ಳುವ ದರ.",
+      },
+      burnRate: {
+        label: "ಮಾಸಿಕ ನಗದು ವೆಚ್ಚ ದರ",
+        desc: "ಕಾರ್ಯಾಚರಣೆಯ ವೆಚ್ಚಗಳು ವಸೂಲಾತಿಯನ್ನು ಮೀರಿದಾಗ ನಗದು ಮೀಸಲು ಖಾಲಿಯಾಗುವ ಮಾಸಿಕ ದರ.",
+      },
+      customerConcentration: {
+        label: "ಗ್ರಾಹಕರ ಸಾಂದ್ರತೆ",
+        desc: "ಪ್ರಮುಖ ಖರೀದಿದಾರರಿಂದ ಬರುವ ಆದಾಯದ ಪಾಲು (ರಚನಾತ್ಮಕ ಆದಾಯದ ಅಪಾಯವನ್ನು ಸೂಚಿಸುತ್ತದೆ).",
+      },
+      cashRunway: {
+        label: "ನಗದು ಜೀವಿತಾವಧಿ",
+        desc: "ಲಭ್ಯವಿರುವ ನಗದು ಮೀಸಲು ಮತ್ತು ಮಾಸಿಕ ವೆಚ್ಚ ದರದ ಆಧಾರದ ಮೇಲೆ ಅಂದಾಜು ಉಳಿವಿನ ತಿಂಗಳುಗಳು.",
+      },
+    },
+    roles: {
+      owner: "ಮಾಲೀಕ",
+      administrator: "ನಿರ್ವಾಹಕ",
+      manager: "ವ್ಯವಸ್ಥಾಪಕ",
+      analyst: "ವಿಶ್ಲೇಷಕ",
+      viewer: "ವೀಕ್ಷಕ",
+    },
+    decisions: {
+      draft: "ಕರಡು",
+      proposed: "ಪ್ರಸ್ತಾಪಿತ",
+      pendingApproval: "ಅನುಮೋದನೆ ಬಾಕಿ",
+      approved: "ಅನುಮೋದಿತ",
+      rejected: "ತಿರಸ್ಕೃತ",
+      executed: "ಕಾರ್ಯಗತಗೊಳಿಸಲಾಗಿದೆ",
+      cancelled: "ರದ್ದುಗೊಳಿಸಲಾಗಿದೆ",
+      newDecision: "ಹೊಸ ನಿರ್ಧಾರ",
+      requestApproval: "ಅನುಮೋದನೆ ಕೋರಿ",
+      approve: "ಅನುಮೋದಿಸಿ",
+      reject: "ತಿರಸ್ಕರಿಸಿ",
+      soleOwnerAutoApproved: "ಏಕಮಾತ್ರ ಮಾಲೀಕ — ಸ್ವಯಂ ಅನುಮೋದಿತ",
+    },
+    feedbackEvaluation: {
+      helpful: "ಸಹಾಯಕ",
+      incorrectInformation: "ತಪ್ಪಾದ ಮಾಹಿತಿ",
+      missingEvidence: "ಪುರಾವೆ ಕೊರತೆ",
+      outdatedData: "ಹಳೆಯ ಡೇಟಾ",
+      difficultToUnderstand: "ಅರ್ಥಮಾಡಿಕೊಳ್ಳಲು ಕಷ್ಟ",
+      qualityScore: "ಗುಣಮಟ್ಟದ ಸ್ಕೋರ್",
+      helpfulnessRate: "ಸಹಾಯಕತೆಯ ಪ್ರಮಾಣ",
+      totalFeedback: "ಒಟ್ಟು ಪ್ರತಿಕ್ರಿಯೆಗಳು",
+      groundedVsFallback: "ಆಧಾರಿತ vs ನಿಯಮ ಎಂಜಿನ್ ಟೆಲಿಮೆಟ್ರಿ",
+      groundedAnswers: "ಆಧಾರಿತ ಉತ್ತರಗಳು",
+      ruleFallbacks: "ನಿಯಮ ಎಂಜಿನ್ ಉತ್ತರಗಳು",
+      unclassified: "ವರ್ಗೀಕರಿಸದ",
+      zeroRetention: "ಶೂನ್ಯ-ಧಾರಣ ದತ್ತಾಂಶ ಸಾರ್ವಭೌಮತ್ವ",
+      unvote: "ಪ್ರತಿಕ್ರಿಯೆ ತೆಗೆದುಹಾಕಿ",
+    },
+    goalsTracker: {
+      title: "ವ್ಯವಹಾರ ಗುರಿಗಳು ಮತ್ತು ಪ್ರಗತಿ ಟ್ರ್ಯಾಕರ್",
+      activeGoals: "ಸಕ್ರಿಯ ಗುರಿಗಳು",
+      targetValue: "ಗುರಿ ಮೌಲ್ಯ",
+      currentValue: "ಪ್ರಸ್ತುತ ಮೌಲ್ಯ",
+      deadline: "ಅಂತಿಮ ಗಡುವು",
+      milestones: "ಮೈಲಿಗಲ್ಲುಗಳು",
+      onTrack: "ಸರಿಯಾದ ಹಾದಿಯಲ್ಲಿದೆ",
+      atRisk: "ಅಪಾಯದಲ್ಲಿದೆ",
+      behind: "ಹಿಂದುಳಿದಿದೆ",
+      achieved: "ಸಾಧಿಸಲಾಗಿದೆ",
+    },
+    reportsExport: {
+      title: "ವರದಿಗಳು ಮತ್ತು ಪುರಾವೆ ರಫ್ತು ಕೇಂದ್ರ",
+      exportReport: "ವರದಿ ರಫ್ತು ಮಾಡಿ",
+      downloadPdf: "PDF ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ",
+      downloadCsv: "CSV ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ",
+      downloadXlsx: "Excel ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ",
+      auditPackage: "ಆಡಿಟ್ ಪುರಾವೆ ಪ್ಯಾಕೇಜ್",
+      checksum: "SHA-256 ಚೆಕ್‌ಸಮ್",
+    },
+    connectors: {
+      title: "ಸಂಯೋಜನೆಗಳು ಮತ್ತು ಕನೆಕ್ಟರ್‌ಗಳು",
+      tallyPrime: "ಟ್ಯಾಲಿ ಪ್ರೈಮ್ ಇಆರ್‌ಪಿ",
+      zohoBooks: "ಜೋಹೋ ಬುಕ್ಸ್",
+      manualLedger: "ಮ್ಯಾನುಯಲ್ ಲೆಡ್ಜರ್ ಅಪ್‌ಲೋಡ್",
+      syncStatus: "ಸಿಂಕ್ ಸ್ಥಿತಿ",
+      connected: "ಸಂಪರ್ಕಗೊಂಡಿದೆ",
+      inactive: "ನಿಷ್ಕ್ರಿಯ",
+      beta: "ಬೀಟಾ",
+      lastSync: "ಕೊನೆಯ ಸಿಂಕ್",
+    },
+    a11y: {
+      skipToContent: "ಮುಖ್ಯ ವಿಷಯಕ್ಕೆ ತೆರಳಿ",
+      openNavigation: "ನ್ಯಾವಿಗೇಷನ್ ಮೆನು ತೆರೆಯಿರಿ",
+      closeNavigation: "ನ್ಯಾವಿಗೇಷನ್ ಮೆನು ಮುಚ್ಚಿ",
+      toggleTheme: "ಬಣ್ಣದ ಥೀಮ್ ಬದಲಾಯಿಸಿ",
+      languageSelect: "ಇಂಟರ್ಫೇಸ್ ಭಾಷೆಯನ್ನು ಬದಲಾಯಿಸಿ",
+      currentLanguage: "ಪ್ರಸ್ತುತ ಭಾಷೆ: ಕನ್ನಡ",
+      externalLink: "(ಹೊಸ ವಿಂಡೋದಲ್ಲಿ ತೆರೆಯುತ್ತದೆ)",
+      breadcrumb: "ಬ್ರೆಡ್‌ಕ್ರಂಬ್ ನ್ಯಾವಿಗೇಷನ್",
+      loadingState: "ವಿಷಯ ಲೋಡ್ ಆಗುತ್ತಿದೆ, ದಯವಿಟ್ಟು ಕಾಯಿರಿ...",
     },
   },
 };

@@ -17,42 +17,13 @@ interface MobileDrawerProps {
 }
 
 /**
- * Slide-in drawer used for mobile/tablet navigation (Phase 1 Dark Neon).
+ * Slide-in drawer used for mobile/tablet navigation (Phase 1 & Phase 6.29).
+ * Fully bilingual English & Kannada, WCAG touch target compliant (>=44px),
+ * and keyboard accessible.
  */
 export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
   const pathname = usePathname() ?? "/";
-  const { t } = useLanguage();
-
-  const getLocalizedLabel = (href: string, defaultLabel: string): string => {
-    switch (href) {
-      case "/":
-        return t("nav.home", defaultLabel);
-      case "/dashboard":
-        return t("nav.dashboard", defaultLabel);
-      case "/schemes":
-        return t("nav.schemes", defaultLabel);
-      case "/analytics":
-        return t("nav.analytics", defaultLabel);
-      case "/predictive-analytics":
-        return t("nav.predictiveAnalytics", defaultLabel);
-      case "/action-board":
-        return t("nav.actionBoard", defaultLabel);
-      case "/insights":
-        return t("nav.insights", defaultLabel);
-      case "/reports":
-        return t("nav.reports", defaultLabel);
-      case "/assistant":
-        return t("nav.assistant", defaultLabel);
-      case "/business":
-        return t("nav.business", defaultLabel);
-      case "/advisor":
-        return t("nav.advisor", defaultLabel);
-      case "/notifications":
-        return t("nav.notifications", defaultLabel);
-      default:
-        return defaultLabel;
-    }
-  };
+  const { t, language } = useLanguage();
 
   useEffect(() => {
     if (!open) {
@@ -69,13 +40,13 @@ export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
     if (!open) {
       return;
     }
-    const onKey = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
   useEffect(() => {
@@ -83,42 +54,46 @@ export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
+  if (!open) {
+    return null;
+  }
+
   return (
     <div
-      id="mobile-drawer"
-      aria-hidden={!open}
-      className={cn(
-        "fixed inset-0 z-50 overflow-x-hidden lg:hidden",
-        open ? "pointer-events-auto" : "pointer-events-none",
-        !open && "hidden",
-      )}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("a11y.openNavigation", "Mobile Navigation")}
+      className="fixed inset-0 z-50 lg:hidden"
     >
-      <button
-        type="button"
-        aria-label="Close menu"
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-background/80 backdrop-blur-md transition-opacity"
         onClick={onClose}
-        className={cn(
-          "absolute inset-0 bg-black/75 backdrop-blur-sm transition-opacity duration-300",
-          open ? "opacity-100" : "opacity-0",
-        )}
+        aria-hidden="true"
       />
 
+      {/* Slide-over panel */}
       <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label="Mobile navigation"
+        id="mobile-drawer"
         className={cn(
-          "absolute right-0 top-0 flex h-full w-80 max-w-[85vw] flex-col border-l border-border/80 bg-background/95 shadow-2xl backdrop-blur-2xl transition-transform duration-300 ease-out",
-          open ? "translate-x-0" : "translate-x-full",
+          "fixed inset-y-0 right-0 z-50 flex w-full max-w-xs flex-col border-l border-border/80 bg-background/95 shadow-2xl backdrop-blur-xl",
+          "animate-in slide-in-from-right duration-200",
         )}
       >
         <div className="flex h-16 items-center justify-between border-b border-border/80 px-4">
-          <Logo size="sm" />
+          <Link
+            href="/"
+            onClick={onClose}
+            aria-label="UrsBiz — Home"
+            className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <Logo size="md" />
+          </Link>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label="Close menu"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            aria-label={t("a11y.closeNavigation", "Close menu")}
           >
             <X className="size-5" aria-hidden="true" />
           </button>
@@ -129,50 +104,58 @@ export function MobileDrawer({ open, onClose }: MobileDrawerProps) {
         </div>
 
         <nav aria-label="Mobile" className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
-          {navGroups.map((group) => (
-            <div key={group.id} className="space-y-1">
-              <h4 className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                {group.label}
-              </h4>
-              <ul className="space-y-0.5 pt-0.5">
-                {group.links.map((link) => {
-                  const Icon = link.icon;
-                  const active = isActiveLink(pathname, link.href);
-                  const label = getLocalizedLabel(link.href, link.label);
-                  return (
-                    <li key={link.href}>
-                      <Link
-                        href={link.href}
-                        aria-current={active ? "page" : undefined}
-                        className={cn(
-                          "flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium transition-colors",
-                          active
-                            ? "border border-primary/30 bg-primary/15 font-semibold text-accent shadow-[0_0_8px_rgba(37,99,235,0.25)]"
-                            : "text-muted-foreground hover:bg-card hover:text-foreground",
-                        )}
-                      >
-                        <div className="flex items-center gap-2.5 truncate">
-                          <Icon
-                            className={cn(
-                              "size-4 shrink-0",
-                              active ? "text-accent" : "text-muted-foreground",
-                            )}
-                            aria-hidden="true"
-                          />
-                          <span className="truncate">{label}</span>
-                        </div>
-                        {link.badge && (
-                          <span className="py-0.2 rounded-full border border-primary/40 bg-primary/20 px-1.5 text-[9px] font-bold text-accent">
-                            {link.badge}
-                          </span>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+          {navGroups.map((group) => {
+            const groupTitle = group.labelKey ? t(group.labelKey, group.label) : group.label;
+            return (
+              <div key={group.id} className="space-y-1">
+                <h4 className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                  {groupTitle}
+                </h4>
+                <ul className="space-y-0.5 pt-0.5">
+                  {group.links.map((link) => {
+                    const Icon = link.icon;
+                    const active = isActiveLink(pathname, link.href);
+                    const label = link.labelKey ? t(link.labelKey, link.label) : link.label;
+                    const badgeText = link.badgeKey ? t(link.badgeKey, link.badge || "") : link.badge;
+
+                    return (
+                      <li key={link.href}>
+                        <Link
+                          href={link.href}
+                          aria-current={active ? "page" : undefined}
+                          className={cn(
+                            "flex min-h-[44px] items-center justify-between rounded-lg px-3 py-2 text-xs font-medium transition-colors",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+                            active
+                              ? "border border-primary/30 bg-primary/15 font-semibold text-accent shadow-[0_0_8px_rgba(37,99,235,0.25)]"
+                              : "text-muted-foreground hover:bg-card hover:text-foreground",
+                          )}
+                        >
+                          <div className="flex items-center gap-2.5 truncate">
+                            <Icon
+                              className={cn(
+                                "size-4 shrink-0",
+                                active ? "text-accent" : "text-muted-foreground",
+                              )}
+                              aria-hidden="true"
+                            />
+                            <span className={cn("truncate", language === "kn" && "font-kannada")}>
+                              {label}
+                            </span>
+                          </div>
+                          {badgeText && (
+                            <span className="py-0.5 rounded-full border border-primary/40 bg-primary/20 px-1.5 text-[9px] font-bold text-accent">
+                              {badgeText}
+                            </span>
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </nav>
 
         <div className="border-t border-border/80 bg-card/40 p-4">

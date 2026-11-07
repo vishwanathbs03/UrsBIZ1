@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/PageHeader";
+import { useLanguage } from "@/context/language-context";
+import { formatINR } from "@/lib/formatters";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingSkeleton } from "@/components/common/LoadingSkeleton";
@@ -92,6 +94,7 @@ const TEMPLATES: DecisionTemplate[] = [
 ];
 
 export function DecisionWorkbenchView() {
+  const { language } = useLanguage();
   const [selectedTemplate, setSelectedTemplate] = useState<DecisionTemplate>(TEMPLATES[0]);
   const [objective, setObjective] = useState<string>(TEMPLATES[0].defaultObjective);
   const [evaluating, setEvaluating] = useState<boolean>(false);

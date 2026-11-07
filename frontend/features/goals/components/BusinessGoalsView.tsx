@@ -31,6 +31,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/common/PageHeader";
+import { useLanguage } from "@/context/language-context";
+import { formatINR, formatDate } from "@/lib/formatters";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingSkeleton } from "@/components/common/LoadingSkeleton";
@@ -98,6 +100,7 @@ const METRIC_OPTIONS: { key: GoalMetricKey; label: string; unit: string; desc: s
 ];
 
 export function BusinessGoalsView() {
+  const { language } = useLanguage();
   const [data, setData] = useState<BusinessGoalListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -308,7 +311,7 @@ export function BusinessGoalsView() {
   const formatValue = (val: number | null | undefined, unit: string) => {
     if (val === null || val === undefined) return "—";
     if (unit.toUpperCase() === "INR" || unit === "₹") {
-      return `₹${val.toLocaleString("en-IN")}`;
+      return formatINR(val, { language });
     }
     if (unit === "%") {
       return `${val.toFixed(1)}%`;
@@ -725,7 +728,7 @@ export function BusinessGoalsView() {
                       <span>Evidence Source: {goal.evidence_source}</span>
                     </div>
                     {goal.last_evaluated_at && (
-                      <div>Last Evaluated: {new Date(goal.last_evaluated_at).toLocaleString()}</div>
+                      <div>Last Evaluated: {formatDate(goal.last_evaluated_at, { format: "datetime", language })}</div>
                     )}
                   </div>
                 </div>
@@ -1037,7 +1040,7 @@ export function BusinessGoalsView() {
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-primary">{a.action}</span>
                       <span className="text-[11px] text-muted-foreground">
-                        {new Date(a.created_at).toLocaleString()}
+                        {formatDate(a.created_at, { format: "datetime", language })}
                       </span>
                     </div>
 

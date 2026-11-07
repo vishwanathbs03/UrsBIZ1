@@ -65,6 +65,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        kannada: ["'Noto Sans Kannada'", "Tunga", "Kedage", "sans-serif"],
       },
       keyframes: {
         fadeUp: {
