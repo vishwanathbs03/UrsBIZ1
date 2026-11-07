@@ -175,7 +175,9 @@ def test_connector_registry_and_catalogue():
 # ==============================================================================
 
 def test_credential_vault_encryption_masking_redaction():
-    """Verify AES-256 authenticated encryption, tenant validation, masking, and redaction."""
+    """Verify Fernet authenticated encryption (128-bit AES in CBC mode with PKCS7 padding and 128-bit HMAC-SHA256),
+    tenant validation, masking, and redaction.
+    """
     vault = ConnectorCredentialVault()
     biz_id = 42
 
@@ -768,7 +770,7 @@ def test_tally_connector_validation_and_mapping():
     """Verify Tally Prime XML schema mapping and configuration validation."""
     tally = ConnectorRegistry.get("tally_prime")
     assert tally.auth_method == "BASIC_AUTH"
-    assert tally.operational_status == OperationalStatus.READY_FOR_CREDENTIALS
+    assert tally.operational_status == OperationalStatus.BETA
 
     # Missing gateway url
     ok, err = tally.validate_configuration({"company_name": "Test Co"}, {})
@@ -805,7 +807,7 @@ def test_zoho_books_connector_validation_and_mapping():
     """Verify Zoho Books REST API v3 schema mapping and validation."""
     zoho = ConnectorRegistry.get("zoho_books")
     assert zoho.auth_method == "OAUTH2"
-    assert zoho.operational_status == OperationalStatus.READY_FOR_CREDENTIALS
+    assert zoho.operational_status == OperationalStatus.BETA
 
     # Non-numeric organization_id must fail validation
     ok, err = zoho.validate_configuration(
@@ -899,3 +901,191 @@ def test_audit_retention_blocks_business_deletion(client: TestClient, db_session
         db_session.commit()
 
     db_session.rollback()
+
+
+# ==============================================================================
+# 13. FINDINGS REGRESSION TESTS (PRODUCTION ENCRYPTION & REPEATED INVOICE PRODUCTS)
+# ==============================================================================
+
+def test_production_encryption_key_enforcement():
+    """Verify that production mode strictly refuses startup and credential vault
+    operations if CONNECTOR_ENCRYPTION_KEY is unset or empty.
+    """
+    from app.config.settings import get_settings
+    import os
+
+    settings = get_settings()
+    original_env = settings.app_env
+    original_key = settings.connector_encryption_key
+    env_backup = os.environ.get("CONNECTOR_ENCRYPTION_KEY")
+
+    try:
+        settings.app_env = "production"
+        settings.connector_encryption_key = ""
+        if "CONNECTOR_ENCRYPTION_KEY" in os.environ:
+            del os.environ["CONNECTOR_ENCRYPTION_KEY"]
+
+        # 1. Instantiating vault in production without key must raise RuntimeError
+        with pytest.raises(RuntimeError, match="CONNECTOR_ENCRYPTION_KEY must be configured in production"):
+            ConnectorCredentialVault()
+
+        # 2. Providing an explicit master_key or setting CONNECTOR_ENCRYPTION_KEY succeeds
+        prod_vault = ConnectorCredentialVault(master_key="prod-secure-dedicated-vault-key-2026")
+        encrypted = prod_vault.encrypt_credentials(10, {"api_key": "prod-secret-token"})
+        decrypted = prod_vault.decrypt_credentials(10, encrypted)
+        assert decrypted == {"api_key": "prod-secret-token"}
+    finally:
+        settings.app_env = original_env
+        settings.connector_encryption_key = original_key
+        if env_backup is not None:
+            os.environ["CONNECTOR_ENCRYPTION_KEY"] = env_backup
+
+
+def test_repeated_products_in_same_invoice_and_line_item_amendments(client: TestClient, db_session: Session):
+    """Verify that multiple line items for the same product on a single invoice
+    are not collapsed or overwritten, and legitimate line-level amendments are accurately updated.
+    """
+    owner = _create_user(db_session, "multi_line_owner@test.com")
+    biz = _create_business(db_session, owner, "Multi-Line Test Business")
+
+    # 1. Create and connect
+    c_res = client.post(
+        "/api/v1/integrations/connections",
+        json={
+            "connector_id": "test_harness",
+            "name": "Multi-Line Simulator",
+            "configuration": {"store_identifier": "BLR-ML-01", "batch_size": 10},
+            "credentials": {"api_key": "valid-test-key"},
+        },
+        headers=_auth_header(owner),
+    )
+    conn_id = c_res.json()["id"]
+    client.post(f"/api/v1/integrations/connections/{conn_id}/connect", headers=_auth_header(owner))
+
+    # 2. Invoice with two distinct lines for the SAME product
+    line1 = {
+        "raw_id": "ml-raw-1",
+        "line_item_id": "line-1",
+        "invoice_no": "INV-REP-001",
+        "tx_date": "2026-11-05T10:00:00Z",
+        "customer_id": "CUST-01",
+        "customer_name": "Retail Store",
+        "product_id": "SKU-TURMERIC",
+        "product": "Karnataka Spices Pack 1",
+        "qty": 2.0,
+        "unit_price": 250.0,
+        "amount": 500.0,
+    }
+    line2 = {
+        "raw_id": "ml-raw-2",
+        "line_item_id": "line-2",
+        "invoice_no": "INV-REP-001",
+        "tx_date": "2026-11-05T10:00:00Z",
+        "customer_id": "CUST-01",
+        "customer_name": "Retail Store",
+        "product_id": "SKU-TURMERIC",
+        "product": "Karnataka Spices Pack 1",
+        "qty": 5.0,
+        "unit_price": 250.0,
+        "amount": 1250.0,
+    }
+
+    from unittest.mock import patch
+    from app.services.connectors.base import FetchResult
+    from app.services.connectors.implementations.test_harness import TestHarnessConnector
+
+    with patch.object(
+        TestHarnessConnector,
+        "fetch_records",
+        return_value=FetchResult(
+            records=[line1, line2],
+            next_cursor="2",
+            has_more=False,
+            total_discovered=2,
+        ),
+    ):
+        res1 = client.post(
+            f"/api/v1/integrations/connections/{conn_id}/sync",
+            json={"trigger_type": "MANUAL", "batch_limit": 2},
+            headers=_auth_header(owner),
+        )
+        assert res1.status_code == 202
+        data1 = res1.json()
+        assert data1["status"] == SyncExecutionStatus.SUCCEEDED.value
+        assert data1["records_discovered"] == 2
+        assert data1["records_imported"] == 2
+        assert data1["duplicate_count"] == 0
+
+    # 3. Assert database contains exactly 2 distinct rows for this invoice and product
+    rows = (
+        db_session.query(SalesTransaction)
+        .filter_by(business_id=biz.id, invoice_id="INV-REP-001")
+        .order_by(SalesTransaction.id.asc())
+        .all()
+    )
+    assert len(rows) == 2
+    assert rows[0].quantity == 2.0
+    assert rows[0].total_amount == 500.0
+    assert rows[1].quantity == 5.0
+    assert rows[1].total_amount == 1250.0
+
+    # 4. Re-sync of identical invoice (Replay deduplication)
+    # Both lines must be detected as duplicates and neither duplicated nor overwritten
+    with patch.object(
+        TestHarnessConnector,
+        "fetch_records",
+        return_value=FetchResult(
+            records=[line1, line2],
+            next_cursor="2",
+            has_more=False,
+            total_discovered=2,
+        ),
+    ):
+        res_replay = client.post(
+            f"/api/v1/integrations/connections/{conn_id}/sync",
+            json={"trigger_type": "MANUAL", "batch_limit": 2},
+            headers=_auth_header(owner),
+        )
+        data_rep = res_replay.json()
+        assert data_rep["duplicate_count"] == 2
+        assert data_rep["records_imported"] == 0
+
+    assert db_session.query(SalesTransaction).filter_by(business_id=biz.id, invoice_id="INV-REP-001").count() == 2
+
+    # 5. Upstream amendment of Line 2 only (qty increases 5.0 -> 8.0, total 1250.0 -> 2000.0)
+    line2_amended = dict(line2)
+    line2_amended["qty"] = 8.0
+    line2_amended["amount"] = 2000.0
+
+    with patch.object(
+        TestHarnessConnector,
+        "fetch_records",
+        return_value=FetchResult(
+            records=[line1, line2_amended],
+            next_cursor="2",
+            has_more=False,
+            total_discovered=2,
+        ),
+    ):
+        res_amend = client.post(
+            f"/api/v1/integrations/connections/{conn_id}/sync",
+            json={"trigger_type": "MANUAL", "batch_limit": 2},
+            headers=_auth_header(owner),
+        )
+        data_amend = res_amend.json()
+        assert data_amend["duplicate_count"] == 1  # line 1 was unchanged
+        assert data_amend["summary"]["records_updated"] == 1  # line 2 was updated in-place
+
+    # Verify database state: row count still 2, line 1 unchanged, line 2 updated in-place
+    rows_after = (
+        db_session.query(SalesTransaction)
+        .filter_by(business_id=biz.id, invoice_id="INV-REP-001")
+        .order_by(SalesTransaction.id.asc())
+        .all()
+    )
+    assert len(rows_after) == 2
+    assert rows_after[0].quantity == 2.0
+    assert rows_after[0].total_amount == 500.0
+    assert rows_after[1].quantity == 8.0
+    assert rows_after[1].total_amount == 2000.0
+

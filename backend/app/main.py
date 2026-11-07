@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1 import api_router
 from app.config.logging import configure_logging, get_logger
+import os
 from app.config.settings import get_settings, validate_security_settings
 from app.middleware.cors import install_cors
 from app.middleware.performance import install_performance
@@ -91,6 +92,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     for warning in warnings:
         logger.warning("security: %s", warning)
     _check("Security Config", not any("production" in w for w in warnings), "see warnings above" if warnings else "")
+
+    if settings.is_production and not getattr(settings, "connector_encryption_key", "") and not os.environ.get("CONNECTOR_ENCRYPTION_KEY"):
+        raise RuntimeError("CRITICAL: CONNECTOR_ENCRYPTION_KEY must be configured in production. Server startup is refused to prevent using an insecure fallback key.")
 
     print(f"[PASS] API Ready — http://{settings.app_host}:{settings.app_port}/docs", flush=True)
     print("", flush=True)

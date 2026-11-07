@@ -62,7 +62,7 @@ class TallyConnector(BaseDataConnector):
 
     @property
     def operational_status(self) -> OperationalStatus:
-        return OperationalStatus.READY_FOR_CREDENTIALS
+        return OperationalStatus.BETA
 
     @property
     def known_limitations(self) -> list[str]:
@@ -204,4 +204,5 @@ class TallyConnector(BaseDataConnector):
             unit_price=rate if rate > 0 else (amt / max(qty, 1.0)),
             total_amount=amt,
             raw_source_id=inv_id,
+            line_item_id=str(raw_record.get("LINE_NO") or raw_record.get("ITEMINDEX") or ""),
         )

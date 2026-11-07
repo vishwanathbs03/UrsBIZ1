@@ -289,8 +289,8 @@ def validate_security_settings(settings: Settings) -> list[str]:
             warnings.append("JWT_SECRET_KEY is unset or a placeholder in production")
         if not settings.connector_encryption_key:
             warnings.append(
-                "CONNECTOR_ENCRYPTION_KEY is unset or empty in production — "
-                "integration credentials will use unmanaged fallback"
+                "CRITICAL: CONNECTOR_ENCRYPTION_KEY is unset or empty in production — "
+                "startup and integration credential operations are blocked"
             )
         if not settings.security_headers_enabled:
             warnings.append("SECURITY_HEADERS_ENABLED=false in production")

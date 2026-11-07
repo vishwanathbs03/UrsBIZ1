@@ -37,6 +37,7 @@ class ConnectorCredentialVault:
     """Manages encryption, decryption, masking, and redaction of integration credentials."""
 
     def __init__(self, master_key: str | None = None) -> None:
+        self._master_key = master_key
         self._fernet = self._init_fernet(master_key)
 
     @staticmethod
@@ -68,7 +69,14 @@ class ConnectorCredentialVault:
                 derived_key = base64.urlsafe_b64encode(hkdf.derive(raw_bytes))
                 return Fernet(derived_key)
 
-        # Standalone, isolated fallback key generation (completely decoupled from jwt_secret_key)
+        if not key_candidate:
+            if settings.is_production:
+                raise RuntimeError(
+                    "CRITICAL SECURITY ERROR: CONNECTOR_ENCRYPTION_KEY must be configured in production. "
+                    "Refusing to initialize ConnectorCredentialVault with a predictable fallback key."
+                )
+
+        # Standalone, isolated fallback key generation (development/test mode only)
         logger.warning(
             "CONNECTOR_ENCRYPTION_KEY is unset. Using independent default key for development/test only. "
             "Set CONNECTOR_ENCRYPTION_KEY in production to ensure isolated credential encryption."
@@ -87,6 +95,14 @@ class ConnectorCredentialVault:
         """Encrypt credentials dictionary into an authenticated ciphertext string."""
         if not credentials:
             return ""
+        settings = get_settings()
+        has_key = bool(
+            self._master_key
+            or getattr(settings, "connector_encryption_key", "")
+            or os.environ.get("CONNECTOR_ENCRYPTION_KEY")
+        )
+        if settings.is_production and not has_key:
+            raise RuntimeError("Production requires CONNECTOR_ENCRYPTION_KEY. Credential encryption refused.")
         payload = {
             "business_id": business_id,
             "credentials": credentials,
@@ -98,6 +114,14 @@ class ConnectorCredentialVault:
         """Decrypt ciphertext and enforce tenant ownership validation."""
         if not encrypted_str:
             return {}
+        settings = get_settings()
+        has_key = bool(
+            self._master_key
+            or getattr(settings, "connector_encryption_key", "")
+            or os.environ.get("CONNECTOR_ENCRYPTION_KEY")
+        )
+        if settings.is_production and not has_key:
+            raise RuntimeError("Production requires CONNECTOR_ENCRYPTION_KEY. Credential decryption refused.")
         try:
             raw_bytes = self._fernet.decrypt(encrypted_str.encode("utf-8"))
             payload = json.loads(raw_bytes.decode("utf-8"))

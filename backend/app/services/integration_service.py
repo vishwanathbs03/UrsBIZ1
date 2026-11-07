@@ -12,6 +12,7 @@ Orchestrates:
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime, timezone
 import logging
 from typing import Any
@@ -522,19 +523,31 @@ class IntegrationService:
         existing_fps = self.sales_repo.get_transaction_fingerprints(business.id)
         current_batch_fps: set[tuple[Any, ...]] = set()
 
-        # Pre-fetch existing invoice transactions for in-place amendment handling
-        existing_invoice_txs: dict[tuple[str, str], SalesTransaction] = {}
+        # Pre-fetch existing invoice transactions for in-place amendment and repeated line handling
+        # Structured with composite keys: (invoice_norm, product_norm, line_identifier)
+        # where line_identifier is the stable line_item_id or ordinal occurrence index of that product on the invoice
+        existing_invoice_lines: dict[tuple[str, str, Any], SalesTransaction] = {}
+        db_product_occurrence_counts: dict[tuple[str, str], int] = defaultdict(int)
+
         for t in (
             self.db.query(SalesTransaction)
             .filter(
                 SalesTransaction.business_id == business.id,
                 SalesTransaction.invoice_id.isnot(None),
             )
+            .order_by(SalesTransaction.id.asc())
             .all()
         ):
             if t.invoice_id and t.product_name:
-                key = (t.invoice_id.strip().lower(), t.product_name.strip().lower())
-                existing_invoice_txs[key] = t
+                inv_norm = t.invoice_id.strip().lower()
+                p_norm = t.product_name.strip().lower()
+                idx = db_product_occurrence_counts[(inv_norm, p_norm)]
+                db_product_occurrence_counts[(inv_norm, p_norm)] += 1
+                existing_invoice_lines[(inv_norm, p_norm, idx)] = t
+
+        # Track line item occurrence counts within the current sync batch
+        batch_product_occurrence_counts: dict[tuple[str, str], int] = defaultdict(int)
+        current_batch_invoiced_keys: set[tuple[str, str, Any]] = set()
 
         for raw_rec in fetch_result.records:
             try:
@@ -545,62 +558,103 @@ class IntegrationService:
                 skipped_count += 1
                 continue
 
-            # Deduplication fingerprint conforming to SalesRepository specification
             p_name = (norm_tx.product_name or "").strip().lower()
             q_val = round(float(norm_tx.quantity), 4)
             tot_val = round(float(norm_tx.total_amount), 2)
+
             if norm_tx.invoice_id:
-                fp = ("inv", norm_tx.invoice_id.strip().lower(), p_name, q_val, tot_val)
+                inv_norm = norm_tx.invoice_id.strip().lower()
+                pair = (inv_norm, p_name)
+
+                # Stable upstream line identifier or sequential line occurrence index
+                line_idx = batch_product_occurrence_counts[pair]
+                batch_product_occurrence_counts[pair] += 1
+                line_tag = str(norm_tx.line_item_id) if getattr(norm_tx, "line_item_id", None) else line_idx
+                inv_key = (inv_norm, p_name, line_tag)
+
+                # Check if this specific invoice line item already exists in the database
+                existing_tx = existing_invoice_lines.get(inv_key) or existing_invoice_lines.get((inv_norm, p_name, line_idx))
+
+                if existing_tx:
+                    # Line item exists in DB: check if values are identical (exact duplicate)
+                    if (
+                        round(float(existing_tx.quantity), 4) == q_val
+                        and round(float(existing_tx.total_amount), 2) == tot_val
+                    ):
+                        dup_count += 1
+                        skipped_count += 1
+                        continue
+                    else:
+                        # Legitimate upstream amendment to this specific invoice line item
+                        existing_tx.quantity = norm_tx.quantity
+                        existing_tx.unit_price = norm_tx.unit_price
+                        existing_tx.total_amount = norm_tx.total_amount
+                        existing_tx.transaction_date = norm_tx.transaction_date
+                        if norm_tx.customer_name:
+                            existing_tx.customer_name = norm_tx.customer_name
+                        if norm_tx.customer_id:
+                            existing_tx.customer_id = norm_tx.customer_id
+                        existing_tx.upload_id = sales_upload.id
+                        updated_count += 1
+                        continue
+
+                # Deduplicate against repeated identical lines within the current batch
+                if inv_key in current_batch_invoiced_keys:
+                    dup_count += 1
+                    skipped_count += 1
+                    continue
+
+                current_batch_invoiced_keys.add(inv_key)
+
+                # Brand new line item on invoice
+                tx_entity = SalesTransaction(
+                    upload_id=sales_upload.id,
+                    business_id=business.id,
+                    transaction_date=norm_tx.transaction_date,
+                    invoice_id=norm_tx.invoice_id,
+                    customer_id=norm_tx.customer_id,
+                    customer_name=norm_tx.customer_name,
+                    product_id=norm_tx.product_id,
+                    product_name=norm_tx.product_name,
+                    quantity=norm_tx.quantity,
+                    unit_price=norm_tx.unit_price,
+                    total_amount=norm_tx.total_amount,
+                    is_duplicate=False,
+                )
+                self.db.add(tx_entity)
+                imported_count += 1
+                existing_invoice_lines[inv_key] = tx_entity
+                existing_invoice_lines[(inv_norm, p_name, line_idx)] = tx_entity
+
             else:
+                # Non-invoiced transaction (e.g. POS receipt)
                 date_str = norm_tx.transaction_date.strftime("%Y-%m-%d")
                 c_name = (norm_tx.customer_name or norm_tx.customer_id or "").strip().lower()
                 fp = ("date", date_str, c_name, p_name, q_val, tot_val)
 
-            # 1. Exact duplicate check (exact same fingerprint already in DB or current batch)
-            is_duplicate = fp in existing_fps or fp in current_batch_fps
-            if is_duplicate:
-                dup_count += 1
-                skipped_count += 1
-                continue
-
-            current_batch_fps.add(fp)
-
-            # 2. In-place amendment check for legitimate upstream invoice corrections
-            if norm_tx.invoice_id:
-                inv_key = (norm_tx.invoice_id.strip().lower(), p_name)
-                if inv_key in existing_invoice_txs:
-                    existing_tx = existing_invoice_txs[inv_key]
-                    existing_tx.quantity = norm_tx.quantity
-                    existing_tx.unit_price = norm_tx.unit_price
-                    existing_tx.total_amount = norm_tx.total_amount
-                    existing_tx.transaction_date = norm_tx.transaction_date
-                    if norm_tx.customer_name:
-                        existing_tx.customer_name = norm_tx.customer_name
-                    if norm_tx.customer_id:
-                        existing_tx.customer_id = norm_tx.customer_id
-                    existing_tx.upload_id = sales_upload.id
-                    updated_count += 1
+                if fp in existing_fps or fp in current_batch_fps:
+                    dup_count += 1
+                    skipped_count += 1
                     continue
 
-            # 3. New transaction insertion
-            tx_entity = SalesTransaction(
-                upload_id=sales_upload.id,
-                business_id=business.id,
-                transaction_date=norm_tx.transaction_date,
-                invoice_id=norm_tx.invoice_id,
-                customer_id=norm_tx.customer_id,
-                customer_name=norm_tx.customer_name,
-                product_id=norm_tx.product_id,
-                product_name=norm_tx.product_name,
-                quantity=norm_tx.quantity,
-                unit_price=norm_tx.unit_price,
-                total_amount=norm_tx.total_amount,
-                is_duplicate=False,
-            )
-            self.db.add(tx_entity)
-            imported_count += 1
-            if norm_tx.invoice_id:
-                existing_invoice_txs[(norm_tx.invoice_id.strip().lower(), p_name)] = tx_entity
+                current_batch_fps.add(fp)
+
+                tx_entity = SalesTransaction(
+                    upload_id=sales_upload.id,
+                    business_id=business.id,
+                    transaction_date=norm_tx.transaction_date,
+                    invoice_id=None,
+                    customer_id=norm_tx.customer_id,
+                    customer_name=norm_tx.customer_name,
+                    product_id=norm_tx.product_id,
+                    product_name=norm_tx.product_name,
+                    quantity=norm_tx.quantity,
+                    unit_price=norm_tx.unit_price,
+                    total_amount=norm_tx.total_amount,
+                    is_duplicate=False,
+                )
+                self.db.add(tx_entity)
+                imported_count += 1
 
         total_active_records = imported_count + updated_count
         sales_upload.valid_row_count = total_active_records

@@ -61,7 +61,7 @@ class ZohoBooksConnector(BaseDataConnector):
 
     @property
     def operational_status(self) -> OperationalStatus:
-        return OperationalStatus.READY_FOR_CREDENTIALS
+        return OperationalStatus.BETA
 
     @property
     def known_limitations(self) -> list[str]:
@@ -189,4 +189,5 @@ class ZohoBooksConnector(BaseDataConnector):
             unit_price=rate,
             total_amount=total,
             raw_source_id=str(raw_record.get("invoice_id", inv_num)),
+            line_item_id=str(line_items[0].get("line_item_id", "")) if line_items and isinstance(line_items, list) else None,
         )

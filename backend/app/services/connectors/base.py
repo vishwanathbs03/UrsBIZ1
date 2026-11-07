@@ -68,6 +68,7 @@ class NormalizedTransaction:
     unit_price: float
     total_amount: float
     raw_source_id: str | None = None
+    line_item_id: str | None = None
 
 
 @dataclass
