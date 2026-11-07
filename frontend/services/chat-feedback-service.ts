@@ -59,6 +59,7 @@ export interface GroundingCorrelationMetrics {
   fallback_message_count: number;
   fallback_average_rating: number;
   fallback_unhelpful_rate: number;
+  unclassified_message_count: number;
 }
 
 export interface ChatFeedbackAnalytics {

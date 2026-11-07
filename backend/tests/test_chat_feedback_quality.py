@@ -401,34 +401,49 @@ def test_quality_analytics_and_grounding_correlation(client: TestClient, db_sess
         headers=_auth_header(owner),
     )
 
+    # Turn 5: Missing / indeterminate provenance metadata -> rated 3 -> must be EXCLUDED from grounded and fallback comparison
+    _, msg5 = _create_chat_turn(
+        db_session, biz.id, owner.id,
+        user_prompt="Unclassified message without sources",
+        assistant_reply="Response without provenance envelope.",
+        fallback_used=False,
+        sources=[],
+    )
+    client.post(
+        f"/api/v1/chat/messages/{msg5.id}/feedback",
+        json={"rating": 3, "feedback_category": "Helpful"},
+        headers=_auth_header(owner),
+    )
+
     # Fetch quality evaluation analytics
     res = client.get("/api/v1/chat/feedback/analytics?days=30", headers=_auth_header(owner))
     assert res.status_code == 200
     analytics = res.json()
 
     assert analytics["business_id"] == biz.id
-    assert analytics["total_feedback_count"] == 4
+    assert analytics["total_feedback_count"] == 5
     assert analytics["helpful_count"] == 2
     assert analytics["unhelpful_count"] == 2
-    assert analytics["helpfulness_rate"] == 0.50  # 2 of 4 helpful
-    assert analytics["average_rating"] == 3.0  # (5 + 4 + 2 + 1) / 4 = 3.0
+    assert analytics["helpfulness_rate"] == 0.40  # 2 of 5 helpful (rating >= 4)
+    assert analytics["average_rating"] == 3.0  # (5 + 4 + 2 + 1 + 3) / 5 = 3.0
     assert analytics["quality_score"] > 0
 
     # Category breakdown
     dist = analytics["category_distribution"]
-    assert dist["Helpful"] == 2
+    assert dist["Helpful"] == 3
     assert dist["Missing Evidence"] == 1
     assert dist["Outdated Data"] == 1
     assert dist["Incorrect Information"] == 0
     assert dist["Difficult to Understand"] == 0
 
-    # Grounding correlation
+    # Grounding correlation: exactly 2 grounded and 2 fallback; unclassified message is strictly excluded
     corr = analytics["grounding_correlation"]
     assert corr["grounded_message_count"] == 2
     assert corr["grounded_average_rating"] == 4.5  # (5 + 4) / 2 = 4.5
     assert corr["fallback_message_count"] == 2
     assert corr["fallback_average_rating"] == 1.5  # (2 + 1) / 2 = 1.5
     assert corr["fallback_unhelpful_rate"] == 1.0  # 100% of fallback turns rated unhelpful (<=2)
+    assert corr["unclassified_message_count"] == 1
 
 
 def test_rbac_and_cross_user_feedback_isolation(client: TestClient, db_session: Session):
@@ -497,3 +512,127 @@ def test_rbac_and_cross_user_feedback_isolation(client: TestClient, db_session: 
         headers=_auth_header(admin),
     )
     assert del_admin.status_code == 204
+
+
+def test_user_cascade_deletion_and_uniqueness_policy(client: TestClient, db_session: Session):
+    """Verify user_id NOT NULL constraint, cascade deletion on user removal, and uniqueness."""
+    owner = _create_user(db_session, "cascade_owner@test.com", "Cascade Owner")
+    biz = _create_business(db_session, owner, "Cascade Business")
+    _, assistant_msg = _create_chat_turn(db_session, biz.id, owner.id)
+
+    # 1. Feedback must have user_id (cannot be NULL)
+    with pytest.raises(Exception):
+        null_fb = ChatFeedback(
+            message_id=assistant_msg.id,
+            business_id=biz.id,
+            user_id=None,  # type: ignore[arg-type]
+            rating=5,
+            feedback_category="Helpful",
+        )
+        db_session.add(null_fb)
+        db_session.commit()
+    db_session.rollback()
+
+    # 2. Submit valid feedback
+    res = client.post(
+        f"/api/v1/chat/messages/{assistant_msg.id}/feedback",
+        json={"rating": 5, "feedback_category": "Helpful", "notes": "Cascade test note"},
+        headers=_auth_header(owner),
+    )
+    assert res.status_code == 201
+    fb_id = res.json()["id"]
+
+    # Verify feedback exists in db
+    fb = db_session.query(ChatFeedback).filter_by(id=fb_id).first()
+    assert fb is not None
+    assert fb.user_id == owner.id
+
+    # 3. Deleting the user CASCADE deletes their feedback records (GDPR / zero-retention)
+    db_session.delete(owner)
+    db_session.commit()
+
+    fb_after = db_session.query(ChatFeedback).filter_by(id=fb_id).first()
+    assert fb_after is None, "ChatFeedback must be cascade-deleted when user is deleted"
+
+
+def test_feedback_ownership_moderation_and_privacy(client: TestClient, db_session: Session):
+    """Verify feedback ownership, cross-user update denial, manager deletion restriction,
+    multi-tenant admin boundary, and analytics privacy (zero private notes exposure)."""
+    owner = _create_user(db_session, "priv_owner@test.com", "Priv Owner")
+    biz1 = _create_business(db_session, owner, "Business 1")
+    biz2_owner = _create_user(db_session, "biz2_owner@test.com", "Biz2 Owner")
+    biz2 = _create_business(db_session, biz2_owner, "Business 2")
+
+    # Member in Biz1: Manager
+    mgr = _create_user(db_session, "mgr_priv@test.com", "Manager User")
+    mem_mgr = BusinessMember(
+        business_id=biz1.id,
+        user_id=mgr.id,
+        role=BusinessRole.MANAGER.value,
+        status=MemberStatus.ACTIVE.value,
+    )
+    db_session.add(mem_mgr)
+    mgr.active_business_id = biz1.id
+    db_session.add(mgr)
+
+    # Member in Biz1: Analyst
+    analyst = _create_user(db_session, "analyst_priv@test.com", "Analyst User")
+    mem_analyst = BusinessMember(
+        business_id=biz1.id,
+        user_id=analyst.id,
+        role=BusinessRole.ANALYST.value,
+        status=MemberStatus.ACTIVE.value,
+    )
+    db_session.add(mem_analyst)
+    analyst.active_business_id = biz1.id
+    db_session.add(analyst)
+    db_session.commit()
+
+    _, msg1 = _create_chat_turn(db_session, biz1.id, owner.id)
+    _, msg2 = _create_chat_turn(db_session, biz2.id, biz2_owner.id)
+
+    # 1. Analyst submits feedback with sensitive private notes
+    post_res = client.post(
+        f"/api/v1/chat/messages/{msg1.id}/feedback",
+        json={
+            "rating": 2,
+            "feedback_category": "Incorrect Information",
+            "notes": "CONFIDENTIAL: Client GSTIN 29AAAAA0000A1Z5 discrepancy in reconciliation",
+        },
+        headers=_auth_header(analyst),
+    )
+    assert post_res.status_code == 201
+
+    # 2. Manager attempts to UPDATE Analyst's feedback by submitting on message_id -> creates or updates ONLY Manager's own feedback
+    patch_attempt = client.patch(
+        f"/api/v1/chat/messages/{msg1.id}/feedback",
+        json={"rating": 5, "notes": "Manager attempt to overwrite"},
+        headers=_auth_header(mgr),
+    )
+    assert patch_attempt.status_code == 404
+    assert "No feedback record found for message" in patch_attempt.json()["detail"]
+
+    # 3. Manager attempts to DELETE Analyst's feedback -> forbidden / 404 (only owner or admin can moderate)
+    del_attempt = client.delete(
+        f"/api/v1/chat/messages/{msg1.id}/feedback",
+        headers=_auth_header(mgr),
+    )
+    assert del_attempt.status_code == 404
+
+    # 4. Biz2 Admin / Owner cannot delete Biz1 feedback
+    del_biz2 = client.delete(
+        f"/api/v1/chat/messages/{msg1.id}/feedback",
+        headers=_auth_header(biz2_owner),
+    )
+    assert del_biz2.status_code == 404
+
+    # 5. Analytics must expose purely aggregate statistics without leaking private notes or identifiers
+    analytics_res = client.get("/api/v1/chat/feedback/analytics?days=30", headers=_auth_header(mgr))
+    assert analytics_res.status_code == 200
+    analytics_payload = analytics_res.json()
+    analytics_str = json.dumps(analytics_payload)
+    assert "CONFIDENTIAL" not in analytics_str
+    assert "29AAAAA0000A1Z5" not in analytics_str
+    assert "notes" not in analytics_str
+    assert "user_id" not in analytics_str
+    assert "message_id" not in analytics_str

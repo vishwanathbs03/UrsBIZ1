@@ -40,8 +40,8 @@ def upgrade() -> None:
         sa.Column(
             "user_id",
             sa.Integer(),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
-            nullable=True,
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
         ),
         sa.Column("rating", sa.Integer(), nullable=False),
         sa.Column("feedback_category", sa.String(50), nullable=False),

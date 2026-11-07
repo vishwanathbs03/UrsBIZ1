@@ -92,6 +92,10 @@ class GroundingCorrelationMetrics(BaseModel):
         default=0.0,
         description="Percentage of fallback messages rated unhelpful (rating < 3).",
     )
+    unclassified_message_count: int = Field(
+        default=0,
+        description="Number of messages with missing or indeterminate grounding metadata excluded from comparison.",
+    )
 
 
 class ChatFeedbackAnalyticsResponse(BaseModel):

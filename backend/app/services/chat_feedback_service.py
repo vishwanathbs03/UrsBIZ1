@@ -220,6 +220,7 @@ class ChatFeedbackService:
         fallback_count = 0
         fallback_rating_sum = 0
         fallback_unhelpful_count = 0
+        unclassified_count = 0
 
         for fb, msg in records:
             r = fb.rating
@@ -233,8 +234,17 @@ class ChatFeedbackService:
             cat = fb.feedback_category
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
-            # Grounding and fallback correlation
-            is_fallback = bool(getattr(msg, "fallback_used", False))
+            # Grounding and fallback correlation based on system-persisted evidence
+            gen_meta: dict[str, Any] = {}
+            raw_meta = getattr(msg, "generation_meta_json", "") or ""
+            if raw_meta:
+                try:
+                    parsed_meta = json.loads(raw_meta)
+                    if isinstance(parsed_meta, dict):
+                        gen_meta = parsed_meta
+                except Exception:
+                    gen_meta = {}
+
             sources_raw = getattr(msg, "sources_json", "[]") or "[]"
             has_sources = False
             try:
@@ -243,14 +253,33 @@ class ChatFeedbackService:
             except Exception:
                 has_sources = False
 
+            is_fallback = bool(
+                getattr(msg, "fallback_used", False)
+                or gen_meta.get("fallback_used") is True
+                or gen_meta.get("provider") == "local-rule-engine"
+            )
+
+            is_grounded = (
+                not is_fallback
+                and (
+                    bool(gen_meta.get("grounding_validated"))
+                    or (isinstance(gen_meta.get("evidence_count"), (int, float)) and gen_meta["evidence_count"] > 0)
+                    or (isinstance(gen_meta.get("server_grounding_score"), (int, float)) and gen_meta["server_grounding_score"] > 0)
+                    or has_sources
+                )
+            )
+
             if is_fallback:
                 fallback_count += 1
                 fallback_rating_sum += r
                 if r <= 2:
                     fallback_unhelpful_count += 1
-            elif has_sources:
+            elif is_grounded:
                 grounded_count += 1
                 grounded_rating_sum += r
+            else:
+                # Missing or indeterminate provenance metadata: strictly excluded from comparison
+                unclassified_count += 1
 
         avg_rating = round(total_rating_sum / total_count, 2)
         helpfulness_rate = round(helpful_count / total_count, 4)
@@ -280,6 +309,7 @@ class ChatFeedbackService:
                 fallback_message_count=fallback_count,
                 fallback_average_rating=fallback_avg,
                 fallback_unhelpful_rate=fallback_unhelpful_rate,
+                unclassified_message_count=unclassified_count,
             ),
         )
 

@@ -228,6 +228,12 @@ export function QualityEvaluationPanel({
                 </p>
               </div>
             </div>
+
+            {analytics.grounding_correlation.unclassified_message_count > 0 && (
+              <p className="text-[10px] text-muted-foreground italic">
+                * Note: {analytics.grounding_correlation.unclassified_message_count} message turn(s) with missing or indeterminate provenance metadata were excluded from grounding comparison.
+              </p>
+            )}
           </div>
 
           {/* Category Breakdown */}
