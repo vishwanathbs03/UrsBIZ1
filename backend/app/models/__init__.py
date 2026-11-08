@@ -4,7 +4,30 @@ Re-exports every model so SQLAlchemy's declarative base and Alembic
 autogenerate see them in a single import.
 """
 
+from app.models.accounts_payable import (
+    VendorBill,
+    VendorBillLine,
+    VendorPayment,
+    VendorPaymentAllocation,
+)
+from app.models.accounts_receivable import (
+    ARInvoice,
+    ARInvoiceLine,
+    ARPaymentAllocation,
+    CustomerPayment,
+)
 from app.models.action_item import ActionItem
+from app.models.audit_chain import (
+    AllocationReversal,
+    ARAllocationReversal,
+    AuditReversalNonce,
+    AuditSigningPublicKey,
+    AuditSigningSecret,
+    AuditTransitionCheckpoint,
+    AuditWorkerJob,
+    BusinessAuditChain,
+    VendorAllocationReversal,
+)
 from app.models.business import Business
 from app.models.business_challenge import BusinessChallenge
 from app.models.business_goal import BusinessGoal, BusinessGoalAudit
@@ -42,6 +65,10 @@ from app.models.integration import (
     IntegrationSyncExecution,
     SyncExecutionStatus,
     SyncTriggerType,
+)
+from app.models.integration_device import (
+    IntegrationDevice,
+    IntegrationDeviceNonce,
 )
 from app.models.notification_item import NotificationItem
 from app.models.personalization import BusinessPersonalizationSettings
@@ -104,4 +131,23 @@ __all__ = [
     "SyncExecutionStatus",
     "SyncTriggerType",
     "ErrorCategory",
+    # Wave 1 Financial Subledger Models
+    "ARInvoice",
+    "ARInvoiceLine",
+    "CustomerPayment",
+    "ARPaymentAllocation",
+    "VendorBill",
+    "VendorBillLine",
+    "VendorPayment",
+    "VendorPaymentAllocation",
+    "AuditSigningPublicKey",
+    "AuditSigningSecret",
+    "AuditTransitionCheckpoint",
+    "BusinessAuditChain",
+    "AuditReversalNonce",
+    "AllocationReversal",
+    "ARAllocationReversal",
+    "VendorAllocationReversal",
+    "IntegrationDevice",
+    "IntegrationDeviceNonce",
 ]

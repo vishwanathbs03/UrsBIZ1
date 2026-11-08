@@ -178,6 +178,17 @@ class Settings(BaseSettings):
     security_audit_logger: str = "atlas.security"
     security_audit_enabled: bool = True
 
+    # Audit Reversal & Key Management Service (Wave 1.1 / Wave 1.1.2)
+    # Supported providers: "gcp_kms" (Production), "memory" (Development/Automated Tests Only)
+    kms_provider_type: str = "memory"
+    kms_algorithm: str = "EC_SIGN_ED25519"
+    kms_protection_level: str = "SOFTWARE"
+    kms_project_id: str = ""
+    kms_location_id: str = ""
+    kms_key_ring_id: str = ""
+    kms_crypto_key_id: str = ""
+    kms_key_version_id: str = ""
+
     cookie_path: str = "/"
     cookie_max_age_seconds: int = 3_600
 
@@ -265,6 +276,10 @@ class Settings(BaseSettings):
         return self.app_env.lower() == "development"
 
     @property
+    def is_staging(self) -> bool:
+        return self.app_env.lower() == "staging"
+
+    @property
     def is_production(self) -> bool:
         return self.app_env.lower() == "production"
 
@@ -281,6 +296,38 @@ def get_settings() -> Settings:
 
 def validate_security_settings(settings: Settings) -> list[str]:
     warnings: list[str] = []
+
+    if settings.is_production or settings.is_staging:
+        # KMS Signing Guardrails for Production & Staging (Wave 1.1.2)
+        if not settings.kms_provider_type or settings.kms_provider_type.strip() == "":
+            warnings.append("CRITICAL: KMS_PROVIDER_TYPE is unset in production/staging")
+        elif settings.kms_provider_type.lower() == "memory":
+            warnings.append(
+                "CRITICAL: VolatileMemoryKMSProvider (kms_provider_type='memory') is strictly prohibited in production and staging environments"
+            )
+        elif settings.kms_provider_type.lower() != "gcp_kms":
+            warnings.append(
+                f"CRITICAL: Unsupported KMS provider '{settings.kms_provider_type}' in production/staging. Only 'gcp_kms' is supported"
+            )
+        else:
+            if settings.kms_algorithm != "EC_SIGN_ED25519":
+                warnings.append(
+                    f"CRITICAL: Unsupported KMS algorithm '{settings.kms_algorithm}' for Google Cloud KMS. Approved algorithm is 'EC_SIGN_ED25519'"
+                )
+            if settings.kms_protection_level != "SOFTWARE":
+                warnings.append(
+                    f"CRITICAL: Google Cloud KMS Ed25519 requires 'SOFTWARE' protection level, got '{settings.kms_protection_level}'. (Ed25519 is not supported on Cloud HSM)"
+                )
+            if not (
+                settings.kms_project_id.strip()
+                and settings.kms_location_id.strip()
+                and settings.kms_key_ring_id.strip()
+                and settings.kms_crypto_key_id.strip()
+                and settings.kms_key_version_id.strip()
+            ):
+                warnings.append(
+                    "CRITICAL: Incomplete Google Cloud KMS key version configuration in production/staging. Missing project_id, location_id, key_ring_id, crypto_key_id, or key_version_id"
+                )
 
     if settings.is_production:
         if not settings.cookie_secure:
